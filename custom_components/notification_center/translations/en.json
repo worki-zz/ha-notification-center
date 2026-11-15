@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Notification Center",
+        "description": "Add Notification Center to manage all notifications of your home in one place. You will find it in the sidebar."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Notification Center is already set up."
+    }
+  }
+}
