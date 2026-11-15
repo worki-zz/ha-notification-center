@@ -7,10 +7,24 @@ export interface HassUser {
   is_admin: boolean;
 }
 
+export interface HassMessage {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface HassConnection {
+  subscribeMessage<T>(
+    callback: (message: T) => void,
+    message: HassMessage,
+  ): Promise<() => Promise<void>>;
+}
+
 export interface HomeAssistant {
   user?: HassUser;
   language: string;
   themes?: { darkMode?: boolean };
+  connection: HassConnection;
+  callWS<T>(message: HassMessage): Promise<T>;
 }
 
 export interface PanelInfo {
