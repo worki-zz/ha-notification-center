@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv*/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend
+node_modules/
+# Built modules are produced by `npm run build` and shipped in the release zip.
+custom_components/notification_center/frontend/*.js
+custom_components/notification_center/frontend/*.js.map
+
+# Release
+dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store

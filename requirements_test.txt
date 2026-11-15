@@ -1,0 +1,6 @@
+# Test and lint tools. pytest-homeassistant-custom-component pins Home Assistant;
+# move it to the release that matches the newest Home Assistant once it exists.
+pytest-homeassistant-custom-component==0.13.375
+home-assistant-frontend==20260930.5
+ruff==0.17.5
+mypy==2.4.1

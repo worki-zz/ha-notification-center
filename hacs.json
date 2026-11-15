@@ -1,0 +1,7 @@
+{
+  "name": "Notification Center",
+  "homeassistant": "2026.11.0",
+  "zip_release": true,
+  "filename": "notification_center.zip",
+  "render_readme": true
+}

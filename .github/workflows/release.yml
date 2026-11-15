@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    name: Build and attach notification_center.zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Check that the tag matches the versions
+        run: python scripts/check_version.py "${{ github.event.release.tag_name }}"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Create the zip
+        working-directory: custom_components/notification_center
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          zip -r "$GITHUB_WORKSPACE/dist/notification_center.zip" . -x "__pycache__/*" "*.pyc"
+      - name: Attach the zip to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/notification_center.zip --clobber

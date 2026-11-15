@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Notification Center",
+        "description": "A Notification Center egy helyen kezeli az otthonod összes értesítését. Az oldalsávban találod."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "A Notification Center már be van állítva."
+    }
+  }
+}
