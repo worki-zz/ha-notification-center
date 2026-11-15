@@ -2,7 +2,7 @@
 
 A Home Assistant integration that manages every notification of your home in one place: when it shows, how it looks, which channels it uses (lights, speakers, phones), and when it goes away.
 
-> **Status: early development (0.x).** Version 0.0.1 is only the skeleton: it adds the sidebar panel and an empty dashboard card. Each release in the [changelog](CHANGELOG.md) says what to try.
+> **Status: early development (0.x).** Version 0.1.0 stores the configuration, but notifications do not show or sound yet. Each release in the [changelog](CHANGELOG.md) says what to try.
 
 ## Requirements
 
@@ -14,15 +14,13 @@ A Home Assistant integration that manages every notification of your home in one
 
 1. In Home Assistant open **Settings → Marketplace** (HACS before Home Assistant 2026.11).
 2. Open the menu, choose **Custom repositories**, and add `https://github.com/worki-zz/ha-notification-center` with the type **Integration**. Custom repositories need a GitHub connection, which the Marketplace asks for the first time.
-3. Find **Notification Center** in the list and download it.
-4. Restart Home Assistant.
-5. Go to **Settings → Devices & services → Add integration** and choose **Notification Center**.
+3. Find **Notification Center** in the list and download it. The Marketplace installs and sets it up; no restart is needed.
 
 ### Manual
 
 1. Download `notification_center.zip` from the [latest release](https://github.com/worki-zz/ha-notification-center/releases/latest).
 2. Unpack it into `config/custom_components/notification_center/`.
-3. Restart Home Assistant and add the integration as in step 5 above.
+3. Restart Home Assistant, then go to **Settings → Devices & services → Add integration** and choose **Notification Center**.
 
 The release zip contains the built frontend. The repository itself does not, so copying the source folder without building it gives an empty panel.
 

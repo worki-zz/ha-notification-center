@@ -22,7 +22,7 @@ from custom_components.notification_center.const import (
     STORAGE_KEYS,
 )
 
-VERSION = "0.0.1"
+VERSION = "0.1.0"
 CARD_URL = f"{STATIC_URL_BASE}/{CARD_FILENAME}?v={VERSION}"
 
 
@@ -38,7 +38,7 @@ async def test_setup_registers_panel_and_card(
     await _setup(hass, config_entry)
 
     assert config_entry.state is ConfigEntryState.LOADED
-    assert config_entry.runtime_data == VERSION
+    assert config_entry.runtime_data.version == VERSION
 
     panel = hass.data[DATA_PANELS][PANEL_URL_PATH]
     assert panel.sidebar_title == PANEL_TITLE

@@ -23,4 +23,8 @@ CARD_FILENAME: Final = "notification-center-card.js"
 
 # Storage keys owned by the integration. They are deleted when the
 # config entry is removed.
-STORAGE_KEYS: Final[tuple[str, ...]] = (DOMAIN, f"{DOMAIN}.runtime")
+STORAGE_KEYS: Final[tuple[str, ...]] = (
+    DOMAIN,
+    f"{DOMAIN}.runtime",
+    f"{DOMAIN}.backup",
+)
