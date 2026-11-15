@@ -55,7 +55,7 @@ pytest
 
 Every version number (manifest, `pyproject.toml`, `frontend/package.json`, `frontend/src/shared/version.ts`) must match; `python scripts/check_version.py` checks this, and the release workflow also compares it with the tag.
 
-Publishing a GitHub release runs `.github/workflows/release.yml`, which builds the frontend and attaches `notification_center.zip` to the release.
+To release, run the *Release* workflow from the Actions tab with the version (for example `0.0.1`). It checks the versions, builds the frontend, and creates the tag and the GitHub release with `notification_center.zip` and the matching changelog section. A release published by hand also gets the zip attached.
 
 ## License
 
