@@ -1,9 +1,9 @@
 """The calendar of the scheduled steps.
 
 ``calendar.notification_center`` is read-only. Each occurrence of a
-scheduled step is an event: the notification's name, the step's message,
-from the due time until it expires (one hour if it does not). A step without
-a time of day (after last done without At) is an all-day event.
+scheduled step is an all-day event on the day it is due: the notification's
+name and the step's message. The time of day (At) and the expiry only tell
+when the card shows and goes away, the task itself belongs to the day.
 """
 
 from __future__ import annotations

@@ -88,7 +88,7 @@ from .model import (
 )
 from .modes import ModeTracker
 from .render import TextTracker, render_text
-from .schedule import calendar_between, expires as schedule_expires
+from .schedule import calendar_between
 from .scheduler import StepSchedule
 from .store import RUNTIME_KEY, ConfigManager
 
@@ -1735,8 +1735,6 @@ class Engine:
                     {"entity": None, "trigger": {}, "data": {}},
                     None,
                 )
-                timed = bool(schedule.config.get("at"))
-                period = schedule_expires(schedule.config)
                 events.extend(
                     {
                         "notification_id": runner.id,
@@ -1744,8 +1742,8 @@ class Engine:
                         "summary": runner.name,
                         "description": message,
                         "start": when,
-                        "end": when + (period or timedelta(hours=1)),
-                        "all_day": not timed,
+                        "end": when + timedelta(days=1),
+                        "all_day": True,
                     }
                     for when in times
                 )
