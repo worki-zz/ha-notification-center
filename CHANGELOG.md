@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.9
+
+### Changed
+
+- `calendar.notification_center` is a diagnostic entity (it shows in the Diagnostic block of the device) and its state stays off, so it adds no rows to the Activity log. The events are in the calendar views and in `calendar.get_events` as before.
+- README: the three entities and the Activity log.
+
 ## 0.2.8
 
 ### Changed
