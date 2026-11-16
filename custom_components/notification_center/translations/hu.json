@@ -68,22 +68,6 @@
           }
         }
       }
-    },
-    "event": {
-      "notification_center": {
-        "state_attributes": {
-          "event_type": {
-            "state": {
-              "active": "Aktív",
-              "done": "Kész",
-              "snoozed": "Elhalasztva",
-              "dismissed": "Elvetve",
-              "expired": "Lejárt",
-              "button": "Gombnyomás"
-            }
-          }
-        }
-      }
     }
   },
   "services": {

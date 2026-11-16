@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.10
+
+### Removed
+
+- `event.notification_center`: nothing used it, and it could not be kept out of the Activity log. Its registry entry is removed on the start. Automations can use the Notification state trigger or the sensors.
+
 ## 0.2.9
 
 ### Changed

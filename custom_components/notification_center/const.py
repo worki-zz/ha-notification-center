@@ -30,12 +30,13 @@ STORAGE_KEYS: Final[tuple[str, ...]] = (
 )
 
 # Entity platforms
-PLATFORMS: Final = ("calendar", "event", "sensor")
+PLATFORMS: Final = ("calendar", "sensor")
 
 # Unique ids of the entities. A notification's sensor uses the prefix and the
 # notification's id.
 UNIQUE_ID_NOTIFICATION_PREFIX: Final = "notification-"
 UNIQUE_ID_SUMMARY: Final = "summary"
+# The event entity of 0.2.x, removed: only its registry entry is cleaned up.
 UNIQUE_ID_EVENT: Final = "event"
 UNIQUE_ID_CALENDAR: Final = "calendar"
 
@@ -63,21 +64,12 @@ CLOSED_DONE: Final = "done"
 CLOSED_DISMISSED: Final = "dismissed"
 CLOSED_EXPIRED: Final = "expired"
 
-# Event types of the event entity.
+# What the engine reports about a card (for the channels).
 EVENT_ACTIVE: Final = "active"
 EVENT_DONE: Final = "done"
 EVENT_SNOOZED: Final = "snoozed"
 EVENT_DISMISSED: Final = "dismissed"
 EVENT_EXPIRED: Final = "expired"
-EVENT_BUTTON: Final = "button"
-EVENT_TYPES: Final = (
-    EVENT_ACTIVE,
-    EVENT_DONE,
-    EVENT_SNOOZED,
-    EVENT_DISMISSED,
-    EVENT_EXPIRED,
-    EVENT_BUTTON,
-)
 
 # What started or closed a card.
 SOURCE_TRIGGER: Final = "trigger"

@@ -793,12 +793,11 @@ class Engine:
         self._late_listeners: list[ChangeListener] = []
         self._event_listeners: list[EventListener] = []
         # For the Activity log the causes chain up: the entity that started
-        # the change, the notification's sensor, then the summary sensor and
-        # the event entity. ``contexts`` is what the notification's sensor
-        # writes in; ``event_context`` (a child of it) is what the summary
-        # sensor and the event entity write in during that change.
+        # the change, the notification's sensor, then the summary sensor.
+        # ``contexts`` is what the notification's sensor writes in;
+        # ``summary_context`` (a child of it) is what the summary sensor
+        # writes in during that change.
         self.contexts: dict[str, Context] = {}
-        self.event_context: Context | None = None
         self.summary_context: Context | None = None
         self._watches = hass.data.setdefault(DATA_WATCHES, [])
         self._snooze_timers: dict[CardKey, CALLBACK_TYPE] = {}
@@ -1315,7 +1314,7 @@ class Engine:
             setattr(card, name, value)
         new = card.status
         changed = new != old
-        previous = (self.event_context, self.summary_context)
+        previous = self.summary_context
         if changed:
             now = dt_util.utcnow()
             card.state_since = now
@@ -1329,7 +1328,6 @@ class Engine:
             # so they are written after it.
             cause = Context(parent_id=context.id) if context else Context()
             self.contexts[card.notification_id] = cause
-            self.event_context = Context(parent_id=cause.id)
             self.summary_context = Context(parent_id=cause.id)
             self._state_reached(card, old, new)
         self._save()
@@ -1338,7 +1336,7 @@ class Engine:
             if changed:
                 self._fire_event(card, new, source, context)
         finally:
-            self.event_context, self.summary_context = previous
+            self.summary_context = previous
 
     def _record(
         self, notification_id: str, step_id: str, state: str, when: datetime

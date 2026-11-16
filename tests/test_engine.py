@@ -37,10 +37,10 @@ async def _tick(
 
 
 async def test_entities_are_created(center: Center) -> None:
-    """The summary sensor, the event entity and one sensor per notification."""
+    """The summary sensor and one sensor per notification (no event entity)."""
     assert center.state("sensor.notification_center") == "0"
     assert center.attrs("sensor.notification_center")["mode"] == "Home"
-    assert center.hass.states.get("event.notification_center") is not None
+    assert center.hass.states.get("event.notification_center") is None
 
     await center.add("Dishwasher", step())
     assert center.state("sensor.nc_dishwasher") == "idle"
@@ -91,11 +91,9 @@ async def test_trigger_done_when_and_last_done(
     assert center.attrs("sensor.notification_center")["top_notification"] == (
         "sensor.nc_dishwasher"
     )
-    event = hass.states.get("event.notification_center")
-    assert event is not None
-    assert event.attributes["event_type"] == "active"
-    assert event.attributes["notification"] == "sensor.nc_dishwasher"
-    assert event.attributes["step"] == 1
+    assert center.kinds() == ["active"]
+    assert center.events[0][1]["notification"] == "sensor.nc_dishwasher"
+    assert center.events[0][1]["step"] == 1
 
     await center.set("input_boolean.dishwasher", "off")
     assert center.state("sensor.nc_dishwasher") == "done"
@@ -762,7 +760,6 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
         if new is not None and new.entity_id in (
             "sensor.nc_doors",
             "sensor.notification_center",
-            "event.notification_center",
         ):
             log.append((new.entity_id, new.state))
 
@@ -786,19 +783,13 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
     assert [entity for entity, _ in log] == [
         "sensor.nc_doors",
         "sensor.notification_center",
-        "event.notification_center",
     ]
 
     sensor = hass.states.get("sensor.nc_doors")
     summary = hass.states.get("sensor.notification_center")
-    event = hass.states.get("event.notification_center")
     assert sensor is not None
     assert summary is not None
-    assert event is not None
-    # Both follow the notification's sensor, each in a context of its own.
     assert summary.context.parent_id == sensor.context.id
-    assert event.context.parent_id == sensor.context.id
-    assert summary.context.id != event.context.id
 
 
 async def test_entity_already_matching_has_no_cause(
@@ -822,3 +813,20 @@ async def test_entity_already_matching_has_no_cause(
     assert state is not None
     assert state.state == "active"
     assert state.context.parent_id is None
+
+
+async def test_old_event_entity_is_removed(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    """The event entity of 0.2.x does not stay in the registry."""
+    config_entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    old = registry.async_get_or_create(
+        "event",
+        DOMAIN,
+        "event",
+        suggested_object_id="notification_center",
+        config_entry=config_entry,
+    )
+    await load(hass, config_entry)
+    assert registry.async_get(old.entity_id) is None

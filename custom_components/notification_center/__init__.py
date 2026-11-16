@@ -7,13 +7,14 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from . import websocket_api
-from .const import DOMAIN, PLATFORMS, STORAGE_KEYS
+from .const import DOMAIN, PLATFORMS, STORAGE_KEYS, UNIQUE_ID_EVENT
 from .engine import Engine
 from .frontend_setup import async_register_frontend, async_unregister_frontend
 from .services import async_setup_services
@@ -61,6 +62,13 @@ async def async_setup_entry(
     if not hass.data.get(_WEBSOCKET_REGISTERED):
         websocket_api.async_register(hass)
         hass.data[_WEBSOCKET_REGISTERED] = True
+
+    # The event entity of 0.2.x is gone: remove what it left in the registry.
+    registry = er.async_get(hass)
+    if (
+        old := registry.async_get_entity_id("event", DOMAIN, UNIQUE_ID_EVENT)
+    ) is not None:
+        registry.async_remove(old)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_frontend(hass, version)

@@ -68,22 +68,6 @@
           }
         }
       }
-    },
-    "event": {
-      "notification_center": {
-        "state_attributes": {
-          "event_type": {
-            "state": {
-              "active": "Active",
-              "done": "Done",
-              "snoozed": "Snoozed",
-              "dismissed": "Dismissed",
-              "expired": "Expired",
-              "button": "Button pressed"
-            }
-          }
-        }
-      }
     }
   },
   "services": {
