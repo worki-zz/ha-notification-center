@@ -518,7 +518,10 @@ class StepRunner:
         self,
         triggers: list[dict[str, Any]],
         fired: Callable[[dict[str, Any], Context | None], None],
-        listed: tuple[Callable[[str, dict[str, Any]], None], Callable[[str], None]],
+        listed: tuple[
+            Callable[[str, dict[str, Any]], None],
+            Callable[[str, Context | None], None],
+        ],
         *,
         start: bool = False,
     ) -> None:
@@ -648,7 +651,7 @@ class StepRunner:
         )
 
     @callback
-    def _start_unmatched(self, entity_id: str) -> None:
+    def _start_unmatched(self, entity_id: str, context: Context | None) -> None:
         key = (self.notification.id, self.step_id, entity_id)
         card = self.engine.cards.get(key)
         if card is None:
@@ -658,7 +661,7 @@ class StepRunner:
             self.engine.forget_block(card)
             return
         if card.is_open and self.step["done_when"].get("start_no_longer_true"):
-            self.engine.close(card, CLOSED_DONE, SOURCE_ENTITY)
+            self.engine.close(card, CLOSED_DONE, SOURCE_ENTITY, context=context)
             self.engine.forget_block(card)
 
     # -- Done when ----------------------------------------------------------
@@ -681,7 +684,7 @@ class StepRunner:
         self._done_fired(trigger, None)
 
     @callback
-    def _done_unmatched(self, entity_id: str) -> None:
+    def _done_unmatched(self, entity_id: str, context: Context | None) -> None:
         """Do nothing: an entity of a Done when trigger stopped matching."""
 
     def start_matching(self, entity_id: str) -> bool:
@@ -779,6 +782,7 @@ class Engine:
         self.modes = ModeTracker(hass, manager.config["modes"], self._mode_changed)
         self._store = Store[dict[str, Any]](hass, RUNTIME_VERSION, RUNTIME_KEY)
         self._listeners: list[ChangeListener] = []
+        self._late_listeners: list[ChangeListener] = []
         self._event_listeners: list[EventListener] = []
         # For the Activity log the causes chain up: the entity that started
         # the change, the notification's sensor, then the summary sensor and
@@ -913,13 +917,20 @@ class Engine:
     # -- Listeners ----------------------------------------------------------
 
     @callback
-    def async_add_listener(self, listener: ChangeListener) -> CALLBACK_TYPE:
-        """Call the listener after every change of a card or the mode."""
-        self._listeners.append(listener)
+    def async_add_listener(
+        self, listener: ChangeListener, *, late: bool = False
+    ) -> CALLBACK_TYPE:
+        """Call the listener after every change of a card or the mode.
+
+        A late listener is called after the others: the summary sensor is
+        caused by the sensor of the notification, so it changes after it.
+        """
+        listeners = self._late_listeners if late else self._listeners
+        listeners.append(listener)
 
         @callback
         def remove() -> None:
-            self._listeners.remove(listener)
+            listeners.remove(listener)
 
         return remove
 
@@ -936,7 +947,7 @@ class Engine:
 
     @callback
     def _notify(self) -> None:
-        for listener in list(self._listeners):
+        for listener in [*self._listeners, *self._late_listeners]:
             listener()
 
     @callback
@@ -1078,7 +1089,8 @@ class Engine:
         if card is not None and card.blocked and source == SOURCE_ENTITY:
             return None
         if card is not None:
-            self.forget(card)
+            # No state change in between: the new card follows at once.
+            self.forget(card, notify=False)
         card = Card(
             notification_id=step.notification.id,
             step_id=step.step_id,
@@ -1191,7 +1203,7 @@ class Engine:
             self._change(card, source=SOURCE_TRIGGER, hidden=hidden)
 
     @callback
-    def forget(self, card: Card) -> None:
+    def forget(self, card: Card, *, notify: bool = True) -> None:
         """Remove a card without any event (its notification changed)."""
         self._cancel_unsnooze(card)
         self._cancel_expiry(card)
@@ -1202,7 +1214,8 @@ class Engine:
         if self.cards.get(card.key) is card:
             del self.cards[card.key]
         self._save()
-        self._notify()
+        if notify:
+            self._notify()
 
     @callback
     def forget_block(self, card: Card) -> None:
@@ -1286,7 +1299,9 @@ class Engine:
         for name, value in changes.items():
             setattr(card, name, value)
         new = card.status
-        if new != old:
+        changed = new != old
+        previous = self.event_context
+        if changed:
             now = dt_util.utcnow()
             card.state_since = now
             self._record(card.notification_id, card.step_id, new, now)
@@ -1295,17 +1310,19 @@ class Engine:
             # The notification's sensor is caused by the context behind the
             # change; a time driven change (a schedule, an expiry, the end of
             # a snooze) has none, the sensor just changes by itself. Either
-            # way the summary sensor and the event are caused by the sensor.
+            # way the summary sensor and the event are caused by the sensor,
+            # so they are written after it.
             cause = Context(parent_id=context.id) if context else Context()
             self.contexts[card.notification_id] = cause
             self.event_context = Context(parent_id=cause.id)
             self._state_reached(card, old, new)
-            self._fire_event(card, new, source, context)
         self._save()
         try:
             self._notify()
+            if changed:
+                self._fire_event(card, new, source, context)
         finally:
-            self.event_context = None
+            self.event_context = previous
 
     def _record(
         self, notification_id: str, step_id: str, state: str, when: datetime

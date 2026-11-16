@@ -20,6 +20,7 @@ from typing import Any
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import (
     CALLBACK_TYPE,
+    Context,
     Event,
     HomeAssistant,
     State,
@@ -43,7 +44,7 @@ from homeassistant.util import dt as dt_util
 from .model import TRIGGER_LISTED_ENTITIES
 
 type MatchCallback = Callable[[str, dict[str, Any]], None]
-type UnmatchCallback = Callable[[str], None]
+type UnmatchCallback = Callable[[str, Context | None], None]
 
 
 def _as_list(value: Any) -> list[str] | None:
@@ -102,6 +103,11 @@ def _period(value: Any) -> timedelta | None:
         return value
     period: timedelta = cv.positive_time_period_dict(value)
     return period
+
+
+def _context(state: State | None) -> Context | None:
+    """Return the context of a state change, the cause of what follows."""
+    return state.context if state is not None else None
 
 
 def _float(value: Any) -> float | None:
@@ -296,7 +302,7 @@ class ListedTracker:
         new_state = event.data["new_state"]
         if not self._entities.contains(entity_id, new_state):
             if entity_id in self._matching:
-                self._stop_matching(entity_id)
+                self._stop_matching(entity_id, _context(new_state))
             return
         self._evaluate(entity_id, event.data["old_state"], new_state)
 
@@ -306,7 +312,7 @@ class ListedTracker:
     ) -> None:
         if not self.matcher.matches(new_state):
             if entity_id in self._matching:
-                self._stop_matching(entity_id)
+                self._stop_matching(entity_id, _context(new_state))
             return
         if entity_id in self._matching:
             return
@@ -329,11 +335,11 @@ class ListedTracker:
         self._timers[entity_id] = async_call_later(self._hass, self.matcher.for_, fire)
 
     @callback
-    def _stop_matching(self, entity_id: str) -> None:
+    def _stop_matching(self, entity_id: str, context: Context | None = None) -> None:
         self._matching.discard(entity_id)
         if (cancel := self._timers.pop(entity_id, None)) is not None:
             cancel()
-        self._on_unmatch(entity_id)
+        self._on_unmatch(entity_id, context)
 
     def _variables(
         self, entity_id: str, old_state: State | None, new_state: State | None

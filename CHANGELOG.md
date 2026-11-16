@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7
+
+### Fixed
+
+- The Activity log follows the whole chain, in this order: the entity (the door opens) causes the notification's sensor (active), which causes `event.notification_center`. The summary and the event are written after the sensor, so the log can link them to it.
+- An entity that stops matching (the door closes) is now the cause of the notification becoming done; before, only the start was linked.
+- A new card for an entity whose card was done goes from done straight to active; the sensor no longer shows an idle state in between.
+
 ## 0.2.6
 
 ### Changed

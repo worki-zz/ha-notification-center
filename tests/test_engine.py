@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import Context, Event, HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -728,3 +728,57 @@ async def test_time_driven_change_has_no_cause(
     assert summary is not None
     # The summary sensor is still caused by the notification's sensor.
     assert summary.context.parent_id == state.context.id
+
+
+async def test_closing_is_caused_and_reopening_does_not_flicker(
+    hass: HomeAssistant, center: Center
+) -> None:
+    """The entity closing the card is the cause; a new card skips idle."""
+    await center.set("binary_sensor.front", "off")
+    await center.add(
+        "Doors",
+        step(
+            start={
+                "type": "triggers",
+                "triggers": [
+                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                ],
+            },
+            done_when={"start_no_longer_true": True},
+        ),
+        entities=[{"entity_id": "binary_sensor.front"}],
+    )
+    log: list[tuple[str, str]] = []
+
+    @callback
+    def record(event: Event[Any]) -> None:
+        new = event.data["new_state"]
+        if new is not None and new.entity_id in (
+            "sensor.nc_doors",
+            "sensor.notification_center",
+            "event.notification_center",
+        ):
+            log.append((new.entity_id, new.state))
+
+    hass.bus.async_listen("state_changed", record)
+    await center.set("binary_sensor.front", "on")
+    await center.set("binary_sensor.front", "off")
+    door = hass.states.get("binary_sensor.front")
+    state = hass.states.get("sensor.nc_doors")
+    assert door is not None
+    assert state is not None
+    assert state.state == "done"
+    assert state.context.parent_id == door.context.id
+
+    log.clear()
+    await center.set("binary_sensor.front", "on")
+    # The sensor goes from done straight to active, and the summary and the
+    # event follow it.
+    assert [
+        (entity, value) for entity, value in log if entity == "sensor.nc_doors"
+    ] == [("sensor.nc_doors", "active")]
+    assert [entity for entity, _ in log] == [
+        "sensor.nc_doors",
+        "sensor.notification_center",
+        "event.notification_center",
+    ]
