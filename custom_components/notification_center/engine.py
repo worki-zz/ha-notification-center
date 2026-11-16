@@ -200,6 +200,9 @@ class Card:
     blocked: bool = False
     # The channels were silenced (Keep it, stop light, speaker and push).
     silenced: bool = False
+    # Closed because the entity stopped matching (a status): the card does
+    # not stay as done today, the notification just goes back to idle.
+    transient: bool = False
     trigger: dict[str, Any] | None = None
     data: dict[str, Any] = field(default_factory=dict)
     message_override: str | None = None
@@ -335,6 +338,9 @@ def trigger_context(trigger: dict[str, Any], context: Context | None) -> Context
     """Return the context behind a trigger: the one given, or its state's."""
     if context is not None:
         return context
+    if trigger.get("initial"):
+        # The entity already matched when the notification was loaded.
+        return None
     state = trigger.get("to_state")
     return state.context if isinstance(state, State) else None
 
@@ -591,7 +597,7 @@ class StepRunner:
                     and card.is_open
                     and not self.start_matching(card.entity_id)
                 ):
-                    self.engine.close(card, CLOSED_DONE, SOURCE_ENTITY)
+                    self.engine.close(card, CLOSED_DONE, SOURCE_ENTITY, transient=True)
 
     def _add_watch(
         self,
@@ -661,7 +667,9 @@ class StepRunner:
             self.engine.forget_block(card)
             return
         if card.is_open and self.step["done_when"].get("start_no_longer_true"):
-            self.engine.close(card, CLOSED_DONE, SOURCE_ENTITY, context=context)
+            self.engine.close(
+                card, CLOSED_DONE, SOURCE_ENTITY, context=context, transient=True
+            )
             self.engine.forget_block(card)
 
     # -- Done when ----------------------------------------------------------
@@ -791,6 +799,7 @@ class Engine:
         # sensor and the event entity write in during that change.
         self.contexts: dict[str, Context] = {}
         self.event_context: Context | None = None
+        self.summary_context: Context | None = None
         self._watches = hass.data.setdefault(DATA_WATCHES, [])
         self._snooze_timers: dict[CardKey, CALLBACK_TYPE] = {}
         self._expiry_timers: dict[CardKey, CALLBACK_TYPE] = {}
@@ -1144,10 +1153,16 @@ class Engine:
         reason: str,
         source: str,
         context: Context | None = None,
+        *,
+        transient: bool = False,
     ) -> None:
-        """Close a card: done, dismissed or expired."""
+        """Close a card: done, dismissed or expired.
+
+        A transient card goes at once instead of staying as done today.
+        """
         if not card.is_open:
             return
+        card.transient = transient
         self._cancel_unsnooze(card)
         self._cancel_expiry(card)
         self._stop_text(card)
@@ -1170,7 +1185,7 @@ class Engine:
             hidden=False,
             blocked=blocked,
         )
-        if reason != CLOSED_DONE and not card.blocked:
+        if transient or (reason != CLOSED_DONE and not card.blocked):
             self.cards.pop(card.key, None)
             self._save()
             self._notify()
@@ -1300,7 +1315,7 @@ class Engine:
             setattr(card, name, value)
         new = card.status
         changed = new != old
-        previous = self.event_context
+        previous = (self.event_context, self.summary_context)
         if changed:
             now = dt_util.utcnow()
             card.state_since = now
@@ -1315,6 +1330,7 @@ class Engine:
             cause = Context(parent_id=context.id) if context else Context()
             self.contexts[card.notification_id] = cause
             self.event_context = Context(parent_id=cause.id)
+            self.summary_context = Context(parent_id=cause.id)
             self._state_reached(card, old, new)
         self._save()
         try:
@@ -1322,7 +1338,7 @@ class Engine:
             if changed:
                 self._fire_event(card, new, source, context)
         finally:
-            self.event_context = previous
+            self.event_context, self.summary_context = previous
 
     def _record(
         self, notification_id: str, step_id: str, state: str, when: datetime
@@ -1658,6 +1674,7 @@ class Engine:
             if card.is_open
             or (
                 card.closed_reason == CLOSED_DONE
+                and not card.transient
                 and card.closed_at is not None
                 and card.closed_at >= start
             )

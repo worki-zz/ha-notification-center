@@ -5,6 +5,9 @@
 ### Changed
 
 - A step that starts or ends by the Notification state trigger (also in an automation) is caused by the sensor of the other notification in the Activity log: the other notification's sensor causes this one's.
+- A status notification (a step that starts when an entity matches and is done when it stops matching, like an open door) goes back to idle when the entity stops matching, instead of staying as done until midnight. The done event still fires.
+- In the Activity log the event entity and the summary sensor each have their own cause, both the notification's sensor; before, they shared one, so the count showed as the cause of the event.
+- A card opened because the entity already matched when the notification was loaded (a restart, a saved change) has no state change as its cause.
 
 ## 0.2.7
 
