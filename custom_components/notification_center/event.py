@@ -59,5 +59,7 @@ class NotificationEvent(EventEntity):
 
     @callback
     def _fired(self, event_type: str, data: dict[str, Any]) -> None:
+        if self._engine.event_context is not None:
+            self.async_set_context(self._engine.event_context)
         self._trigger_event(event_type, data)
         self.async_write_ha_state()

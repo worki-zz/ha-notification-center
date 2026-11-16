@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+### Changed
+
+- The Activity log says why a notification changed: the sensor and the event entity now write their states in a child of the context that caused the change (an entity that started to match, a Done when trigger, an action or a button press), so the Activity panel's "Triggered by" and the cause line work. A change without a cause (a schedule, an expiry, a snooze that ends) shows as made by Notification Center.
+
 ## 0.2.2
 
 ### Changed

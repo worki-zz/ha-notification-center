@@ -331,6 +331,14 @@ class StateWatch:
         self.timers.clear()
 
 
+def trigger_context(trigger: dict[str, Any], context: Context | None) -> Context | None:
+    """Return the context behind a trigger: the one given, or its state's."""
+    if context is not None:
+        return context
+    state = trigger.get("to_state")
+    return state.context if isinstance(state, State) else None
+
+
 class _Conditions:
     """Home Assistant conditions together with the integration's own ones."""
 
@@ -621,6 +629,7 @@ class StepRunner:
             entity_id if isinstance(entity_id, str) else None,
             trigger,
             SOURCE_TRIGGER,
+            context=trigger_context(trigger, context),
         )
 
     @callback
@@ -630,7 +639,13 @@ class StepRunner:
             variables
         ):
             return
-        self.engine.open(self, entity_id, trigger, SOURCE_ENTITY)
+        self.engine.open(
+            self,
+            entity_id,
+            trigger,
+            SOURCE_ENTITY,
+            context=trigger_context(trigger, None),
+        )
 
     @callback
     def _start_unmatched(self, entity_id: str) -> None:
@@ -657,6 +672,7 @@ class StepRunner:
         ]
         entity_id = trigger.get("entity_id")
         own = [card for card in cards if card.entity_id == entity_id]
+        context = trigger_context(trigger, context)
         for card in own or cards:
             self.engine.close(card, CLOSED_DONE, SOURCE_DONE_WHEN, context=context)
 
@@ -764,6 +780,10 @@ class Engine:
         self._store = Store[dict[str, Any]](hass, RUNTIME_VERSION, RUNTIME_KEY)
         self._listeners: list[ChangeListener] = []
         self._event_listeners: list[EventListener] = []
+        # What caused the last change of each notification, for the Activity
+        # log: the entities write their states in a child of this context.
+        self.contexts: dict[str, Context] = {}
+        self.event_context: Context | None = None
         self._watches = hass.data.setdefault(DATA_WATCHES, [])
         self._snooze_timers: dict[CardKey, CALLBACK_TYPE] = {}
         self._expiry_timers: dict[CardKey, CALLBACK_TYPE] = {}
@@ -1269,6 +1289,9 @@ class Engine:
             self._record(card.notification_id, card.step_id, new, now)
             if new == CLOSED_DONE:
                 self._done_recorded(card.notification_id, card.step_id)
+            cause = Context(parent_id=context.id) if context else Context()
+            self.contexts[card.notification_id] = cause
+            self.event_context = cause
             self._state_reached(card, old, new)
             self._fire_event(card, new, source, context)
         self._save()
