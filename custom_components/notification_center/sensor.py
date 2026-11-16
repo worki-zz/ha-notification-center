@@ -178,7 +178,7 @@ class SummarySensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Follow the engine."""
-        self.async_on_remove(self._engine.async_add_listener(self._changed))
+        self.async_on_remove(self._engine.async_add_listener(self._changed, late=True))
 
     @callback
     def _changed(self) -> None:

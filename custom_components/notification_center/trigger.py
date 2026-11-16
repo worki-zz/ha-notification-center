@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, ClassVar, cast, override
 
 from homeassistant.const import CONF_OPTIONS
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Context, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.automation import move_top_level_schema_fields_to_options
 import homeassistant.helpers.config_validation as cv
@@ -134,7 +134,7 @@ class ListedEntitiesTrigger(_OptionsTrigger):
             )
 
         @callback
-        def unmatched(_entity_id: str) -> None:
+        def unmatched(_entity_id: str, _context: Context | None) -> None:
             """Do nothing: only matching fires."""
 
         @callback
