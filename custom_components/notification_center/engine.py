@@ -1,0 +1,1571 @@
+"""The engine: it decides when a notification shows and when it goes away.
+
+Every step of a notification has cards. A step has one card, or, with the
+Listed entities trigger, one card per entity. A card is:
+
+- **open**: it shows (state ``active``), or it is hidden while the step's
+  Hide while is true (state ``hidden``);
+- **snoozed** until a time;
+- **closed**: done, dismissed or expired. A done card stays until the end of
+  the day, so it can be shown as done today.
+
+The cards and the time each step last reached each state (the last done
+time among them) are saved in ``.storage/notification_center.runtime``, so
+they survive a restart.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta
+import logging
+from typing import Any, Final, cast
+
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    Context,
+    HomeAssistant,
+    State,
+    callback,
+)
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.condition import (
+    ConditionsChecker,
+    async_conditions_from_config,
+    async_extract_entities,
+    async_validate_conditions_config,
+)
+import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.event import (
+    async_track_point_in_utc_time,
+    async_track_state_change_event,
+    async_track_time_change,
+)
+from homeassistant.helpers.start import async_at_started
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers.trigger import (
+    async_initialize_triggers,
+    async_validate_trigger_config,
+)
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    CLOSED_DISMISSED,
+    CLOSED_DONE,
+    CLOSED_EXPIRED,
+    DOMAIN,
+    EVENT_ACTIVE,
+    EVENT_DISMISSED,
+    EVENT_DONE,
+    EVENT_EXPIRED,
+    EVENT_SNOOZED,
+    SOURCE_ACTION,
+    SOURCE_DONE_WHEN,
+    SOURCE_ENTITY,
+    SOURCE_SNOOZE_END,
+    SOURCE_TRIGGER,
+    STATE_ACTIVE,
+    STATE_DISABLED,
+    STATE_DONE,
+    STATE_HIDDEN,
+    STATE_IDLE,
+    STATE_SNOOZED,
+    UNIQUE_ID_NOTIFICATION_PREFIX,
+)
+from .listed import EntityList, ListedMatcher, ListedTracker, matching_entities
+from .model import (
+    TRIGGER_LISTED_ENTITIES,
+    TRIGGER_NOTIFICATION_STATE,
+    ConfigData,
+)
+from .modes import ModeTracker
+from .render import TextTracker, render_text
+from .store import RUNTIME_KEY, ConfigManager
+
+_LOGGER = logging.getLogger(__name__)
+
+RUNTIME_VERSION: Final = 1
+SAVE_DELAY: Final = 1
+
+PHASE_OPEN: Final = "open"
+PHASE_SNOOZED: Final = "snoozed"
+PHASE_CLOSED: Final = "closed"
+
+# Conditions that change with time, not with an entity: a Hide while that
+# holds one of them is checked again every minute.
+_TIMED_CONDITIONS: Final = frozenset({"time", "sun", "template", "trigger"})
+
+type CardKey = tuple[str, str, str]
+type ChangeListener = Callable[[], None]
+type EventListener = Callable[[str, dict[str, Any]], None]
+
+
+def _jsonable(value: Any) -> Any:
+    """Return a value that can be stored as JSON and used in templates."""
+    if isinstance(value, State):
+        return {
+            "entity_id": value.entity_id,
+            "state": value.state,
+            "name": value.name,
+            "attributes": _jsonable(dict(value.attributes)),
+            "last_changed": value.last_changed.isoformat(),
+        }
+    if isinstance(value, Mapping):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, (date, time)):
+        return value.isoformat()
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _parse_time(value: str | None) -> datetime | None:
+    return dt_util.parse_datetime(value) if value else None
+
+
+@dataclass(slots=True)
+class Card:
+    """One card of a step: the step itself, or one entity of it."""
+
+    notification_id: str
+    step_id: str
+    entity_id: str | None
+    phase: str
+    since: datetime
+    state_since: datetime
+    source: str = SOURCE_TRIGGER
+    hidden: bool = False
+    snoozed_until: datetime | None = None
+    closed_reason: str | None = None
+    closed_at: datetime | None = None
+    # A listed entity's closed card blocks a new one until the entity stops
+    # matching: a dismissed or done card does not come back by itself.
+    blocked: bool = False
+    # The channels were silenced (Keep it, stop light, speaker and push).
+    silenced: bool = False
+    trigger: dict[str, Any] | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+    message_override: str | None = None
+    info_override: str | None = None
+    attachments: list[dict[str, Any]] | None = None
+    message: str | None = None
+    info: str | None = None
+
+    @property
+    def key(self) -> CardKey:
+        """Return the key of the card."""
+        return (self.notification_id, self.step_id, self.entity_id or "")
+
+    @property
+    def status(self) -> str:
+        """Return the state of the card, including how it closed."""
+        if self.phase == PHASE_OPEN:
+            return STATE_HIDDEN if self.hidden else STATE_ACTIVE
+        if self.phase == PHASE_SNOOZED:
+            return STATE_SNOOZED
+        return self.closed_reason or CLOSED_DISMISSED
+
+    @property
+    def is_open(self) -> bool:
+        """Return whether the card is open or snoozed (not closed)."""
+        return self.phase != PHASE_CLOSED
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return the card for storage and the websocket API."""
+        return {
+            "notification_id": self.notification_id,
+            "step_id": self.step_id,
+            "entity_id": self.entity_id,
+            "phase": self.phase,
+            "status": self.status,
+            "since": self.since.isoformat(),
+            "state_since": self.state_since.isoformat(),
+            "source": self.source,
+            "hidden": self.hidden,
+            "snoozed_until": _iso(self.snoozed_until),
+            "closed_reason": self.closed_reason,
+            "closed_at": _iso(self.closed_at),
+            "blocked": self.blocked,
+            "silenced": self.silenced,
+            "trigger": self.trigger,
+            "data": self.data,
+            "message_override": self.message_override,
+            "info_override": self.info_override,
+            "attachments": self.attachments,
+            "message": self.message,
+            "info": self.info,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> Card:
+        """Return a card read from storage."""
+        since = _parse_time(data.get("since")) or dt_util.utcnow()
+        return cls(
+            notification_id=data["notification_id"],
+            step_id=data["step_id"],
+            entity_id=data.get("entity_id"),
+            phase=data["phase"],
+            since=since,
+            state_since=_parse_time(data.get("state_since")) or since,
+            source=data.get("source", SOURCE_TRIGGER),
+            hidden=bool(data.get("hidden", False)),
+            snoozed_until=_parse_time(data.get("snoozed_until")),
+            closed_reason=data.get("closed_reason"),
+            closed_at=_parse_time(data.get("closed_at")),
+            blocked=bool(data.get("blocked", False)),
+            silenced=bool(data.get("silenced", False)),
+            trigger=data.get("trigger"),
+            data=dict(data.get("data") or {}),
+            message_override=data.get("message_override"),
+            info_override=data.get("info_override"),
+            attachments=data.get("attachments"),
+            message=data.get("message"),
+            info=data.get("info"),
+        )
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+@dataclass(slots=True)
+class Overrides:
+    """What the trigger action gives a card instead of the step's own."""
+
+    message: str | None = None
+    info: str | None = None
+    attachments: list[dict[str, Any]] | None = None
+    data: dict[str, Any] | None = None
+
+
+@dataclass(slots=True)
+class _StateWatch:
+    """A Notification state trigger: report when a step reaches a state."""
+
+    notification_id: str
+    step_id: str | None
+    state: str
+    for_: timedelta | None
+    action: Callable[[Card, dict[str, Any]], None]
+    timers: dict[CardKey, CALLBACK_TYPE] = field(default_factory=dict)
+
+    def applies_to(self, card: Card) -> bool:
+        return card.notification_id == self.notification_id and (
+            self.step_id is None or card.step_id == self.step_id
+        )
+
+    def cancel_all(self) -> None:
+        for cancel in self.timers.values():
+            cancel()
+        self.timers.clear()
+
+
+class _Conditions:
+    """Home Assistant conditions together with the integration's own ones."""
+
+    def __init__(
+        self,
+        engine: Engine,
+        notification: NotificationRunner,
+        own: list[dict[str, Any]],
+        checker: ConditionsChecker | None,
+    ) -> None:
+        self._engine = engine
+        self._notification = notification
+        self._own = own
+        self._checker = checker
+
+    @property
+    def empty(self) -> bool:
+        return not self._own and self._checker is None
+
+    def check(self, variables: Mapping[str, Any]) -> bool:
+        """Return whether every condition is true."""
+        for condition in self._own:
+            if not self._engine.check_own_condition(
+                condition, self._notification, variables
+            ):
+                return False
+        if self._checker is not None:
+            return self._checker(dict(variables))
+        return True
+
+    def unload(self) -> None:
+        if self._checker is not None:
+            self._checker.async_unload()
+
+
+async def _async_conditions(
+    engine: Engine,
+    notification: NotificationRunner,
+    configs: list[dict[str, Any]],
+    name: str,
+) -> tuple[_Conditions, set[str], bool]:
+    """Compile conditions; return them, their entities and if time matters."""
+    own = [c for c in configs if str(c.get("condition", "")).startswith(f"{DOMAIN}.")]
+    others = [c for c in configs if c not in own]
+    checker: ConditionsChecker | None = None
+    entities: set[str] = set()
+    timed = False
+    if others:
+        validated = await async_validate_conditions_config(
+            engine.hass, cv.CONDITIONS_SCHEMA(others)
+        )
+        checker = await async_conditions_from_config(
+            engine.hass,
+            cast(list[dict[str, Any]], validated),
+            _LOGGER,
+            name,
+        )
+        for condition in validated:
+            entities |= async_extract_entities(condition)
+            timed |= _is_timed(condition)
+    return _Conditions(engine, notification, own, checker), entities, timed
+
+
+def _is_timed(condition: Any) -> bool:
+    if not isinstance(condition, Mapping):
+        return True  # a template shorthand
+    if condition.get("condition") in _TIMED_CONDITIONS:
+        return True
+    return any(_is_timed(item) for item in condition.get("conditions", []))
+
+
+class StepRunner:
+    """Run one step: start it, hide it and close it."""
+
+    def __init__(
+        self,
+        engine: Engine,
+        notification: NotificationRunner,
+        step: dict[str, Any],
+        number: int,
+    ) -> None:
+        """Set up the step; call ``async_start`` to begin."""
+        self.engine = engine
+        self.hass = engine.hass
+        self.notification = notification
+        self.step = step
+        self.number = number
+        self.step_id: str = step["id"]
+        self._unsubs: list[CALLBACK_TYPE] = []
+        self._trackers: list[ListedTracker] = []
+        self._watches: list[_StateWatch] = []
+        self._start_trackers: list[ListedTracker] = []
+        self.start_conditions: _Conditions | None = None
+        self.hide_while: _Conditions | None = None
+        self.hide_timed = False
+        self._hide_entities: set[str] = set()
+
+    @property
+    def name(self) -> str:
+        """Return a name for logs."""
+        return f"{self.notification.name} step {self.number}"
+
+    @property
+    def is_listed(self) -> bool:
+        """Return whether the step starts with Listed entities."""
+        return bool(self._start_trackers)
+
+    async def async_start(self) -> None:
+        """Set up the triggers and conditions of the step."""
+        start = self.step["start"]
+        self.start_conditions, _, _ = await _async_conditions(
+            self.engine,
+            self.notification,
+            start.get("conditions", []),
+            f"{self.name} conditions",
+        )
+        self.hide_while, self._hide_entities, self.hide_timed = await _async_conditions(
+            self.engine,
+            self.notification,
+            self.step.get("hide_while", []),
+            f"{self.name} hide while",
+        )
+        if self._hide_entities:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass, sorted(self._hide_entities), self._hide_changed
+                )
+            )
+        if start["type"] == "triggers":
+            await self._async_setup_triggers(
+                start.get("triggers", []),
+                self._start_fired,
+                (self._start_listed, self._start_unmatched),
+                start=True,
+            )
+        await self._async_setup_triggers(
+            self.step["done_when"].get("triggers", []),
+            self._done_fired,
+            (self._done_listed, self._done_unmatched),
+        )
+
+    @callback
+    def async_stop(self) -> None:
+        """Remove every listener of the step."""
+        for unsub in self._unsubs:
+            unsub()
+        self._unsubs.clear()
+        for tracker in self._trackers:
+            tracker.async_stop()
+        self._trackers.clear()
+        self._start_trackers.clear()
+        for watch in self._watches:
+            self.engine.remove_watch(watch)
+        self._watches.clear()
+        for conditions in (self.start_conditions, self.hide_while):
+            if conditions is not None:
+                conditions.unload()
+
+    async def _async_setup_triggers(
+        self,
+        triggers: list[dict[str, Any]],
+        fired: Callable[[dict[str, Any], Context | None], None],
+        listed: tuple[Callable[[str, dict[str, Any]], None], Callable[[str], None]],
+        *,
+        start: bool = False,
+    ) -> None:
+        others: list[dict[str, Any]] = []
+        for trigger in triggers:
+            kind = trigger.get("trigger", trigger.get("platform"))
+            if kind == TRIGGER_LISTED_ENTITIES:
+                tracker = ListedTracker(
+                    self.hass, self.notification.entities, trigger, *listed
+                )
+                self._trackers.append(tracker)
+                if start:
+                    self._start_trackers.append(tracker)
+            elif kind == TRIGGER_NOTIFICATION_STATE:
+                self._add_watch(trigger, fired)
+            else:
+                others.append(trigger)
+        if others:
+            try:
+                validated = await async_validate_trigger_config(
+                    self.hass, cv.TRIGGER_SCHEMA(others)
+                )
+            except (HomeAssistantError, ValueError) as err:
+                _LOGGER.error("Invalid trigger in %s: %s", self.name, err)
+                return
+            unsub = await async_initialize_triggers(
+                self.hass,
+                validated,
+                self._ha_trigger_action(fired),
+                DOMAIN,
+                self.name,
+                self._log,
+            )
+            if unsub is not None:
+                self._unsubs.append(unsub)
+
+    def _ha_trigger_action(
+        self, fired: Callable[[dict[str, Any], Context | None], None]
+    ) -> Callable[[dict[str, Any], Context | None], None]:
+        @callback
+        def action(
+            run_variables: dict[str, Any], context: Context | None = None
+        ) -> None:
+            fired(dict(run_variables.get("trigger", {})), context)
+
+        return action
+
+    @callback
+    def _log(self, level: int, msg: str, **kwargs: Any) -> None:
+        _LOGGER.log(level, "%s %s", msg, self.name, **kwargs)
+
+    @callback
+    def start_listed_trackers(self) -> None:
+        """Start the Listed entities trackers (after the cards are restored)."""
+        for tracker in self._trackers:
+            tracker.async_start()
+        if self.step["done_when"].get("start_no_longer_true"):
+            for card in self.engine.cards_of(self.notification.id, self.step_id):
+                if (
+                    card.entity_id is not None
+                    and card.is_open
+                    and not self.start_matching(card.entity_id)
+                ):
+                    self.engine.close(card, CLOSED_DONE, SOURCE_ENTITY)
+
+    def _add_watch(
+        self,
+        trigger: dict[str, Any],
+        fired: Callable[[dict[str, Any], Context | None], None],
+    ) -> None:
+        notification_id = self.engine.resolve_notification(trigger["notification"])
+        if notification_id is None:
+            _LOGGER.warning(
+                "%s: no notification %s", self.name, trigger["notification"]
+            )
+            return
+        period = trigger.get("for")
+
+        @callback
+        def action(card: Card, variables: dict[str, Any]) -> None:
+            fired(variables, None)
+
+        watch = _StateWatch(
+            notification_id=notification_id,
+            step_id=trigger.get("step"),
+            state=trigger["state"],
+            for_=cv.positive_time_period_dict(period) if period else None,
+            action=action,
+        )
+        self._watches.append(watch)
+        self.engine.add_watch(watch)
+
+    # -- Start --------------------------------------------------------------
+
+    @callback
+    def _start_fired(self, trigger: dict[str, Any], context: Context | None) -> None:
+        entity_id = trigger.get("entity_id") if self.is_listed else None
+        variables = {
+            "trigger": trigger,
+            "entity": entity_id or trigger.get("entity_id"),
+        }
+        if self.start_conditions is not None and not self.start_conditions.check(
+            variables
+        ):
+            return
+        self.engine.open(
+            self,
+            entity_id if isinstance(entity_id, str) else None,
+            trigger,
+            SOURCE_TRIGGER,
+        )
+
+    @callback
+    def _start_listed(self, entity_id: str, trigger: dict[str, Any]) -> None:
+        variables = {"trigger": trigger, "entity": entity_id}
+        if self.start_conditions is not None and not self.start_conditions.check(
+            variables
+        ):
+            return
+        self.engine.open(self, entity_id, trigger, SOURCE_ENTITY)
+
+    @callback
+    def _start_unmatched(self, entity_id: str) -> None:
+        key = (self.notification.id, self.step_id, entity_id)
+        card = self.engine.cards.get(key)
+        if card is None:
+            return
+        if not card.is_open:
+            # A done card stays until midnight; the entity may open a new one.
+            self.engine.forget_block(card)
+            return
+        if card.is_open and self.step["done_when"].get("start_no_longer_true"):
+            self.engine.close(card, CLOSED_DONE, SOURCE_ENTITY)
+            self.engine.forget_block(card)
+
+    # -- Done when ----------------------------------------------------------
+
+    @callback
+    def _done_fired(self, trigger: dict[str, Any], context: Context | None) -> None:
+        cards = [
+            card
+            for card in self.engine.cards_of(self.notification.id, self.step_id)
+            if card.is_open
+        ]
+        entity_id = trigger.get("entity_id")
+        own = [card for card in cards if card.entity_id == entity_id]
+        for card in own or cards:
+            self.engine.close(card, CLOSED_DONE, SOURCE_DONE_WHEN, context=context)
+
+    @callback
+    def _done_listed(self, entity_id: str, trigger: dict[str, Any]) -> None:
+        self._done_fired(trigger, None)
+
+    @callback
+    def _done_unmatched(self, entity_id: str) -> None:
+        """Do nothing: an entity of a Done when trigger stopped matching."""
+
+    def start_matching(self, entity_id: str) -> bool:
+        """Return whether an entity matches a Listed entities start trigger."""
+        return any(tracker.is_matching(entity_id) for tracker in self._start_trackers)
+
+    # -- Hide while ---------------------------------------------------------
+
+    @callback
+    def _hide_changed(self, *_: Any) -> None:
+        self.refresh_hidden()
+
+    @callback
+    def refresh_hidden(self) -> None:
+        """Check Hide while again for the open cards of the step."""
+        for card in self.engine.cards_of(self.notification.id, self.step_id):
+            if card.phase == PHASE_OPEN:
+                self.engine.set_hidden(card, self.is_hidden(card))
+
+    def is_hidden(self, card: Card) -> bool:
+        """Return whether Hide while is true for a card."""
+        if self.hide_while is None or self.hide_while.empty:
+            return False
+        return self.hide_while.check(self.engine.variables(card))
+
+    @property
+    def has_listed_start(self) -> bool:
+        """Return whether a Listed entities trigger starts the step."""
+        return any(
+            trigger.get("trigger", trigger.get("platform")) == TRIGGER_LISTED_ENTITIES
+            for trigger in self.step["start"].get("triggers", [])
+        )
+
+
+class NotificationRunner:
+    """Run the steps of one notification."""
+
+    def __init__(self, engine: Engine, notification: dict[str, Any]) -> None:
+        """Set up the notification; call ``async_start`` to begin."""
+        self.engine = engine
+        self.config = notification
+        self.id: str = notification["id"]
+        self.name: str = notification["name"]
+        self.entities = EntityList(engine.hass, notification)
+        self.steps: dict[str, StepRunner] = {}
+        for number, step in enumerate(notification["steps"], start=1):
+            if step.get("enabled", True):
+                self.steps[step["id"]] = StepRunner(engine, self, step, number)
+
+    async def async_start(self) -> None:
+        """Set up every step."""
+        for step in self.steps.values():
+            try:
+                await step.async_start()
+            except Exception:
+                _LOGGER.exception("Error setting up %s", step.name)
+
+    @callback
+    def start_trackers(self) -> None:
+        """Start the Listed entities trackers of every step."""
+        for step in self.steps.values():
+            step.start_listed_trackers()
+
+    @callback
+    def async_stop(self) -> None:
+        """Stop every step."""
+        for step in self.steps.values():
+            step.async_stop()
+
+
+class Engine:
+    """Hold every card and run the notifications."""
+
+    def __init__(self, hass: HomeAssistant, manager: ConfigManager) -> None:
+        """Set up the engine; call ``async_load`` and ``async_start``."""
+        self.hass = hass
+        self.manager = manager
+        self.cards: dict[CardKey, Card] = {}
+        # notification id -> step id -> state -> ISO time it was last reached
+        self.history: dict[str, dict[str, dict[str, str]]] = {}
+        self.runners: dict[str, NotificationRunner] = {}
+        self.modes = ModeTracker(hass, manager.config["modes"], self._mode_changed)
+        self._store = Store[dict[str, Any]](hass, RUNTIME_VERSION, RUNTIME_KEY)
+        self._listeners: list[ChangeListener] = []
+        self._event_listeners: list[EventListener] = []
+        self._watches: list[_StateWatch] = []
+        self._snooze_timers: dict[CardKey, CALLBACK_TYPE] = {}
+        self._text_trackers: dict[CardKey, TextTracker] = {}
+        self._unsubs: list[CALLBACK_TYPE] = []
+        self._started = False
+        self._config = manager.config
+
+    # -- Life cycle ---------------------------------------------------------
+
+    async def async_load(self) -> None:
+        """Read the saved cards; start the timers that do not need triggers."""
+        stored = await self._store.async_load() or {}
+        self.history = {
+            str(nid): {str(sid): dict(states) for sid, states in steps.items()}
+            for nid, steps in (stored.get("history") or {}).items()
+        }
+        for item in stored.get("cards") or []:
+            try:
+                card = Card.from_dict(item)
+            except KeyError, TypeError, ValueError:
+                continue
+            if self._step_config(card.notification_id, card.step_id) is None:
+                continue
+            self.cards[card.key] = card
+        self._prune()
+        for card in self.cards.values():
+            if card.phase == PHASE_SNOOZED:
+                self._schedule_unsnooze(card)
+        self._unsubs.append(self.manager.async_add_listener(self._config_changed))
+        self._unsubs.append(
+            async_track_time_change(
+                self.hass, self._midnight, hour=0, minute=0, second=0
+            )
+        )
+        self._unsubs.append(async_track_time_change(self.hass, self._minute, second=0))
+        self._unsubs.append(async_at_started(self.hass, self._async_started))
+
+    async def _async_started(self, _hass: HomeAssistant) -> None:
+        self._started = True
+        self.modes.async_start()
+        for notification in self._config["notifications"]:
+            await self._async_start_notification(notification)
+        for card in list(self.cards.values()):
+            if card.is_open:
+                self._start_text(card)
+        self._notify()
+
+    async def _async_start_notification(self, notification: dict[str, Any]) -> None:
+        if not notification.get("enabled", True):
+            return
+        runner = NotificationRunner(self, notification)
+        self.runners[runner.id] = runner
+        await runner.async_start()
+        if self.runners.get(runner.id) is not runner:
+            runner.async_stop()
+            return
+        for step in runner.steps.values():
+            for card in self.cards_of(runner.id, step.step_id):
+                if card.phase == PHASE_OPEN:
+                    self.set_hidden(card, step.is_hidden(card))
+        runner.start_trackers()
+
+    async def async_unload(self) -> None:
+        """Stop everything and save the cards."""
+        for unsub in self._unsubs:
+            unsub()
+        self._unsubs.clear()
+        for runner in self.runners.values():
+            runner.async_stop()
+        self.runners.clear()
+        self.modes.async_stop()
+        for cancel in self._snooze_timers.values():
+            cancel()
+        self._snooze_timers.clear()
+        for tracker in self._text_trackers.values():
+            tracker.async_stop()
+        self._text_trackers.clear()
+        await self._store.async_save(self._data_to_save())
+
+    @callback
+    def _config_changed(self, config: ConfigData) -> None:
+        old = {item["id"]: item for item in self._config["notifications"]}
+        self._config = config
+        if config["modes"] != self.modes.modes:
+            self.modes.async_stop()
+            self.modes = ModeTracker(self.hass, config["modes"], self._mode_changed)
+            if self._started:
+                self.modes.async_start()
+        new = {item["id"]: item for item in config["notifications"]}
+        for nid in list(self.runners):
+            if nid not in new or new[nid] != old.get(nid):
+                self.runners.pop(nid).async_stop()
+        for card in list(self.cards.values()):
+            notification = new.get(card.notification_id)
+            step = self._step_config(card.notification_id, card.step_id)
+            if (
+                notification is None
+                or not notification.get("enabled", True)
+                or step is None
+                or not step.get("enabled", True)
+            ):
+                self.forget(card)
+        if self._started:
+            for nid, notification in new.items():
+                if nid not in self.runners:
+                    self.hass.async_create_task(
+                        self._async_start_notification(notification),
+                        eager_start=True,
+                    )
+        self._save()
+        self._notify()
+
+    # -- Listeners ----------------------------------------------------------
+
+    @callback
+    def async_add_listener(self, listener: ChangeListener) -> CALLBACK_TYPE:
+        """Call the listener after every change of a card or the mode."""
+        self._listeners.append(listener)
+
+        @callback
+        def remove() -> None:
+            self._listeners.remove(listener)
+
+        return remove
+
+    @callback
+    def async_add_event_listener(self, listener: EventListener) -> CALLBACK_TYPE:
+        """Call the listener with every event (active, done, ...)."""
+        self._event_listeners.append(listener)
+
+        @callback
+        def remove() -> None:
+            self._event_listeners.remove(listener)
+
+        return remove
+
+    @callback
+    def _notify(self) -> None:
+        for listener in list(self._listeners):
+            listener()
+
+    @callback
+    def _mode_changed(self) -> None:
+        self._notify()
+
+    def add_watch(self, watch: _StateWatch) -> None:
+        """Start reporting a Notification state trigger."""
+        self._watches.append(watch)
+
+    def remove_watch(self, watch: _StateWatch) -> None:
+        """Stop reporting a Notification state trigger."""
+        watch.cancel_all()
+        if watch in self._watches:
+            self._watches.remove(watch)
+
+    # -- Config lookups -----------------------------------------------------
+
+    def notification_config(self, notification_id: str) -> dict[str, Any] | None:
+        """Return the configuration of a notification."""
+        for item in self._config["notifications"]:
+            if item["id"] == notification_id:
+                return dict(item)
+        return None
+
+    def _step_config(self, notification_id: str, step_id: str) -> dict[str, Any] | None:
+        notification = self.notification_config(notification_id)
+        if notification is None:
+            return None
+        for step in notification["steps"]:
+            if step["id"] == step_id:
+                return dict(step)
+        return None
+
+    def step_number(self, notification_id: str, step_id: str) -> int | None:
+        """Return the number of a step (1 is the first)."""
+        notification = self.notification_config(notification_id)
+        if notification is None:
+            return None
+        for number, step in enumerate(notification["steps"], start=1):
+            if step["id"] == step_id:
+                return number
+        return None
+
+    def step_id_of(self, notification_id: str, number: int) -> str:
+        """Return the id of a step by its number, or raise an error."""
+        notification = self.notification_config(notification_id)
+        if notification is None:
+            raise ServiceValidationError(f"No notification {notification_id}")
+        steps = notification["steps"]
+        if not 1 <= number <= len(steps):
+            raise ServiceValidationError(
+                f"{notification['name']} has {len(steps)} step(s), not {number}"
+            )
+        return str(steps[number - 1]["id"])
+
+    def entity_id_of(self, notification_id: str) -> str | None:
+        """Return the entity id of a notification's sensor."""
+        return er.async_get(self.hass).async_get_entity_id(
+            "sensor", DOMAIN, UNIQUE_ID_NOTIFICATION_PREFIX + notification_id
+        )
+
+    def resolve_notification(self, reference: str) -> str | None:
+        """Return a notification id from an id or its sensor's entity id."""
+        if self.notification_config(reference) is not None:
+            return reference
+        entry = er.async_get(self.hass).async_get(reference)
+        if (
+            entry is not None
+            and entry.platform == DOMAIN
+            and entry.unique_id.startswith(UNIQUE_ID_NOTIFICATION_PREFIX)
+        ):
+            return entry.unique_id.removeprefix(UNIQUE_ID_NOTIFICATION_PREFIX)
+        return None
+
+    # -- Cards --------------------------------------------------------------
+
+    def cards_of(self, notification_id: str, step_id: str | None = None) -> list[Card]:
+        """Return the cards of a notification or of one of its steps."""
+        return [
+            card
+            for card in self.cards.values()
+            if card.notification_id == notification_id
+            and (step_id is None or card.step_id == step_id)
+        ]
+
+    def variables(self, card: Card) -> dict[str, Any]:
+        """Return the template variables of a card."""
+        notification = self.notification_config(card.notification_id) or {}
+        return {
+            "entity": card.entity_id,
+            "trigger": card.trigger or {},
+            "data": card.data,
+            "notification": {
+                "id": card.notification_id,
+                "name": notification.get("name"),
+                "entity_id": self.entity_id_of(card.notification_id),
+            },
+        }
+
+    @callback
+    def open(
+        self,
+        step: StepRunner,
+        entity_id: str | None,
+        trigger: dict[str, Any] | None,
+        source: str,
+        overrides: Overrides | None = None,
+        context: Context | None = None,
+    ) -> Card | None:
+        """Open a card of a step, or refresh it if it is already open."""
+        now = dt_util.utcnow()
+        key = (step.notification.id, step.step_id, entity_id or "")
+        card = self.cards.get(key)
+        trigger_data = _jsonable(trigger) if trigger else None
+        if card is not None and card.is_open:
+            self._refresh(card, trigger_data, overrides)
+            if card.phase == PHASE_SNOOZED:
+                self._cancel_unsnooze(card)
+                self._change(
+                    card,
+                    source=source,
+                    context=context,
+                    phase=PHASE_OPEN,
+                    snoozed_until=None,
+                    hidden=step.is_hidden(card),
+                )
+            else:
+                self._render(card)
+                self._save()
+                self._notify()
+            return card
+        if card is not None and card.blocked and source == SOURCE_ENTITY:
+            return None
+        if card is not None:
+            self.forget(card)
+        card = Card(
+            notification_id=step.notification.id,
+            step_id=step.step_id,
+            entity_id=entity_id,
+            phase=PHASE_CLOSED,
+            since=now,
+            state_since=now,
+            source=source,
+            closed_reason=CLOSED_DISMISSED,
+            trigger=trigger_data,
+        )
+        self._refresh(card, trigger_data, overrides)
+        self.cards[card.key] = card
+        self._render(card)
+        self._change(
+            card,
+            source=source,
+            context=context,
+            phase=PHASE_OPEN,
+            closed_reason=None,
+            hidden=step.is_hidden(card),
+        )
+        self._start_text(card)
+        return card
+
+    def _refresh(
+        self,
+        card: Card,
+        trigger: dict[str, Any] | None,
+        overrides: Overrides | None,
+    ) -> None:
+        if trigger is not None:
+            card.trigger = trigger
+        if overrides is None:
+            return
+        if overrides.message is not None:
+            card.message_override = overrides.message
+        if overrides.info is not None:
+            card.info_override = overrides.info
+        if overrides.attachments is not None:
+            card.attachments = overrides.attachments
+        if overrides.data is not None:
+            card.data = overrides.data
+
+    @callback
+    def close(
+        self,
+        card: Card,
+        reason: str,
+        source: str,
+        context: Context | None = None,
+    ) -> None:
+        """Close a card: done, dismissed or expired."""
+        if not card.is_open:
+            return
+        self._cancel_unsnooze(card)
+        self._stop_text(card)
+        runner = self.runners.get(card.notification_id)
+        step = runner.steps.get(card.step_id) if runner else None
+        blocked = (
+            card.entity_id is not None
+            and step is not None
+            and step.has_listed_start
+            and step.start_matching(card.entity_id)
+        )
+        self._change(
+            card,
+            source=source,
+            context=context,
+            phase=PHASE_CLOSED,
+            closed_reason=reason,
+            closed_at=dt_util.utcnow(),
+            snoozed_until=None,
+            hidden=False,
+            blocked=blocked,
+        )
+        if reason != CLOSED_DONE and not card.blocked:
+            self.cards.pop(card.key, None)
+            self._save()
+            self._notify()
+
+    @callback
+    def snooze(
+        self,
+        card: Card,
+        until: datetime,
+        source: str,
+        context: Context | None = None,
+    ) -> None:
+        """Snooze a card until a time."""
+        if not card.is_open:
+            return
+        self._cancel_unsnooze(card)
+        self._change(
+            card,
+            source=source,
+            context=context,
+            phase=PHASE_SNOOZED,
+            snoozed_until=dt_util.as_utc(until),
+        )
+        self._schedule_unsnooze(card)
+
+    @callback
+    def set_hidden(self, card: Card, hidden: bool) -> None:
+        """Hide or show an open card."""
+        if card.phase == PHASE_OPEN and card.hidden != hidden:
+            self._change(card, source=SOURCE_TRIGGER, hidden=hidden)
+
+    @callback
+    def forget(self, card: Card) -> None:
+        """Remove a card without any event (its notification changed)."""
+        self._cancel_unsnooze(card)
+        self._stop_text(card)
+        for watch in self._watches:
+            if (cancel := watch.timers.pop(card.key, None)) is not None:
+                cancel()
+        if self.cards.get(card.key) is card:
+            del self.cards[card.key]
+        self._save()
+        self._notify()
+
+    @callback
+    def forget_block(self, card: Card) -> None:
+        """Let a listed entity's card open again: the entity stopped matching."""
+        if card.blocked:
+            card.blocked = False
+            if card.closed_reason != CLOSED_DONE:
+                self.forget(card)
+            else:
+                self._save()
+
+    def snooze_tomorrow(self, card: Card) -> datetime:
+        """Return when a card snoozed until "Tomorrow" comes back."""
+        step = self._step_config(card.notification_id, card.step_id) or {}
+        tomorrow = dt_util.now().date() + timedelta(days=1)
+        if step.get("start", {}).get("type") == "schedule":
+            at = dt_util.as_local(card.since).time()
+        else:
+            at = dt_util.parse_time(
+                self._config["general"].get("snooze_tomorrow_at", "08:00")
+            ) or time(8)
+        return dt_util.as_utc(
+            datetime.combine(tomorrow, at, tzinfo=dt_util.get_default_time_zone())
+        )
+
+    def set_last_done(self, notification_id: str, step_id: str, when: datetime) -> None:
+        """Set when a step was last done."""
+        self._record(notification_id, step_id, CLOSED_DONE, when)
+        self._save()
+        self._notify()
+
+    def last_reached(
+        self, notification_id: str, step_id: str | None, state: str
+    ) -> datetime | None:
+        """Return when a step (or any step) last reached a state."""
+        steps = self.history.get(notification_id, {})
+        times = [
+            parsed
+            for sid, states in steps.items()
+            if step_id is None or sid == step_id
+            if (parsed := _parse_time(states.get(state))) is not None
+        ]
+        return max(times) if times else None
+
+    # -- Changing a card ----------------------------------------------------
+
+    def _change(
+        self,
+        card: Card,
+        *,
+        source: str,
+        context: Context | None = None,
+        **changes: Any,
+    ) -> None:
+        old = card.status
+        for name, value in changes.items():
+            setattr(card, name, value)
+        new = card.status
+        if new != old:
+            now = dt_util.utcnow()
+            card.state_since = now
+            self._record(card.notification_id, card.step_id, new, now)
+            self._state_reached(card, old, new)
+            self._fire_event(card, new, source, context)
+        self._save()
+        self._notify()
+
+    def _record(
+        self, notification_id: str, step_id: str, state: str, when: datetime
+    ) -> None:
+        self.history.setdefault(notification_id, {}).setdefault(step_id, {})[state] = (
+            dt_util.as_utc(when).isoformat()
+        )
+
+    def _state_reached(self, card: Card, old: str, new: str) -> None:
+        for watch in list(self._watches):
+            if not watch.applies_to(card):
+                continue
+            if (
+                old == watch.state
+                and (cancel := watch.timers.pop(card.key, None)) is not None
+            ):
+                cancel()
+            if new != watch.state:
+                continue
+            variables = {
+                "platform": TRIGGER_NOTIFICATION_STATE,
+                "notification": card.notification_id,
+                "step": card.step_id,
+                "entity_id": card.entity_id,
+                "from_state": old,
+                "to_state": new,
+            }
+            if watch.for_ is None:
+                watch.action(card, variables)
+                continue
+            watch.timers[card.key] = async_track_point_in_utc_time(
+                self.hass,
+                self._watch_timer(watch, card, variables),
+                dt_util.utcnow() + watch.for_,
+            )
+
+    def _watch_timer(
+        self, watch: _StateWatch, card: Card, variables: dict[str, Any]
+    ) -> Callable[[datetime], None]:
+        @callback
+        def fire(_now: datetime) -> None:
+            watch.timers.pop(card.key, None)
+            if self.cards.get(card.key) is card and card.status == watch.state:
+                watch.action(card, variables)
+
+        return fire
+
+    def _fire_event(
+        self, card: Card, state: str, source: str, context: Context | None
+    ) -> None:
+        event_type = {
+            STATE_ACTIVE: EVENT_ACTIVE,
+            STATE_SNOOZED: EVENT_SNOOZED,
+            CLOSED_DONE: EVENT_DONE,
+            CLOSED_DISMISSED: EVENT_DISMISSED,
+            CLOSED_EXPIRED: EVENT_EXPIRED,
+        }.get(state)
+        if event_type is None:
+            return
+        data = {
+            "notification": self.entity_id_of(card.notification_id),
+            "step": self.step_number(card.notification_id, card.step_id),
+            "entity": card.entity_id,
+            "source": source,
+            "person": self.person_of(context),
+            "message": card.message,
+        }
+        for listener in list(self._event_listeners):
+            listener(event_type, data)
+
+    def person_of(self, context: Context | None) -> str | None:
+        """Return the person entity of the user behind a context."""
+        if context is None or context.user_id is None:
+            return None
+        for state in self.hass.states.async_all("person"):
+            if state.attributes.get("user_id") == context.user_id:
+                return state.entity_id
+        return None
+
+    # -- Text ---------------------------------------------------------------
+
+    def _render(self, card: Card) -> bool:
+        step = self._step_config(card.notification_id, card.step_id)
+        if step is None:
+            return False
+        variables = self.variables(card)
+        message, _ = render_text(
+            self.hass,
+            card.message_override or step["message"],
+            variables,
+            card.entity_id,
+        )
+        info, _ = render_text(
+            self.hass, card.info_override or step.get("info"), variables, card.entity_id
+        )
+        changed = (message, info) != (card.message, card.info)
+        card.message, card.info = message, info
+        return changed
+
+    def _start_text(self, card: Card) -> None:
+        self._stop_text(card)
+        step = self._step_config(card.notification_id, card.step_id)
+        if step is None:
+            return
+        texts = [
+            text
+            for text in (
+                card.message_override or step["message"],
+                card.info_override or step.get("info"),
+            )
+            if text
+        ]
+        entity_id = card.entity_id or (card.trigger or {}).get("entity_id")
+
+        @callback
+        def changed() -> None:
+            if self.cards.get(card.key) is card and self._render(card):
+                self._save()
+                self._notify()
+
+        tracker = TextTracker(
+            self.hass,
+            texts,
+            self.variables(card),
+            entity_id if isinstance(entity_id, str) else None,
+            changed,
+        )
+        self._text_trackers[card.key] = tracker
+        tracker.async_start()
+        if self._render(card):
+            self._save()
+            self._notify()
+
+    def _stop_text(self, card: Card) -> None:
+        if (tracker := self._text_trackers.pop(card.key, None)) is not None:
+            tracker.async_stop()
+
+    # -- Timers -------------------------------------------------------------
+
+    def _schedule_unsnooze(self, card: Card) -> None:
+        if card.snoozed_until is None:
+            return
+
+        @callback
+        def wake(_now: datetime) -> None:
+            self._snooze_timers.pop(card.key, None)
+            if self.cards.get(card.key) is not card or card.phase != PHASE_SNOOZED:
+                return
+            runner = self.runners.get(card.notification_id)
+            step = runner.steps.get(card.step_id) if runner else None
+            self._change(
+                card,
+                source=SOURCE_SNOOZE_END,
+                phase=PHASE_OPEN,
+                snoozed_until=None,
+                hidden=step.is_hidden(card) if step else False,
+            )
+            self._start_text(card)
+
+        self._snooze_timers[card.key] = async_track_point_in_utc_time(
+            self.hass, wake, card.snoozed_until
+        )
+
+    def _cancel_unsnooze(self, card: Card) -> None:
+        if (cancel := self._snooze_timers.pop(card.key, None)) is not None:
+            cancel()
+
+    @callback
+    def _midnight(self, _now: datetime) -> None:
+        self._prune()
+        self._save()
+        self._notify()
+
+    @callback
+    def _minute(self, _now: datetime) -> None:
+        for runner in self.runners.values():
+            for step in runner.steps.values():
+                if step.hide_timed:
+                    step.refresh_hidden()
+
+    def _prune(self) -> None:
+        """Forget the cards closed before today (except blocking ones)."""
+        start = dt_util.start_of_local_day()
+        for card in list(self.cards.values()):
+            if (
+                not card.is_open
+                and not card.blocked
+                and (card.closed_at is None or card.closed_at < start)
+            ):
+                del self.cards[card.key]
+
+    # -- Storage ------------------------------------------------------------
+
+    def _save(self) -> None:
+        self._store.async_delay_save(self._data_to_save, SAVE_DELAY)
+
+    def _data_to_save(self) -> dict[str, Any]:
+        return {
+            "cards": [card.as_dict() for card in self.cards.values()],
+            "history": self.history,
+        }
+
+    # -- Own conditions -----------------------------------------------------
+
+    def check_own_condition(
+        self,
+        condition: Mapping[str, Any],
+        notification: NotificationRunner,
+        variables: Mapping[str, Any],
+    ) -> bool:
+        """Check a Listed entities or Notification state condition."""
+        kind = condition["condition"]
+        if kind == TRIGGER_LISTED_ENTITIES:
+            entity_id = variables.get("entity")
+            if isinstance(entity_id, str) and notification.entities.contains(entity_id):
+                return ListedMatcher(condition).matches(self.hass.states.get(entity_id))
+            return any(
+                True
+                for _ in matching_entities(self.hass, notification.entities, condition)
+            )
+        return self.check_notification_state(condition)
+
+    def check_notification_state(self, condition: Mapping[str, Any]) -> bool:
+        """Check a Notification state condition."""
+        notification_id = self.resolve_notification(condition["notification"])
+        if notification_id is None:
+            return False
+        step_id: str | None = condition.get("step")
+        state: str = condition["state"]
+        if (within := condition.get("within")) is not None:
+            reached = self.last_reached(notification_id, step_id, state)
+            return reached is not None and dt_util.utcnow() - reached <= (
+                cv.positive_time_period_dict(within)
+            )
+        period = condition.get("for")
+        needed = cv.positive_time_period_dict(period) if period else timedelta()
+        now = dt_util.utcnow()
+        start = dt_util.start_of_local_day()
+        for card in self.cards_of(notification_id, step_id):
+            if card.status != state:
+                continue
+            if state == CLOSED_DONE and (
+                card.closed_at is None or card.closed_at < start
+            ):
+                continue
+            if now - card.state_since >= needed:
+                return True
+        return False
+
+    # -- Views for entities and the websocket API ---------------------------
+
+    def notification_state(self, notification_id: str) -> str:
+        """Return the state of a notification's sensor."""
+        notification = self.notification_config(notification_id)
+        if notification is None or not notification.get("enabled", True):
+            return STATE_DISABLED
+        statuses = {card.status for card in self._visible_cards(notification_id)}
+        for state in (STATE_ACTIVE, STATE_HIDDEN, STATE_SNOOZED, STATE_DONE):
+            if state in statuses:
+                return state
+        return STATE_IDLE
+
+    def _visible_cards(self, notification_id: str) -> list[Card]:
+        """Return the open cards and the ones done today, in step order."""
+        notification = self.notification_config(notification_id) or {"steps": []}
+        order = {step["id"]: index for index, step in enumerate(notification["steps"])}
+        start = dt_util.start_of_local_day()
+        cards = [
+            card
+            for card in self.cards_of(notification_id)
+            if card.is_open
+            or (
+                card.closed_reason == CLOSED_DONE
+                and card.closed_at is not None
+                and card.closed_at >= start
+            )
+        ]
+        return sorted(cards, key=lambda card: (order.get(card.step_id, 0), card.since))
+
+    def top_card(self, notification_id: str) -> Card | None:
+        """Return the card a notification shows first."""
+        cards = self._visible_cards(notification_id)
+        for state in (STATE_ACTIVE, STATE_HIDDEN, STATE_SNOOZED, STATE_DONE):
+            for card in cards:
+                if card.status == state:
+                    return card
+        return None
+
+    def notification_attributes(self, notification_id: str) -> dict[str, Any]:
+        """Return the attributes of a notification's sensor."""
+        cards = self._visible_cards(notification_id)
+        top = self.top_card(notification_id)
+        snoozed = [
+            card.snoozed_until
+            for card in cards
+            if card.phase == PHASE_SNOOZED and card.snoozed_until
+        ]
+        notification = self.notification_config(notification_id) or {}
+        category = next(
+            (
+                item["name"]
+                for item in self._config["categories"]
+                if item["id"] == notification.get("category")
+            ),
+            None,
+        )
+        last_done = self.last_reached(notification_id, None, CLOSED_DONE)
+        return {
+            "active_count": sum(card.status == STATE_ACTIVE for card in cards),
+            "active_step": (
+                self.step_number(notification_id, top.step_id)
+                if top is not None and top.is_open
+                else None
+            ),
+            "active_since": (
+                top.since.isoformat() if top is not None and top.is_open else None
+            ),
+            "entities": [
+                card.entity_id for card in cards if card.is_open and card.entity_id
+            ],
+            "message": top.message if top is not None else None,
+            "snoozed_until": min(snoozed).isoformat() if snoozed else None,
+            "next_due": None,
+            "last_done": last_done.isoformat() if last_done else None,
+            "category": category,
+        }
+
+    def summary(self) -> dict[str, Any]:
+        """Return the state and attributes of the summary sensor."""
+        counts: dict[str, int] = {}
+        categories = {item["id"]: item["name"] for item in self._config["categories"]}
+        total = 0
+        top: dict[str, Any] | None = None
+        for notification in self._config["notifications"]:
+            if not notification.get("enabled", True):
+                continue
+            active = [
+                card
+                for card in self._visible_cards(notification["id"])
+                if card.status == STATE_ACTIVE
+            ]
+            if not active:
+                continue
+            total += len(active)
+            name = categories.get(notification["category"], notification["category"])
+            counts[name] = counts.get(name, 0) + len(active)
+            if top is None:
+                top = {
+                    "notification": self.entity_id_of(notification["id"]),
+                    "message": active[0].message,
+                }
+        return {
+            "state": total,
+            "mode": self.modes.current.get("name"),
+            "categories": counts,
+            "top_notification": top["notification"] if top else None,
+            "top_message": top["message"] if top else None,
+        }
+
+    def snapshot(self) -> dict[str, Any]:
+        """Return every notification's state and cards for the websocket API."""
+        return {
+            "mode": self.modes.current.get("id"),
+            "notifications": {
+                notification["id"]: {
+                    "state": self.notification_state(notification["id"]),
+                    "cards": [
+                        card.as_dict()
+                        for card in self._visible_cards(notification["id"])
+                    ],
+                    "last_done": _iso(
+                        self.last_reached(notification["id"], None, CLOSED_DONE)
+                    ),
+                }
+                for notification in self._config["notifications"]
+            },
+        }
+
+    # -- Actions ------------------------------------------------------------
+
+    def _step(self, notification_id: str, step_id: str) -> StepRunner:
+        runner = self.runners.get(notification_id)
+        step = runner.steps.get(step_id) if runner else None
+        if step is None:
+            raise ServiceValidationError(
+                "The notification or the step is switched off, or not started yet"
+            )
+        return step
+
+    @callback
+    def trigger(
+        self,
+        notification_id: str,
+        step_id: str,
+        entity_id: str | None,
+        overrides: Overrides,
+        context: Context | None = None,
+    ) -> None:
+        """Open a card from the trigger action, without checking conditions."""
+        step = self._step(notification_id, step_id)
+        trigger = {"platform": "action", "entity_id": entity_id}
+        self.open(step, entity_id, trigger, SOURCE_ACTION, overrides, context)
+
+    def select(
+        self,
+        notification_id: str,
+        step_id: str | None,
+        entity_id: str | None,
+    ) -> list[Card]:
+        """Return the open and snoozed cards an action is about."""
+        return [
+            card
+            for card in self.cards_of(notification_id, step_id)
+            if card.is_open and (entity_id is None or card.entity_id == entity_id)
+        ]
+
+    def close_cards(
+        self,
+        cards: Iterable[Card],
+        reason: str,
+        source: str,
+        context: Context | None = None,
+    ) -> None:
+        """Close several cards."""
+        for card in list(cards):
+            self.close(card, reason, source, context)
+
+    def snooze_cards(
+        self,
+        cards: Iterable[Card],
+        until: datetime | None,
+        source: str,
+        context: Context | None = None,
+    ) -> None:
+        """Snooze several cards; without a time, until "Tomorrow"."""
+        for card in list(cards):
+            self.snooze(card, until or self.snooze_tomorrow(card), source, context)

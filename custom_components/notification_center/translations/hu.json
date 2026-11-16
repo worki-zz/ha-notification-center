@@ -9,5 +9,188 @@
     "abort": {
       "single_instance_allowed": "A Notification Center már be van állítva."
     }
+  },
+  "entity": {
+    "sensor": {
+      "notification": {
+        "state": {
+          "active": "Aktív",
+          "hidden": "Rejtett",
+          "snoozed": "Elhalasztva",
+          "upcoming": "Hamarosan",
+          "done": "Kész",
+          "idle": "Nincs teendő",
+          "disabled": "Kikapcsolva"
+        },
+        "state_attributes": {
+          "active_count": {
+            "name": "Aktív kártyák"
+          },
+          "active_step": {
+            "name": "Aktív lépés"
+          },
+          "active_since": {
+            "name": "Aktív ekkortól"
+          },
+          "entities": {
+            "name": "Entitások"
+          },
+          "message": {
+            "name": "Üzenet"
+          },
+          "snoozed_until": {
+            "name": "Elhalasztva eddig"
+          },
+          "next_due": {
+            "name": "Következő alkalom"
+          },
+          "last_done": {
+            "name": "Utoljára kész"
+          },
+          "category": {
+            "name": "Kategória"
+          }
+        }
+      },
+      "summary": {
+        "state_attributes": {
+          "mode": {
+            "name": "Mód"
+          },
+          "categories": {
+            "name": "Kategóriák"
+          },
+          "top_notification": {
+            "name": "Legfontosabb értesítés"
+          },
+          "top_message": {
+            "name": "Legfontosabb üzenet"
+          }
+        }
+      }
+    },
+    "event": {
+      "notification_center": {
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "active": "Aktív",
+              "done": "Kész",
+              "snoozed": "Elhalasztva",
+              "dismissed": "Elvetve",
+              "expired": "Lejárt",
+              "button": "Gombnyomás"
+            }
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "trigger": {
+      "name": "Indítás",
+      "description": "Megjeleníti egy értesítés lépését, a feltételei nélkül.",
+      "fields": {
+        "step": {
+          "name": "Lépés",
+          "description": "A lépés száma; az 1. az első."
+        },
+        "entity": {
+          "name": "Entitás",
+          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+        },
+        "message": {
+          "name": "Üzenet",
+          "description": "A lépés üzenete helyett jelenik meg."
+        },
+        "info": {
+          "name": "Info",
+          "description": "A lépés info sora helyett jelenik meg."
+        },
+        "attachments": {
+          "name": "Mellékletek",
+          "description": "Képek vagy videók a kártyához: camera, image vagy video elemek."
+        },
+        "data": {
+          "name": "Adatok",
+          "description": "Bármilyen érték, a szövegekben {{ data.name }} formában érhető el."
+        }
+      }
+    },
+    "done": {
+      "name": "Kész",
+      "description": "Késznek jelöli a lépést, és beírja az elvégzés idejét.",
+      "fields": {
+        "step": {
+          "name": "Lépés",
+          "description": "A lépés száma; az 1. az első."
+        },
+        "entity": {
+          "name": "Entitás",
+          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+        }
+      }
+    },
+    "clear": {
+      "name": "Elvetés",
+      "description": "Lezárja a lépést anélkül, hogy késznek jelölné, mint a Dismiss.",
+      "fields": {
+        "step": {
+          "name": "Lépés",
+          "description": "A lépés száma; az 1. az első."
+        },
+        "entity": {
+          "name": "Entitás",
+          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+        }
+      }
+    },
+    "snooze": {
+      "name": "Halasztás",
+      "description": "Elhalasztja a lépést. Időtartam vagy időpont nélkül holnapig.",
+      "fields": {
+        "step": {
+          "name": "Lépés",
+          "description": "A lépés száma; az 1. az első."
+        },
+        "entity": {
+          "name": "Entitás",
+          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+        },
+        "duration": {
+          "name": "Időtartam",
+          "description": "Mennyi időre."
+        },
+        "until": {
+          "name": "Eddig",
+          "description": "Mikor jelenjen meg újra."
+        }
+      }
+    },
+    "set_last_done": {
+      "name": "Utolsó elvégzés beállítása",
+      "description": "Beállítja, mikor lett a lépés utoljára kész.",
+      "fields": {
+        "step": {
+          "name": "Lépés",
+          "description": "A lépés száma; az 1. az első."
+        },
+        "datetime": {
+          "name": "Időpont",
+          "description": "Mikor lett kész. Alapértelmezés: most."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "A Notification Center nincs betöltve."
+    },
+    "no_target": {
+      "message": "Válaszd ki egy értesítés sensorát."
+    },
+    "not_a_notification": {
+      "message": "A(z) {entity_id} nem egy értesítés sensora."
+    }
   }
 }

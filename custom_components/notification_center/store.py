@@ -1,8 +1,8 @@
 """Storage of the Notification Center configuration and runtime state.
 
 The configuration lives in ``.storage/notification_center``. It is saved
-right after every change. The runtime state (last done times; later also
-snoozes and active cards) lives in ``.storage/notification_center.runtime``.
+right after every change. The runtime state (cards, last done times) lives in
+``.storage/notification_center.runtime`` and belongs to the engine.
 Before an import replaces the configuration, the previous one is kept in
 ``.storage/notification_center.backup``.
 """
@@ -71,10 +71,8 @@ class ConfigManager:
         self._store = _ConfigStore(
             hass, STORAGE_VERSION, CONFIG_KEY, minor_version=STORAGE_MINOR_VERSION
         )
-        self._runtime_store = Store[dict[str, Any]](hass, 1, RUNTIME_KEY)
         self._backup_store = Store[dict[str, Any]](hass, 1, BACKUP_KEY)
         self._config: ConfigData = {}
-        self.runtime: dict[str, Any] = {"last_done": {}}
         self._listeners: list[ConfigListener] = []
         self._unsub_registry: CALLBACK_TYPE | None = None
 
@@ -91,9 +89,6 @@ class ConfigManager:
             await self._store.async_save(self._config)
         else:
             self._config = await async_validate_config(self.hass, stored)
-        runtime = await self._runtime_store.async_load()
-        if runtime is not None:
-            self.runtime = {"last_done": {}, **runtime}
         self._unsub_registry = self.hass.bus.async_listen(
             er.EVENT_ENTITY_REGISTRY_UPDATED, self._async_entity_registry_updated
         )

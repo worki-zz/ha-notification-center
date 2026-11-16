@@ -17,6 +17,11 @@ ignore = [
   "D202",    # blank line after function docstring
   "D203",    # conflicts with D211
   "D213",    # conflicts with D212
+  "PLR0911", # too many return statements (as in Home Assistant)
+  "PLR0912", # too many branches
+  "PLR0913", # too many arguments
+  "PLR0915", # too many statements
+  "PLR0917", # too many positional arguments
   "PLR2004", # magic values in comparisons
 ]
 

@@ -1,0 +1,76 @@
+trigger:
+  target:
+    entity:
+      integration: notification_center
+      domain: sensor
+  fields:
+    step: &step
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+    entity: &entity
+      selector:
+        entity:
+    message:
+      example: "Someone is at the door"
+      selector:
+        text:
+          multiline: true
+    info:
+      selector:
+        text:
+    attachments:
+      example: '[{"camera": "camera.front_door"}]'
+      selector:
+        object:
+    data:
+      example: '{"visitor": "Postman"}'
+      selector:
+        object:
+
+done:
+  target:
+    entity:
+      integration: notification_center
+      domain: sensor
+  fields:
+    step: *step
+    entity: *entity
+
+clear:
+  target:
+    entity:
+      integration: notification_center
+      domain: sensor
+  fields:
+    step: *step
+    entity: *entity
+
+snooze:
+  target:
+    entity:
+      integration: notification_center
+      domain: sensor
+  fields:
+    step: *step
+    entity: *entity
+    duration:
+      selector:
+        duration:
+    until:
+      selector:
+        datetime:
+
+set_last_done:
+  target:
+    entity:
+      integration: notification_center
+      domain: sensor
+  fields:
+    step: *step
+    datetime:
+      selector:
+        datetime:

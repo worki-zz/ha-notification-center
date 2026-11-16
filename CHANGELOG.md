@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+The engine, first part: notifications show and go away, and Home Assistant sees them as entities. No card, light, sound or push yet.
+
+### Added
+
+- The engine. Each step has cards: one, or one per entity with the Listed entities trigger. A card is active, hidden (while Hide while is true), snoozed, or closed as done, dismissed or expired. A done card shows as done until midnight.
+- Start with Home Assistant triggers and conditions, the Listed entities trigger and the Notification state trigger; Hide while; Done when with triggers and, for Listed entities, when the entity no longer matches (off by default).
+- Listed entities groups are resolved live: an entity that starts to match a group gets a card without saving the notification.
+- Message and info are templates with the `{Floor}`, `{Area}`, `{Device}`, `{Entity}` and `{State}` placeholders, and `entity`, `trigger` and `data` variables. They follow the entities they read while the card is open.
+- Snooze for a time, or until tomorrow: a scheduled step comes back at the time it appeared today, any other at the General setting `snooze_tomorrow_at` (08:00 by default).
+- Entities: a sensor per notification (`sensor.nc_<name>`), `sensor.notification_center` and `event.notification_center`, with English and Hungarian state names.
+- Actions: `notification_center.trigger`, `done`, `clear`, `snooze` and `set_last_done`.
+- The modes are worked out live and shown on `sensor.notification_center`.
+- Open cards, snoozes and last done times survive a restart.
+- The development page shows the live state of every notification, with Done, Snooze (1 h, 3 h, Tomorrow) and Dismiss.
+
+### Changed
+
+- The `shown` state of the Notification state trigger and condition is now `active`. Stored configurations and imported YAML are changed automatically.
+
 ## 0.1.0
 
 The data model and storage. Notifications are stored but do not show or sound yet: that comes with the engine in 0.2.

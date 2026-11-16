@@ -311,10 +311,10 @@ notifications:
           type: triggers
           triggers:
             - {trigger: notification_center.listed_entities, below: 20}
-            - {trigger: notification_center.notification_state, notification: garden_watering, state: shown}
+            - {trigger: notification_center.notification_state, notification: garden_watering, state: active}
           conditions:
             - {condition: numeric_state, entity_id: sensor.rain_tank_level, below: 20}
-            - {condition: notification_center.notification_state, notification: garden_watering, state: shown}
+            - {condition: notification_center.notification_state, notification: garden_watering, state: active}
         done_when: {start_no_longer_true: true}
         buttons:
           - {type: done, enabled: false}
@@ -377,7 +377,7 @@ notifications:
     steps:
       - message: Someone is at the door
         done_when:
-          triggers: [{trigger: notification_center.notification_state, notification: doorbell_ring, state: shown, for: {minutes: 3}}]
+          triggers: [{trigger: notification_center.notification_state, notification: doorbell_ring, state: active, for: {minutes: 3}}]
         attachments:
           - camera: camera.front_door
         buttons:
@@ -584,7 +584,7 @@ notifications:
         done_when:
           triggers:
             - {trigger: state, entity_id: alarm_control_panel.home, to: [armed_away, armed_night]}
-            - {trigger: notification_center.notification_state, notification: alarm_cannot_arm, state: shown, for: {minutes: 10}}
+            - {trigger: notification_center.notification_state, notification: alarm_cannot_arm, state: active, for: {minutes: 10}}
         buttons:
           - type: custom
             label: Arm anyway

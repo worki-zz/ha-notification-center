@@ -55,3 +55,29 @@ export interface ConfigMessage {
 }
 
 export const DOMAIN = "notification_center";
+
+// The live state of the cards, from `notification_center/state/subscribe`.
+export interface CardState {
+  notification_id: string;
+  step_id: string;
+  entity_id: string | null;
+  status: "active" | "hidden" | "snoozed" | "done" | "dismissed" | "expired";
+  since: string;
+  state_since: string;
+  snoozed_until: string | null;
+  message: string | null;
+  info: string | null;
+}
+
+export interface NotificationState {
+  state: string;
+  cards: CardState[];
+  last_done: string | null;
+}
+
+export interface StateMessage {
+  mode: string;
+  notifications: Record<string, NotificationState>;
+}
+
+export type CardAction = "done" | "dismiss" | "snooze";

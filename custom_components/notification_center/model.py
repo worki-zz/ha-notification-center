@@ -25,7 +25,7 @@ from homeassistant.helpers.trigger import async_validate_trigger_config
 from homeassistant.util.ulid import ulid_now
 import voluptuous as vol
 
-from .const import DOMAIN
+from .const import DEFAULT_SNOOZE_TOMORROW_AT, DOMAIN
 
 type ConfigData = dict[str, Any]
 
@@ -70,7 +70,9 @@ INTERVAL_UNITS: Final = ("days", "weeks", "months", "years")
 # comes with the engine; the schema is checked here already.
 TRIGGER_LISTED_ENTITIES: Final = f"{DOMAIN}.listed_entities"
 TRIGGER_NOTIFICATION_STATE: Final = f"{DOMAIN}.notification_state"
-NOTIFICATION_STATES: Final = ("shown", "done", "snoozed", "dismissed")
+NOTIFICATION_STATES: Final = ("active", "done", "snoozed", "dismissed")
+# Earlier name of a state, accepted and changed to the new one.
+_RENAMED_STATES: Final = {"shown": "active"}
 
 
 class ConfigValidationError(HomeAssistantError):
@@ -173,6 +175,9 @@ MEDIA = vol.Schema(
 
 GENERAL_SCHEMA = vol.Schema(
     {
+        # When a card snoozed until "Tomorrow" comes back, unless its step is
+        # scheduled (then it comes back at the time it appeared).
+        vol.Optional("snooze_tomorrow_at", default=DEFAULT_SNOOZE_TOMORROW_AT): _time,
         vol.Optional("read_the_message", default=dict): vol.Schema(
             {
                 vol.Optional("tts_service"): _optional(cv.entity_id),
@@ -713,10 +718,19 @@ _LISTED_ENTITIES_FIELDS: dict[vol.Marker, Any] = {
     vol.Optional("attribute"): cv.string,
     vol.Optional("for"): cv.positive_time_period_dict,
 }
+
+
+def _notification_state(value: Any) -> str:
+    """Validate a notification state, accepting earlier names."""
+    text = cv.string(value)
+    text = _RENAMED_STATES.get(text, text)
+    return cast(str, vol.In(NOTIFICATION_STATES)(text))
+
+
 _NOTIFICATION_STATE_FIELDS: dict[vol.Marker, Any] = {
     vol.Required("notification"): _id,
     vol.Optional("step"): _id,
-    vol.Required("state"): vol.In(NOTIFICATION_STATES),
+    vol.Required("state"): _notification_state,
     vol.Optional("for"): cv.positive_time_period_dict,
 }
 
@@ -769,6 +783,18 @@ def _own_items(step: dict[str, Any], kind: str) -> list[dict[str, Any]]:
     ]
 
 
+def _own_item(schema: vol.Schema, item: dict[str, Any]) -> dict[str, Any]:
+    """Validate an own trigger or condition, keeping the user's form.
+
+    Only a renamed state is changed in the stored item, so that an earlier
+    name (``shown``) is saved under its new name (``active``).
+    """
+    validated: dict[str, Any] = schema(item)
+    if "state" in validated:
+        item["state"] = validated["state"]
+    return validated
+
+
 async def _validate_triggers(
     hass: HomeAssistant, triggers: list[dict[str, Any]], where: str
 ) -> list[dict[str, Any]]:
@@ -777,7 +803,7 @@ async def _validate_triggers(
         kind = str(trigger.get("trigger", trigger.get("platform", "")))
         try:
             if kind in OWN_TRIGGER_SCHEMAS:
-                result.append(OWN_TRIGGER_SCHEMAS[kind](trigger))
+                result.append(_own_item(OWN_TRIGGER_SCHEMAS[kind], trigger))
             else:
                 checked = cv.TRIGGER_SCHEMA([trigger])
                 await async_validate_trigger_config(hass, checked)
@@ -795,7 +821,7 @@ async def _validate_conditions(
         kind = str(condition.get("condition", ""))
         try:
             if kind in OWN_CONDITION_SCHEMAS:
-                result.append(OWN_CONDITION_SCHEMAS[kind](condition))
+                result.append(_own_item(OWN_CONDITION_SCHEMAS[kind], condition))
             else:
                 checked = cv.CONDITIONS_SCHEMA([condition])
                 await async_validate_conditions_config(hass, checked)
