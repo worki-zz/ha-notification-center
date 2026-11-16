@@ -65,9 +65,7 @@ class ListedMatcher:
         self.below = _float(config.get("below"))
         self.attribute: str | None = config.get("attribute")
         period = config.get("for")
-        self.for_: timedelta | None = (
-            cv.positive_time_period_dict(period) if period else None
-        )
+        self.for_: timedelta | None = _period(period)
 
     def matches(self, state: State | None) -> bool:
         """Return whether a state passes the test."""
@@ -94,6 +92,16 @@ class ListedMatcher:
             # count, so a restart does not open a card for every entity.
             return text not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
         return True
+
+
+def _period(value: Any) -> timedelta | None:
+    """Return a ``for`` time given as a duration dict or a timedelta."""
+    if not value:
+        return None
+    if isinstance(value, timedelta):
+        return value
+    period: timedelta = cv.positive_time_period_dict(value)
+    return period
 
 
 def _float(value: Any) -> float | None:
@@ -223,10 +231,16 @@ class ListedTracker:
         self._timers: dict[str, CALLBACK_TYPE] = {}
         self._tracker: Any = None
         self._unsub_registry: list[CALLBACK_TYPE] = []
+        # While true, entities that match are noted without firing.
+        self._quiet = False
 
     @callback
-    def async_start(self) -> None:
-        """Check every listed entity now and follow their changes."""
+    def async_start(self, *, fire_matching: bool = True) -> None:
+        """Check every listed entity now and follow their changes.
+
+        With ``fire_matching`` off, the entities that already match do not
+        fire, like a Home Assistant state trigger when it is set up.
+        """
         self._tracker = async_track_state_change_filtered(
             self._hass,
             TrackStates(False, set(self._entities.explicit), self._entities.domains),
@@ -240,7 +254,11 @@ class ListedTracker:
                 self._unsub_registry.append(
                     self._hass.bus.async_listen(event_type, self._registry_updated)
                 )
-        self._check_all()
+        self._quiet = not fire_matching
+        try:
+            self._check_all()
+        finally:
+            self._quiet = False
 
     @callback
     def async_stop(self) -> None:
@@ -293,6 +311,8 @@ class ListedTracker:
         if entity_id in self._matching:
             return
         self._matching.add(entity_id)
+        if self._quiet:
+            return
         variables = self._variables(entity_id, old_state, new_state)
         if self.matcher.for_ is None:
             self._on_match(entity_id, variables)

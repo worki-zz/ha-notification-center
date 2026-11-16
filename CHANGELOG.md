@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-The engine, first part: notifications show and go away, and Home Assistant sees them as entities. No card, light, sound or push yet.
+The engine: notifications show and go away on their triggers and schedules, and Home Assistant sees them as entities, actions, a calendar, automation triggers and Repairs. No card, light, sound or push yet: the development page and the Home Assistant screens show what happens.
 
 ### Added
 
@@ -11,15 +11,34 @@ The engine, first part: notifications show and go away, and Home Assistant sees 
 - Listed entities groups are resolved live: an entity that starts to match a group gets a card without saving the notification.
 - Message and info are templates with the `{Floor}`, `{Area}`, `{Device}`, `{Entity}` and `{State}` placeholders, and `entity`, `trigger` and `data` variables. They follow the entities they read while the card is open.
 - Snooze for a time, or until tomorrow: a scheduled step comes back at the time it appeared today, any other at the General setting `snooze_tomorrow_at` (08:00 by default).
-- Entities: a sensor per notification (`sensor.nc_<name>`), `sensor.notification_center` and `event.notification_center`, with English and Hungarian state names.
+- Entities: a sensor per notification (`sensor.nc_<name>`), `sensor.notification_center`, `event.notification_center` and `calendar.notification_center`, with English and Hungarian state names.
 - Actions: `notification_center.trigger`, `done`, `clear`, `snooze` and `set_last_done`.
 - The modes are worked out live and shown on `sensor.notification_center`.
 - Open cards, snoozes and last done times survive a restart.
 - The development page shows the live state of every notification, with Done, Snooze (1 h, 3 h, Tomorrow) and Dismiss.
+- Schedules: every N days, weeks (on chosen weekdays), months (on a day, or the last day) or years, at a time, counted from a starting date; or N days, weeks, months or years after the step was last done. N can come from an entity; 0 switches the schedule off. A scheduled card can expire; an expired card is not done, and an after-last-done step is due again the next day. A due card waits, hidden, until its Start conditions are true. Times stay right across daylight saving changes.
+- An occurrence that fell while Home Assistant was stopped shows after the start, unless it already expired. Snoozes and expiry times survive a restart.
+- Notification sensors are `upcoming` on the day a scheduled step is due, and show the next due time.
+- `calendar.notification_center`: the occurrences of the scheduled steps. A step with a time is a timed event until it expires (one hour if it does not); one without a time is an all-day event.
+- The Notification state and Listed entities triggers and conditions in the automation editor, for your own automations and scripts. The notification is chosen by its sensor and the step by its number.
+- Repairs: a missing entity, an interval entity without a number, a template error in a message, or a trigger that could not be set up is listed in Settings → Repairs with the notification's name, and goes away when fixed.
+- Diagnostics: download from the integration's menu, with people and push services redacted.
 
 ### Changed
 
+- The README says that a Marketplace update needs a restart.
 - The `shown` state of the Notification state trigger and condition is now `active`. Stored configurations and imported YAML are changed automatically.
+
+### What to try
+
+1. Update from the Marketplace and restart Home Assistant. Each notification has a `sensor.nc_...` entity; `sensor.notification_center`, `event.notification_center` and `calendar.notification_center` are on the *Notification Center* device.
+2. In the panel, every notification shows its live state, its cards with the message, the next due time and the last done time. Done, 1 h, 3 h, Tomorrow and Dismiss act on a card.
+3. In Developer tools → Actions, run `notification_center.trigger` on a notification's sensor: its card shows in the panel and the sensor is `active`. `done`, `clear` and `snooze` close or snooze it.
+4. Open a door listed in a Listed entities notification: it gets its own card. Close it: the card closes if the step asks for it.
+5. The Calendar page shows the scheduled steps.
+6. In a new automation, add the *Notification state* trigger (for example when a notification is done).
+7. Restart Home Assistant: open and snoozed cards are still there.
+8. Settings → Repairs lists the notifications that use entities which do not exist.
 
 ## 0.1.0
 

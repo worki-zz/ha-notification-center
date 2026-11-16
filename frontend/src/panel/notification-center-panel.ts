@@ -198,6 +198,9 @@ export class NotificationCenterPanel extends LitElement {
                       ${live?.last_done
                         ? ` · last done ${formatTime(live.last_done)}`
                         : ""}
+                      ${live?.next_due
+                        ? ` · next ${formatTime(live.next_due)}`
+                        : ""}
                     </div>
                   </div>
                   ${live

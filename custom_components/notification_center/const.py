@@ -30,13 +30,14 @@ STORAGE_KEYS: Final[tuple[str, ...]] = (
 )
 
 # Entity platforms
-PLATFORMS: Final = ("sensor", "event")
+PLATFORMS: Final = ("calendar", "event", "sensor")
 
 # Unique ids of the entities. A notification's sensor uses the prefix and the
 # notification's id.
 UNIQUE_ID_NOTIFICATION_PREFIX: Final = "notification-"
 UNIQUE_ID_SUMMARY: Final = "summary"
 UNIQUE_ID_EVENT: Final = "event"
+UNIQUE_ID_CALENDAR: Final = "calendar"
 
 # What a notification's sensor shows, most important first: with more than
 # one card, the first of these that applies is the state.

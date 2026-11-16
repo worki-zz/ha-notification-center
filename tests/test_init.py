@@ -22,7 +22,7 @@ from custom_components.notification_center.const import (
     STORAGE_KEYS,
 )
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 CARD_URL = f"{STATIC_URL_BASE}/{CARD_FILENAME}?v={VERSION}"
 
 
