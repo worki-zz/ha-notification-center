@@ -693,6 +693,9 @@ async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) 
     assert state is not None
     assert state.state == "active"
     assert state.context.parent_id == cause.context.id
+    summary = hass.states.get("sensor.notification_center")
+    assert summary is not None
+    assert summary.context.parent_id == state.context.id
 
     context = Context()
     await hass.services.async_call(

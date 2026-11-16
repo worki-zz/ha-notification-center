@@ -182,6 +182,9 @@ class SummarySensor(SensorEntity):
 
     @callback
     def _changed(self) -> None:
+        # Caused by the sensor of the notification that changed.
+        if (context := self._engine.event_context) is not None:
+            self.async_set_context(context)
         self.async_write_ha_state()
 
     @property
