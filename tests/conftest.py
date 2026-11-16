@@ -8,6 +8,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.notification_center.const import DOMAIN, NAME
 
+from .common import Center, load
+
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(
@@ -22,3 +24,9 @@ def config_entry(hass: HomeAssistant) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, title=NAME, data={})
     entry.add_to_hass(hass)
     return entry
+
+
+@pytest.fixture
+async def center(hass: HomeAssistant, config_entry: MockConfigEntry) -> Center:
+    """Return the loaded integration."""
+    return await load(hass, config_entry)

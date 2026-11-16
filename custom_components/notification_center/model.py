@@ -710,7 +710,7 @@ def _check_references(config: ConfigData) -> None:
 # ---------------------------------------------------------------------------
 # Triggers and conditions inside steps
 
-_LISTED_ENTITIES_FIELDS: dict[vol.Marker, Any] = {
+LISTED_ENTITIES_FIELDS: dict[vol.Marker, Any] = {
     vol.Optional("to"): vol.Any(cv.string, [cv.string]),
     vol.Optional("not_to"): vol.Any(cv.string, [cv.string]),
     vol.Optional("above"): vol.Coerce(float),
@@ -736,7 +736,7 @@ _NOTIFICATION_STATE_FIELDS: dict[vol.Marker, Any] = {
 
 OWN_TRIGGER_SCHEMAS: Final[dict[str, vol.Schema]] = {
     TRIGGER_LISTED_ENTITIES: vol.Schema(
-        {vol.Required("trigger"): TRIGGER_LISTED_ENTITIES, **_LISTED_ENTITIES_FIELDS},
+        {vol.Required("trigger"): TRIGGER_LISTED_ENTITIES, **LISTED_ENTITIES_FIELDS},
         extra=vol.PREVENT_EXTRA,
     ),
     TRIGGER_NOTIFICATION_STATE: vol.Schema(
@@ -748,7 +748,7 @@ OWN_TRIGGER_SCHEMAS: Final[dict[str, vol.Schema]] = {
 }
 OWN_CONDITION_SCHEMAS: Final[dict[str, vol.Schema]] = {
     TRIGGER_LISTED_ENTITIES: vol.Schema(
-        {vol.Required("condition"): TRIGGER_LISTED_ENTITIES, **_LISTED_ENTITIES_FIELDS}
+        {vol.Required("condition"): TRIGGER_LISTED_ENTITIES, **LISTED_ENTITIES_FIELDS}
     ),
     TRIGGER_NOTIFICATION_STATE: vol.Schema(
         {

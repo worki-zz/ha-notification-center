@@ -2,7 +2,7 @@
 
 A Home Assistant integration that manages every notification of your home in one place: when it shows, how it looks, which channels it uses (lights, speakers, phones), and when it goes away.
 
-> **Status: early development (0.x).** Notifications are stored and the engine decides when they show, but there is no card, light, sound or push yet. Each release in the [changelog](CHANGELOG.md) says what to try.
+> **Status: early development (0.x).** Notifications are stored and the engine decides when they show, but there is no dashboard card, light, sound or push yet. Each release in the [changelog](CHANGELOG.md) says what to try.
 
 ## Requirements
 
@@ -33,6 +33,7 @@ The release zip contains the built frontend. The repository itself does not, so 
 
 - **A sensor per notification:** `sensor.nc_<name>`, for example `sensor.nc_dishwasher`. Its state is the most important state of its cards: `active`, `hidden`, `snoozed`, `upcoming`, `done` (today), `idle` or `disabled`. The attributes tell the number of active cards, the active step, the entities of a Listed entities step, the message, the snooze end and the last done time. The entity id stays when the notification is renamed.
 - **`sensor.notification_center`:** the number of active cards, with the current mode, the counts per category and the top notification as attributes.
+- **`calendar.notification_center`:** the occurrences of the scheduled steps.
 - **`event.notification_center`:** an event for every change of a card: `active`, `done`, `snoozed`, `dismissed`, `expired` and `button`, with the notification's sensor, the step number, the entity, the source and the person who pressed the button.
 - **Actions:** `notification_center.trigger`, `done`, `clear`, `snooze` and `set_last_done`. They target the sensor of a notification and take the step number (`step`, default 1) and, for a Listed entities step, its `entity`:
 
@@ -47,6 +48,9 @@ The release zip contains the built frontend. The repository itself does not, so 
     data:
       visitor: "{{ states('sensor.doorbell_last_person') }}"
   ```
+
+- **Automation triggers and conditions:** *Notification state* (a notification or one of its steps became active, done, snoozed or dismissed; as a condition also "within the last …") and *Listed entities* (an entity listed in a notification starts to match), in the automation editor.
+- **Repairs and diagnostics:** problems such as a missing entity are listed in Settings → Repairs; diagnostics can be downloaded from the integration's menu, with people and push services redacted.
 
 Open cards, snoozes and last done times are kept in `.storage/notification_center.runtime`, so they survive a restart. Removing the integration also deletes its stored data.
 

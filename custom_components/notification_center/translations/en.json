@@ -192,5 +192,153 @@
     "not_a_notification": {
       "message": "{entity_id} is not the sensor of a notification."
     }
+  },
+  "triggers": {
+    "notification_state": {
+      "name": "Notification state",
+      "description": "Triggers when a notification, or one of its steps, becomes active, done, snoozed or dismissed.",
+      "fields": {
+        "notification": {
+          "name": "Notification",
+          "description": "The sensor of the notification."
+        },
+        "step": {
+          "name": "Step",
+          "description": "The number of the step; empty means any step."
+        },
+        "state": {
+          "name": "State",
+          "description": "The state of the notification."
+        },
+        "for": {
+          "name": "For",
+          "description": "How long it has to stay so."
+        }
+      }
+    },
+    "listed_entities": {
+      "name": "Listed entities",
+      "description": "Triggers when an entity listed in a notification starts to match.",
+      "fields": {
+        "notification": {
+          "name": "Notification",
+          "description": "The sensor of the notification."
+        },
+        "to": {
+          "name": "State",
+          "description": "The states that count; empty means any state."
+        },
+        "not_to": {
+          "name": "Not state",
+          "description": "The states that do not count."
+        },
+        "above": {
+          "name": "Above",
+          "description": "The value has to be above this."
+        },
+        "below": {
+          "name": "Below",
+          "description": "The value has to be below this."
+        },
+        "attribute": {
+          "name": "Attribute",
+          "description": "Test this attribute instead of the state."
+        },
+        "for": {
+          "name": "For",
+          "description": "How long it has to stay so."
+        }
+      }
+    }
+  },
+  "conditions": {
+    "notification_state": {
+      "name": "Notification state",
+      "description": "Tests the state of a notification, or of one of its steps.",
+      "fields": {
+        "notification": {
+          "name": "Notification",
+          "description": "The sensor of the notification."
+        },
+        "step": {
+          "name": "Step",
+          "description": "The number of the step; empty means any step."
+        },
+        "state": {
+          "name": "State",
+          "description": "The state of the notification."
+        },
+        "for": {
+          "name": "For",
+          "description": "How long it has to stay so."
+        },
+        "within": {
+          "name": "Within",
+          "description": "True if the state was reached within this time."
+        }
+      }
+    },
+    "listed_entities": {
+      "name": "Listed entities",
+      "description": "Tests whether any entity listed in a notification matches.",
+      "fields": {
+        "notification": {
+          "name": "Notification",
+          "description": "The sensor of the notification."
+        },
+        "to": {
+          "name": "State",
+          "description": "The states that count; empty means any state."
+        },
+        "not_to": {
+          "name": "Not state",
+          "description": "The states that do not count."
+        },
+        "above": {
+          "name": "Above",
+          "description": "The value has to be above this."
+        },
+        "below": {
+          "name": "Below",
+          "description": "The value has to be below this."
+        },
+        "attribute": {
+          "name": "Attribute",
+          "description": "Test this attribute instead of the state."
+        },
+        "for": {
+          "name": "For",
+          "description": "How long it has to stay so."
+        }
+      }
+    }
+  },
+  "selector": {
+    "notification_state": {
+      "options": {
+        "active": "Active",
+        "done": "Done",
+        "snoozed": "Snoozed",
+        "dismissed": "Dismissed"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "{name}: missing entities",
+      "description": "The notification **{name}** uses entities that do not exist: {entities}. Its triggers and conditions that use them do not work. Change the notification in Notification Center, or bring the entities back."
+    },
+    "invalid_every": {
+      "title": "{name}: the schedule is stopped",
+      "description": "Step {step} of **{name}** takes its interval from {entity}, but its state is not a number, so the schedule is stopped, as with 0. It starts again when the state is a number."
+    },
+    "template_error": {
+      "title": "{name}: error in the message",
+      "description": "The message or the info line of step {step} of **{name}** has a template error, so the card shows the text without the template: {error}"
+    },
+    "setup_error": {
+      "title": "{name}: a trigger or condition does not work",
+      "description": "Step {step} of **{name}** could not be set up: {error}"
+    }
   }
 }

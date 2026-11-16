@@ -17,6 +17,7 @@ they survive a restart.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 import logging
@@ -46,10 +47,12 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.trigger import (
+    async_extract_entities as async_extract_trigger_entities,
     async_initialize_triggers,
     async_validate_trigger_config,
 )
 from homeassistant.util import dt as dt_util
+from homeassistant.util.hass_dict import HassKey
 
 from .const import (
     CLOSED_DISMISSED,
@@ -64,6 +67,7 @@ from .const import (
     SOURCE_ACTION,
     SOURCE_DONE_WHEN,
     SOURCE_ENTITY,
+    SOURCE_SCHEDULE,
     SOURCE_SNOOZE_END,
     SOURCE_TRIGGER,
     STATE_ACTIVE,
@@ -72,8 +76,10 @@ from .const import (
     STATE_HIDDEN,
     STATE_IDLE,
     STATE_SNOOZED,
+    STATE_UPCOMING,
     UNIQUE_ID_NOTIFICATION_PREFIX,
 )
+from .issues import IssueTracker
 from .listed import EntityList, ListedMatcher, ListedTracker, matching_entities
 from .model import (
     TRIGGER_LISTED_ENTITIES,
@@ -82,6 +88,8 @@ from .model import (
 )
 from .modes import ModeTracker
 from .render import TextTracker, render_text
+from .schedule import calendar_between, expires as schedule_expires
+from .scheduler import StepSchedule
 from .store import RUNTIME_KEY, ConfigManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,6 +100,37 @@ SAVE_DELAY: Final = 1
 PHASE_OPEN: Final = "open"
 PHASE_SNOOZED: Final = "snoozed"
 PHASE_CLOSED: Final = "closed"
+
+# The Notification state triggers, of the engine and of automations. They
+# live outside the engine so that an automation keeps its trigger when the
+# integration is reloaded.
+DATA_WATCHES: HassKey[list[StateWatch]] = HassKey(f"{DOMAIN}_watches")
+
+
+@callback
+def async_get_engine(hass: HomeAssistant) -> Engine | None:
+    """Return the engine of the loaded integration."""
+    entries = hass.config_entries.async_loaded_entries(DOMAIN)
+    if not entries:
+        return None
+    engine: Engine = entries[0].runtime_data.engine
+    return engine
+
+
+@callback
+def async_add_state_watch(hass: HomeAssistant, watch: StateWatch) -> CALLBACK_TYPE:
+    """Report a Notification state trigger until the returned call."""
+    watches = hass.data.setdefault(DATA_WATCHES, [])
+    watches.append(watch)
+
+    @callback
+    def remove() -> None:
+        watch.cancel_all()
+        if watch in watches:
+            watches.remove(watch)
+
+    return remove
+
 
 # Conditions that change with time, not with an entity: a Hide while that
 # holds one of them is checked again every minute.
@@ -127,6 +166,16 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
+def _period(value: Any) -> timedelta | None:
+    """Return a time given as a duration dict or a timedelta."""
+    if not value:
+        return None
+    if isinstance(value, timedelta):
+        return value
+    period: timedelta = cv.positive_time_period_dict(value)
+    return period
+
+
 def _parse_time(value: str | None) -> datetime | None:
     return dt_util.parse_datetime(value) if value else None
 
@@ -158,6 +207,8 @@ class Card:
     attachments: list[dict[str, Any]] | None = None
     message: str | None = None
     info: str | None = None
+    # A scheduled card closes as expired at this time.
+    expires_at: datetime | None = None
 
     @property
     def key(self) -> CardKey:
@@ -202,6 +253,7 @@ class Card:
             "attachments": self.attachments,
             "message": self.message,
             "info": self.info,
+            "expires_at": _iso(self.expires_at),
         }
 
     @classmethod
@@ -229,6 +281,7 @@ class Card:
             attachments=data.get("attachments"),
             message=data.get("message"),
             info=data.get("info"),
+            expires_at=_parse_time(data.get("expires_at")),
         )
 
 
@@ -247,22 +300,32 @@ class Overrides:
 
 
 @dataclass(slots=True)
-class _StateWatch:
-    """A Notification state trigger: report when a step reaches a state."""
+class StateWatch:
+    """A Notification state trigger: report when a step reaches a state.
 
-    notification_id: str
-    step_id: str | None
+    ``notification`` is a notification's id or its sensor's entity id;
+    ``step`` is a step's id or its number.
+    """
+
+    notification: str
+    step: str | int | None
     state: str
     for_: timedelta | None
-    action: Callable[[Card, dict[str, Any]], None]
+    action: Callable[[dict[str, Any]], None]
     timers: dict[CardKey, CALLBACK_TYPE] = field(default_factory=dict)
 
-    def applies_to(self, card: Card) -> bool:
-        return card.notification_id == self.notification_id and (
-            self.step_id is None or card.step_id == self.step_id
-        )
+    def applies_to(self, engine: Engine, card: Card) -> bool:
+        """Return whether the watch is about a card."""
+        if engine.resolve_notification(self.notification) != card.notification_id:
+            return False
+        if self.step is None:
+            return True
+        if isinstance(self.step, int):
+            return engine.step_number(card.notification_id, card.step_id) == self.step
+        return card.step_id == self.step
 
     def cancel_all(self) -> None:
+        """Cancel the waiting ``for`` timers."""
         for cancel in self.timers.values():
             cancel()
         self.timers.clear()
@@ -358,12 +421,17 @@ class StepRunner:
         self.step_id: str = step["id"]
         self._unsubs: list[CALLBACK_TYPE] = []
         self._trackers: list[ListedTracker] = []
-        self._watches: list[_StateWatch] = []
+        self._watches: list[StateWatch] = []
         self._start_trackers: list[ListedTracker] = []
         self.start_conditions: _Conditions | None = None
         self.hide_while: _Conditions | None = None
         self.hide_timed = False
         self._hide_entities: set[str] = set()
+        self.schedule: StepSchedule | None = None
+        self._start_timed = False
+        # For Repairs: what failed to set up, and the entities it uses.
+        self.errors: list[str] = []
+        self.referenced: set[str] = set()
 
     @property
     def name(self) -> str:
@@ -378,7 +446,11 @@ class StepRunner:
     async def async_start(self) -> None:
         """Set up the triggers and conditions of the step."""
         start = self.step["start"]
-        self.start_conditions, _, _ = await _async_conditions(
+        (
+            self.start_conditions,
+            start_entities,
+            self._start_timed,
+        ) = await _async_conditions(
             self.engine,
             self.notification,
             start.get("conditions", []),
@@ -390,6 +462,12 @@ class StepRunner:
             self.step.get("hide_while", []),
             f"{self.name} hide while",
         )
+        self.referenced |= start_entities | self._hide_entities
+        if start["type"] == "schedule":
+            self.schedule = StepSchedule(self, start["schedule"])
+            # A due card is hidden while the Start conditions are not true.
+            self._hide_entities |= start_entities
+            self.hide_timed |= self._start_timed
         if self._hide_entities:
             self._unsubs.append(
                 async_track_state_change_event(
@@ -422,6 +500,8 @@ class StepRunner:
         for watch in self._watches:
             self.engine.remove_watch(watch)
         self._watches.clear()
+        if self.schedule is not None:
+            self.schedule.async_stop()
         for conditions in (self.start_conditions, self.hide_while):
             if conditions is not None:
                 conditions.unload()
@@ -455,7 +535,11 @@ class StepRunner:
                 )
             except (HomeAssistantError, ValueError) as err:
                 _LOGGER.error("Invalid trigger in %s: %s", self.name, err)
+                self.errors.append(str(err))
                 return
+            for conf in validated:
+                with suppress(Exception):
+                    self.referenced |= set(async_extract_trigger_entities(conf))
             unsub = await async_initialize_triggers(
                 self.hass,
                 validated,
@@ -484,9 +568,11 @@ class StepRunner:
 
     @callback
     def start_listed_trackers(self) -> None:
-        """Start the Listed entities trackers (after the cards are restored)."""
+        """Start the Listed entities and the schedule (after cards are restored)."""
         for tracker in self._trackers:
             tracker.async_start()
+        if self.schedule is not None:
+            self.schedule.async_start()
         if self.step["done_when"].get("start_no_longer_true"):
             for card in self.engine.cards_of(self.notification.id, self.step_id):
                 if (
@@ -501,23 +587,17 @@ class StepRunner:
         trigger: dict[str, Any],
         fired: Callable[[dict[str, Any], Context | None], None],
     ) -> None:
-        notification_id = self.engine.resolve_notification(trigger["notification"])
-        if notification_id is None:
-            _LOGGER.warning(
-                "%s: no notification %s", self.name, trigger["notification"]
-            )
-            return
         period = trigger.get("for")
 
         @callback
-        def action(card: Card, variables: dict[str, Any]) -> None:
+        def action(variables: dict[str, Any]) -> None:
             fired(variables, None)
 
-        watch = _StateWatch(
-            notification_id=notification_id,
-            step_id=trigger.get("step"),
+        watch = StateWatch(
+            notification=trigger["notification"],
+            step=trigger.get("step"),
             state=trigger["state"],
-            for_=cv.positive_time_period_dict(period) if period else None,
+            for_=_period(period),
             action=action,
         )
         self._watches.append(watch)
@@ -606,10 +686,22 @@ class StepRunner:
                 self.engine.set_hidden(card, self.is_hidden(card))
 
     def is_hidden(self, card: Card) -> bool:
-        """Return whether Hide while is true for a card."""
+        """Return whether Hide while is true for a card.
+
+        A scheduled card is also hidden while its Start conditions are not
+        true: it waits for them until it expires.
+        """
+        variables = self.engine.variables(card)
+        if (
+            self.schedule is not None
+            and self.start_conditions is not None
+            and not self.start_conditions.empty
+            and not self.start_conditions.check(variables)
+        ):
+            return True
         if self.hide_while is None or self.hide_while.empty:
             return False
-        return self.hide_while.check(self.engine.variables(card))
+        return self.hide_while.check(variables)
 
     @property
     def has_listed_start(self) -> bool:
@@ -640,8 +732,9 @@ class NotificationRunner:
         for step in self.steps.values():
             try:
                 await step.async_start()
-            except Exception:
+            except Exception as err:
                 _LOGGER.exception("Error setting up %s", step.name)
+                step.errors.append(str(err))
 
     @callback
     def start_trackers(self) -> None:
@@ -671,8 +764,11 @@ class Engine:
         self._store = Store[dict[str, Any]](hass, RUNTIME_VERSION, RUNTIME_KEY)
         self._listeners: list[ChangeListener] = []
         self._event_listeners: list[EventListener] = []
-        self._watches: list[_StateWatch] = []
+        self._watches = hass.data.setdefault(DATA_WATCHES, [])
         self._snooze_timers: dict[CardKey, CALLBACK_TYPE] = {}
+        self._expiry_timers: dict[CardKey, CALLBACK_TYPE] = {}
+        self.template_errors: dict[tuple[str, str], str] = {}
+        self.issues = IssueTracker(self)
         self._text_trackers: dict[CardKey, TextTracker] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
         self._started = False
@@ -716,6 +812,7 @@ class Engine:
         for card in list(self.cards.values()):
             if card.is_open:
                 self._start_text(card)
+        self.issues.async_start()
         self._notify()
 
     async def _async_start_notification(self, notification: dict[str, Any]) -> None:
@@ -731,20 +828,26 @@ class Engine:
             for card in self.cards_of(runner.id, step.step_id):
                 if card.phase == PHASE_OPEN:
                     self.set_hidden(card, step.is_hidden(card))
+                if card.is_open:
+                    self._schedule_expiry(card)
         runner.start_trackers()
+        self.issues.refresh()
+        self._notify()
 
     async def async_unload(self) -> None:
         """Stop everything and save the cards."""
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        self.issues.async_stop()
         for runner in self.runners.values():
             runner.async_stop()
         self.runners.clear()
         self.modes.async_stop()
-        for cancel in self._snooze_timers.values():
-            cancel()
-        self._snooze_timers.clear()
+        for timers in (self._snooze_timers, self._expiry_timers):
+            for cancel in timers.values():
+                cancel()
+            timers.clear()
         for tracker in self._text_trackers.values():
             tracker.async_stop()
         self._text_trackers.clear()
@@ -780,6 +883,7 @@ class Engine:
                         self._async_start_notification(notification),
                         eager_start=True,
                     )
+        self.issues.refresh()
         self._save()
         self._notify()
 
@@ -816,11 +920,11 @@ class Engine:
     def _mode_changed(self) -> None:
         self._notify()
 
-    def add_watch(self, watch: _StateWatch) -> None:
+    def add_watch(self, watch: StateWatch) -> None:
         """Start reporting a Notification state trigger."""
         self._watches.append(watch)
 
-    def remove_watch(self, watch: _StateWatch) -> None:
+    def remove_watch(self, watch: StateWatch) -> None:
         """Stop reporting a Notification state trigger."""
         watch.cancel_all()
         if watch in self._watches:
@@ -919,6 +1023,9 @@ class Engine:
         source: str,
         overrides: Overrides | None = None,
         context: Context | None = None,
+        *,
+        since: datetime | None = None,
+        expires_at: datetime | None = None,
     ) -> Card | None:
         """Open a card of a step, or refresh it if it is already open."""
         now = dt_util.utcnow()
@@ -927,6 +1034,9 @@ class Engine:
         trigger_data = _jsonable(trigger) if trigger else None
         if card is not None and card.is_open:
             self._refresh(card, trigger_data, overrides)
+            if expires_at is not None:
+                card.expires_at = expires_at
+                self._schedule_expiry(card)
             if card.phase == PHASE_SNOOZED:
                 self._cancel_unsnooze(card)
                 self._change(
@@ -951,11 +1061,12 @@ class Engine:
             step_id=step.step_id,
             entity_id=entity_id,
             phase=PHASE_CLOSED,
-            since=now,
+            since=since or now,
             state_since=now,
             source=source,
             closed_reason=CLOSED_DISMISSED,
             trigger=trigger_data,
+            expires_at=expires_at,
         )
         self._refresh(card, trigger_data, overrides)
         self.cards[card.key] = card
@@ -969,6 +1080,7 @@ class Engine:
             hidden=step.is_hidden(card),
         )
         self._start_text(card)
+        self._schedule_expiry(card)
         return card
 
     def _refresh(
@@ -1002,6 +1114,7 @@ class Engine:
         if not card.is_open:
             return
         self._cancel_unsnooze(card)
+        self._cancel_expiry(card)
         self._stop_text(card)
         runner = self.runners.get(card.notification_id)
         step = runner.steps.get(card.step_id) if runner else None
@@ -1058,6 +1171,7 @@ class Engine:
     def forget(self, card: Card) -> None:
         """Remove a card without any event (its notification changed)."""
         self._cancel_unsnooze(card)
+        self._cancel_expiry(card)
         self._stop_text(card)
         for watch in self._watches:
             if (cancel := watch.timers.pop(card.key, None)) is not None:
@@ -1094,7 +1208,32 @@ class Engine:
     def set_last_done(self, notification_id: str, step_id: str, when: datetime) -> None:
         """Set when a step was last done."""
         self._record(notification_id, step_id, CLOSED_DONE, when)
+        self._done_recorded(notification_id, step_id)
         self._save()
+        self._notify()
+
+    def _done_recorded(self, notification_id: str, step_id: str) -> None:
+        """Work out an after-last-done schedule again."""
+        runner = self.runners.get(notification_id)
+        step = runner.steps.get(step_id) if runner else None
+        if (
+            step is not None
+            and step.schedule is not None
+            and not step.schedule.is_calendar
+        ):
+            step.schedule.reschedule()
+
+    def record(
+        self, notification_id: str, step_id: str, state: str, when: datetime
+    ) -> None:
+        """Remember when a step reached a state (or was due)."""
+        self._record(notification_id, step_id, state, when)
+        self._save()
+
+    @callback
+    def schedule_changed(self) -> None:
+        """Tell the listeners that a next due time changed."""
+        self.issues.refresh()
         self._notify()
 
     def last_reached(
@@ -1128,6 +1267,8 @@ class Engine:
             now = dt_util.utcnow()
             card.state_since = now
             self._record(card.notification_id, card.step_id, new, now)
+            if new == CLOSED_DONE:
+                self._done_recorded(card.notification_id, card.step_id)
             self._state_reached(card, old, new)
             self._fire_event(card, new, source, context)
         self._save()
@@ -1142,7 +1283,7 @@ class Engine:
 
     def _state_reached(self, card: Card, old: str, new: str) -> None:
         for watch in list(self._watches):
-            if not watch.applies_to(card):
+            if not watch.applies_to(self, card):
                 continue
             if (
                 old == watch.state
@@ -1153,14 +1294,14 @@ class Engine:
                 continue
             variables = {
                 "platform": TRIGGER_NOTIFICATION_STATE,
-                "notification": card.notification_id,
-                "step": card.step_id,
+                "notification": self.entity_id_of(card.notification_id),
+                "step": self.step_number(card.notification_id, card.step_id),
                 "entity_id": card.entity_id,
                 "from_state": old,
                 "to_state": new,
             }
             if watch.for_ is None:
-                watch.action(card, variables)
+                watch.action(variables)
                 continue
             watch.timers[card.key] = async_track_point_in_utc_time(
                 self.hass,
@@ -1169,13 +1310,13 @@ class Engine:
             )
 
     def _watch_timer(
-        self, watch: _StateWatch, card: Card, variables: dict[str, Any]
+        self, watch: StateWatch, card: Card, variables: dict[str, Any]
     ) -> Callable[[datetime], None]:
         @callback
         def fire(_now: datetime) -> None:
             watch.timers.pop(card.key, None)
             if self.cards.get(card.key) is card and card.status == watch.state:
-                watch.action(card, variables)
+                watch.action(variables)
 
         return fire
 
@@ -1218,15 +1359,23 @@ class Engine:
         if step is None:
             return False
         variables = self.variables(card)
-        message, _ = render_text(
+        message, message_error = render_text(
             self.hass,
             card.message_override or step["message"],
             variables,
             card.entity_id,
         )
-        info, _ = render_text(
+        info, info_error = render_text(
             self.hass, card.info_override or step.get("info"), variables, card.entity_id
         )
+        error = message_error or info_error
+        key = (card.notification_id, card.step_id)
+        if error != self.template_errors.get(key):
+            if error is None:
+                self.template_errors.pop(key, None)
+            else:
+                self.template_errors[key] = error
+            self.issues.refresh()
         changed = (message, info) != (card.message, card.info)
         card.message, card.info = message, info
         return changed
@@ -1295,6 +1444,25 @@ class Engine:
             self.hass, wake, card.snoozed_until
         )
 
+    def _schedule_expiry(self, card: Card) -> None:
+        self._cancel_expiry(card)
+        if card.expires_at is None or not self._started:
+            return
+
+        @callback
+        def expire(_now: datetime) -> None:
+            self._expiry_timers.pop(card.key, None)
+            if self.cards.get(card.key) is card and card.is_open:
+                self.close(card, CLOSED_EXPIRED, SOURCE_SCHEDULE)
+
+        self._expiry_timers[card.key] = async_track_point_in_utc_time(
+            self.hass, expire, card.expires_at
+        )
+
+    def _cancel_expiry(self, card: Card) -> None:
+        if (cancel := self._expiry_timers.pop(card.key, None)) is not None:
+            cancel()
+
     def _cancel_unsnooze(self, card: Card) -> None:
         if (cancel := self._snooze_timers.pop(card.key, None)) is not None:
             cancel()
@@ -1307,6 +1475,7 @@ class Engine:
 
     @callback
     def _minute(self, _now: datetime) -> None:
+        """Check the time-dependent Hide while and Start conditions again."""
         for runner in self.runners.values():
             for step in runner.steps.values():
                 if step.hide_timed:
@@ -1359,15 +1528,20 @@ class Engine:
         notification_id = self.resolve_notification(condition["notification"])
         if notification_id is None:
             return False
-        step_id: str | None = condition.get("step")
+        step = condition.get("step")
+        step_id: str | None
+        if isinstance(step, int):
+            notification = self.notification_config(notification_id) or {"steps": []}
+            if not 1 <= step <= len(notification["steps"]):
+                return False
+            step_id = notification["steps"][step - 1]["id"]
+        else:
+            step_id = step
         state: str = condition["state"]
-        if (within := condition.get("within")) is not None:
+        if (within := _period(condition.get("within"))) is not None:
             reached = self.last_reached(notification_id, step_id, state)
-            return reached is not None and dt_util.utcnow() - reached <= (
-                cv.positive_time_period_dict(within)
-            )
-        period = condition.get("for")
-        needed = cv.positive_time_period_dict(period) if period else timedelta()
+            return reached is not None and dt_util.utcnow() - reached <= within
+        needed = _period(condition.get("for")) or timedelta()
         now = dt_util.utcnow()
         start = dt_util.start_of_local_day()
         for card in self.cards_of(notification_id, step_id):
@@ -1389,10 +1563,33 @@ class Engine:
         if notification is None or not notification.get("enabled", True):
             return STATE_DISABLED
         statuses = {card.status for card in self._visible_cards(notification_id)}
-        for state in (STATE_ACTIVE, STATE_HIDDEN, STATE_SNOOZED, STATE_DONE):
+        next_due = self.next_due(notification_id)
+        if next_due is not None and next_due < dt_util.start_of_local_day() + timedelta(
+            days=1
+        ):
+            statuses.add(STATE_UPCOMING)
+        for state in (
+            STATE_ACTIVE,
+            STATE_HIDDEN,
+            STATE_SNOOZED,
+            STATE_UPCOMING,
+            STATE_DONE,
+        ):
             if state in statuses:
                 return state
         return STATE_IDLE
+
+    def next_due(self, notification_id: str) -> datetime | None:
+        """Return when a scheduled step of a notification is next due."""
+        runner = self.runners.get(notification_id)
+        if runner is None:
+            return None
+        times = [
+            step.schedule.next
+            for step in runner.steps.values()
+            if step.schedule is not None and step.schedule.next is not None
+        ]
+        return min(times) if times else None
 
     def _visible_cards(self, notification_id: str) -> list[Card]:
         """Return the open cards and the ones done today, in step order."""
@@ -1454,7 +1651,7 @@ class Engine:
             ],
             "message": top.message if top is not None else None,
             "snoozed_until": min(snoozed).isoformat() if snoozed else None,
-            "next_due": None,
+            "next_due": _iso(self.next_due(notification_id)),
             "last_done": last_done.isoformat() if last_done else None,
             "category": category,
         }
@@ -1505,10 +1702,54 @@ class Engine:
                     "last_done": _iso(
                         self.last_reached(notification["id"], None, CLOSED_DONE)
                     ),
+                    "next_due": _iso(self.next_due(notification["id"])),
                 }
                 for notification in self._config["notifications"]
             },
         }
+
+    # -- Calendar -----------------------------------------------------------
+
+    def calendar_events(self, start: datetime, end: datetime) -> list[dict[str, Any]]:
+        """Return the occurrences of the scheduled steps between two times.
+
+        A calendar schedule lists every occurrence; an after-last-done one
+        only the next, because the later ones depend on when it is done.
+        """
+        events: list[dict[str, Any]] = []
+        for runner in self.runners.values():
+            for step in runner.steps.values():
+                schedule = step.schedule
+                if schedule is None or schedule.n == 0:
+                    continue
+                if schedule.is_calendar:
+                    times = list(
+                        calendar_between(schedule.config, schedule.n, start, end)
+                    )
+                else:
+                    due = schedule.next
+                    times = [due] if due is not None and start <= due < end else []
+                message, _ = render_text(
+                    self.hass,
+                    step.step["message"],
+                    {"entity": None, "trigger": {}, "data": {}},
+                    None,
+                )
+                timed = bool(schedule.config.get("at"))
+                period = schedule_expires(schedule.config)
+                events.extend(
+                    {
+                        "notification_id": runner.id,
+                        "step_id": step.step_id,
+                        "summary": runner.name,
+                        "description": message,
+                        "start": when,
+                        "end": when + (period or timedelta(hours=1)),
+                        "all_day": not timed,
+                    }
+                    for when in times
+                )
+        return sorted(events, key=lambda event: event["start"])
 
     # -- Actions ------------------------------------------------------------
 

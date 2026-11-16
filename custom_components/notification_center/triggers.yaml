@@ -1,0 +1,61 @@
+notification_state:
+  fields:
+    notification: &notification
+      required: true
+      selector:
+        entity:
+          filter:
+            integration: notification_center
+            domain: sensor
+    step: &step
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+    state:
+      required: true
+      selector:
+        select:
+          translation_key: notification_state
+          options:
+            - active
+            - done
+            - snoozed
+            - dismissed
+    for: &for
+      required: false
+      selector:
+        duration:
+
+listed_entities:
+  fields:
+    notification: *notification
+    to: &to
+      required: false
+      selector:
+        text:
+          multiple: true
+    not_to: &not_to
+      required: false
+      selector:
+        text:
+          multiple: true
+    above: &above
+      required: false
+      selector:
+        number:
+          mode: box
+          step: any
+    below: &below
+      required: false
+      selector:
+        number:
+          mode: box
+          step: any
+    attribute: &attribute
+      required: false
+      selector:
+        text:
+    for: *for

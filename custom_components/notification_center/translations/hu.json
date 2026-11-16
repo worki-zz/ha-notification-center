@@ -192,5 +192,153 @@
     "not_a_notification": {
       "message": "A(z) {entity_id} nem egy értesítés sensora."
     }
+  },
+  "triggers": {
+    "notification_state": {
+      "name": "Értesítés állapota",
+      "description": "Akkor indul, amikor egy értesítés vagy egy lépése aktív, kész, elhalasztott vagy elvetett lesz.",
+      "fields": {
+        "notification": {
+          "name": "Értesítés",
+          "description": "Az értesítés sensora."
+        },
+        "step": {
+          "name": "Lépés",
+          "description": "A lépés száma; üresen bármelyik lépés."
+        },
+        "state": {
+          "name": "Állapot",
+          "description": "Az értesítés állapota."
+        },
+        "for": {
+          "name": "Legalább ennyi ideje",
+          "description": "Mennyi ideig kell így maradnia."
+        }
+      }
+    },
+    "listed_entities": {
+      "name": "Listázott entitások",
+      "description": "Akkor indul, amikor egy értesítés listájának egy entitása megfelel a feltételnek.",
+      "fields": {
+        "notification": {
+          "name": "Értesítés",
+          "description": "Az értesítés sensora."
+        },
+        "to": {
+          "name": "Állapot",
+          "description": "A számító állapotok; üresen bármelyik."
+        },
+        "not_to": {
+          "name": "Nem ez az állapot",
+          "description": "A nem számító állapotok."
+        },
+        "above": {
+          "name": "Felett",
+          "description": "Az értéknek e felett kell lennie."
+        },
+        "below": {
+          "name": "Alatt",
+          "description": "Az értéknek ez alatt kell lennie."
+        },
+        "attribute": {
+          "name": "Attribútum",
+          "description": "Az állapot helyett ezt az attribútumot nézi."
+        },
+        "for": {
+          "name": "Legalább ennyi ideje",
+          "description": "Mennyi ideig kell így maradnia."
+        }
+      }
+    }
+  },
+  "conditions": {
+    "notification_state": {
+      "name": "Értesítés állapota",
+      "description": "Egy értesítés vagy egy lépése állapotát vizsgálja.",
+      "fields": {
+        "notification": {
+          "name": "Értesítés",
+          "description": "Az értesítés sensora."
+        },
+        "step": {
+          "name": "Lépés",
+          "description": "A lépés száma; üresen bármelyik lépés."
+        },
+        "state": {
+          "name": "Állapot",
+          "description": "Az értesítés állapota."
+        },
+        "for": {
+          "name": "Legalább ennyi ideje",
+          "description": "Mennyi ideig kell így maradnia."
+        },
+        "within": {
+          "name": "Ennyi időn belül",
+          "description": "Igaz, ha ennyi időn belül került ebbe az állapotba."
+        }
+      }
+    },
+    "listed_entities": {
+      "name": "Listázott entitások",
+      "description": "Azt vizsgálja, hogy egy értesítés listájának bármelyik entitása megfelel-e.",
+      "fields": {
+        "notification": {
+          "name": "Értesítés",
+          "description": "Az értesítés sensora."
+        },
+        "to": {
+          "name": "Állapot",
+          "description": "A számító állapotok; üresen bármelyik."
+        },
+        "not_to": {
+          "name": "Nem ez az állapot",
+          "description": "A nem számító állapotok."
+        },
+        "above": {
+          "name": "Felett",
+          "description": "Az értéknek e felett kell lennie."
+        },
+        "below": {
+          "name": "Alatt",
+          "description": "Az értéknek ez alatt kell lennie."
+        },
+        "attribute": {
+          "name": "Attribútum",
+          "description": "Az állapot helyett ezt az attribútumot nézi."
+        },
+        "for": {
+          "name": "Legalább ennyi ideje",
+          "description": "Mennyi ideig kell így maradnia."
+        }
+      }
+    }
+  },
+  "selector": {
+    "notification_state": {
+      "options": {
+        "active": "Aktív",
+        "done": "Kész",
+        "snoozed": "Elhalasztva",
+        "dismissed": "Elvetve"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "{name}: hiányzó entitások",
+      "description": "A(z) **{name}** értesítés nem létező entitásokat használ: {entities}. Az ezeket használó triggerek és feltételek nem működnek. Javítsd az értesítést a Notification Centerben, vagy állítsd vissza az entitásokat."
+    },
+    "invalid_every": {
+      "title": "{name}: az ütemezés áll",
+      "description": "A(z) **{name}** {step}. lépése a(z) {entity} entitásból veszi az ismétlés gyakoriságát, de annak állapota nem szám, ezért az ütemezés áll, mint 0-nál. Amint szám lesz, újra indul."
+    },
+    "template_error": {
+      "title": "{name}: hiba az üzenetben",
+      "description": "A(z) **{name}** {step}. lépésének üzenetében vagy info sorában template hiba van, ezért a kártya a template nélkül mutatja a szöveget: {error}"
+    },
+    "setup_error": {
+      "title": "{name}: egy trigger vagy feltétel nem működik",
+      "description": "A(z) **{name}** {step}. lépését nem sikerült elindítani: {error}"
+    }
   }
 }

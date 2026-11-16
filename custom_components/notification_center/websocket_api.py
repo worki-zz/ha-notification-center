@@ -17,7 +17,7 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from .const import CLOSED_DISMISSED, CLOSED_DONE, DOMAIN, SOURCE_BUTTON
-from .engine import Engine
+from .engine import async_get_engine
 from .model import COLLECTIONS, ConfigData, ConfigValidationError
 from .store import ConfigManager, async_people_view
 
@@ -330,14 +330,6 @@ async def ws_import(
 # -- Live state ---------------------------------------------------------------
 
 
-def _engine(hass: HomeAssistant) -> Engine | None:
-    entries = hass.config_entries.async_loaded_entries(DOMAIN)
-    if not entries:
-        return None
-    engine: Engine = entries[0].runtime_data.engine
-    return engine
-
-
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/state/subscribe"})
 @callback
 def ws_state_subscribe(
@@ -346,7 +338,7 @@ def ws_state_subscribe(
     msg: dict[str, Any],
 ) -> None:
     """Send the cards and states now and after every change."""
-    engine = _engine(hass)
+    engine = async_get_engine(hass)
     if engine is None:
         connection.send_error(
             msg["id"], "not_loaded", "Notification Center is not loaded"
@@ -381,7 +373,7 @@ def ws_card_action(
     msg: dict[str, Any],
 ) -> None:
     """Mark a card done, dismiss it or snooze it (any user)."""
-    engine = _engine(hass)
+    engine = async_get_engine(hass)
     if engine is None:
         connection.send_error(
             msg["id"], "not_loaded", "Notification Center is not loaded"

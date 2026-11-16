@@ -28,7 +28,7 @@ from .const import (
     SERVICE_TRIGGER,
     SOURCE_ACTION,
 )
-from .engine import Engine, Overrides
+from .engine import Engine, Overrides, async_get_engine
 from .model import ATTACHMENT_SCHEMA
 
 _STEP = vol.All(vol.Coerce(int), vol.Range(min=1))
@@ -64,12 +64,10 @@ SET_LAST_DONE_SCHEMA = cv.make_entity_service_schema(
 
 
 def _engine(hass: HomeAssistant) -> Engine:
-    entries = hass.config_entries.async_loaded_entries(DOMAIN)
-    if not entries:
+    if (engine := async_get_engine(hass)) is None:
         raise ServiceValidationError(
             translation_domain=DOMAIN, translation_key="not_loaded"
         )
-    engine: Engine = entries[0].runtime_data.engine
     return engine
 
 

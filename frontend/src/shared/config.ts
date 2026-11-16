@@ -73,6 +73,7 @@ export interface NotificationState {
   state: string;
   cards: CardState[];
   last_done: string | null;
+  next_due: string | null;
 }
 
 export interface StateMessage {

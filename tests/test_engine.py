@@ -19,81 +19,12 @@ from pytest_homeassistant_custom_component.common import (
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.notification_center.const import DOMAIN
-from custom_components.notification_center.engine import Engine
-from custom_components.notification_center.store import ConfigManager
 
-DOOR_GROUP = {"domain": "binary_sensor", "device_class": "door"}
-
-
-class Center:
-    """The loaded integration, with shortcuts for the tests."""
-
-    def __init__(self, hass: HomeAssistant, entry: MockConfigEntry) -> None:
-        self.hass = hass
-        self.entry = entry
-        self.events: list[tuple[str, dict[str, Any]]] = []
-        self.engine.async_add_event_listener(
-            lambda kind, data: self.events.append((kind, data))
-        )
-
-    @property
-    def engine(self) -> Engine:
-        engine: Engine = self.entry.runtime_data.engine
-        return engine
-
-    @property
-    def manager(self) -> ConfigManager:
-        manager: ConfigManager = self.entry.runtime_data.manager
-        return manager
-
-    async def add(self, name: str, *steps: dict[str, Any], **extra: Any) -> str:
-        item = await self.manager.async_create(
-            "notifications", {"name": name, "steps": list(steps), **extra}
-        )
-        await self.hass.async_block_till_done()
-        return str(item["id"])
-
-    def state(self, entity_id: str) -> str:
-        state = self.hass.states.get(entity_id)
-        assert state is not None, entity_id
-        return state.state
-
-    def attrs(self, entity_id: str) -> dict[str, Any]:
-        state = self.hass.states.get(entity_id)
-        assert state is not None, entity_id
-        return dict(state.attributes)
-
-    def kinds(self) -> list[str]:
-        return [kind for kind, _ in self.events]
-
-    async def call(self, service: str, entity_id: str, **data: Any) -> None:
-        await self.hass.services.async_call(
-            DOMAIN, service, {"entity_id": entity_id, **data}, blocking=True
-        )
-        await self.hass.async_block_till_done()
-
-    async def set(self, entity_id: str, state: str, **attributes: Any) -> None:
-        self.hass.states.async_set(entity_id, state, attributes)
-        await self.hass.async_block_till_done()
-
-
-async def _load(hass: HomeAssistant, entry: MockConfigEntry) -> Center:
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    return Center(hass, entry)
-
-
-@pytest.fixture
-async def center(hass: HomeAssistant, config_entry: MockConfigEntry) -> Center:
-    return await _load(hass, config_entry)
+from .common import DOOR_GROUP, Center, load, step
 
 
 def _state_trigger(entity_id: str, to: str = "on") -> dict[str, Any]:
     return {"trigger": "state", "entity_id": entity_id, "to": to}
-
-
-def _step(message: str = "Do it", **extra: Any) -> dict[str, Any]:
-    return {"message": message, **extra}
 
 
 async def _tick(
@@ -110,7 +41,7 @@ async def test_entities_are_created(center: Center) -> None:
     assert center.attrs("sensor.notification_center")["mode"] == "Home"
     assert center.hass.states.get("event.notification_center") is not None
 
-    await center.add("Dishwasher", _step())
+    await center.add("Dishwasher", step())
     assert center.state("sensor.nc_dishwasher") == "idle"
     attrs = center.attrs("sensor.nc_dishwasher")
     assert attrs["friendly_name"] == "Dishwasher"
@@ -133,7 +64,7 @@ async def test_trigger_done_when_and_last_done(
     await center.set("input_boolean.dishwasher", "off")
     await center.add(
         "Dishwasher",
-        _step(
+        step(
             "Empty the dishwasher",
             start={
                 "type": "triggers",
@@ -171,7 +102,7 @@ async def test_start_conditions(center: Center) -> None:
     await center.set("input_boolean.away", "on")
     await center.add(
         "Bell",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [_state_trigger("input_boolean.bell")],
@@ -199,7 +130,7 @@ async def test_hide_while(center: Center) -> None:
     await center.set("input_boolean.raining", "on")
     await center.add(
         "Windows",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [_state_trigger("input_boolean.hot")],
@@ -232,7 +163,7 @@ async def test_retrigger_keeps_the_card(
     """A trigger on an open card keeps its start time; a snoozed one shows."""
     await center.add(
         "Bell",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [{"trigger": "event", "event_type": "bell"}],
@@ -261,7 +192,7 @@ async def test_snooze_comes_back(
     hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
 ) -> None:
     """A snoozed card shows again when the snooze ends."""
-    nid = await center.add("Plants", _step())
+    nid = await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     await center.call("snooze", "sensor.nc_plants", duration={"minutes": 30})
     attrs = center.attrs("sensor.nc_plants")
@@ -282,7 +213,7 @@ async def test_snooze_until_tomorrow(
     await hass.config.async_set_time_zone("Europe/Budapest")
     freezer.move_to("2026-11-16 15:00:00+01:00")
     await center.manager.async_update_general({"snooze_tomorrow_at": "07:30"})
-    await center.add("Plants", _step())
+    await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     await center.call("snooze", "sensor.nc_plants")
     until = dt_util.parse_datetime(center.attrs("sensor.nc_plants")["snoozed_until"])
@@ -292,7 +223,7 @@ async def test_snooze_until_tomorrow(
 
 async def test_clear_and_done_actions(center: Center) -> None:
     """Clear dismisses without last done; Done records it even when closed."""
-    await center.add("Plants", _step())
+    await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     await center.call("clear", "sensor.nc_plants")
     assert center.state("sensor.nc_plants") == "idle"
@@ -313,7 +244,7 @@ async def test_clear_and_done_actions(center: Center) -> None:
 
 async def test_action_errors(center: Center) -> None:
     """Actions explain a wrong target or step."""
-    await center.add("Plants", _step())
+    await center.add("Plants", step())
     with pytest.raises(ServiceValidationError):
         await center.call("trigger", "sensor.notification_center")
     with pytest.raises(ServiceValidationError, match="1 step"):
@@ -323,7 +254,7 @@ async def test_action_errors(center: Center) -> None:
 async def test_trigger_action_message_and_data(center: Center) -> None:
     """The trigger action can replace the message and pass data."""
     await center.set("input_boolean.front", "on", friendly_name="Front door")
-    await center.add("Bell", _step("Someone at {Entity}"))
+    await center.add("Bell", step("Someone at {Entity}"))
     await center.call("trigger", "sensor.nc_bell", entity="input_boolean.front")
     assert center.attrs("sensor.nc_bell")["message"] == "Someone at Front door"
 
@@ -343,7 +274,7 @@ async def test_trigger_action_message_and_data(center: Center) -> None:
 async def test_live_message(center: Center) -> None:
     """The message follows the entities it reads while the card is open."""
     await center.set("sensor.battery", "40")
-    await center.add("Battery", _step("Battery {{ states('sensor.battery') }}%"))
+    await center.add("Battery", step("Battery {{ states('sensor.battery') }}%"))
     await center.call("trigger", "sensor.nc_battery")
     assert center.attrs("sensor.nc_battery")["message"] == "Battery 40%"
     await center.set("sensor.battery", "15")
@@ -357,7 +288,7 @@ async def test_listed_entities(center: Center) -> None:
     await center.set("binary_sensor.motion", "on", device_class="motion")
     await center.add(
         "Doors",
-        _step(
+        step(
             "{Entity} is open",
             start={
                 "type": "triggers",
@@ -391,7 +322,7 @@ async def test_listed_entities_dismiss_waits(center: Center) -> None:
     await center.set("binary_sensor.front", "on", device_class="door")
     await center.add(
         "Doors",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [
@@ -421,7 +352,7 @@ async def test_listed_entities_for(
     await center.set("binary_sensor.front", "off", device_class="door")
     await center.add(
         "Doors",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [
@@ -444,10 +375,10 @@ async def test_listed_entities_for(
 
 async def test_notification_state_trigger_and_condition(center: Center) -> None:
     """A step can start when another notification's step is done."""
-    waste = await center.add("Waste", _step("Take out the waste"))
+    waste = await center.add("Waste", step("Take out the waste"))
     await center.add(
         "Waste check",
-        _step(
+        step(
             "Bring the bin back",
             start={
                 "type": "triggers",
@@ -460,7 +391,7 @@ async def test_notification_state_trigger_and_condition(center: Center) -> None:
                 ],
             },
         ),
-        _step(
+        step(
             "Done within a day",
             start={
                 "type": "triggers",
@@ -496,8 +427,8 @@ async def test_done_card_until_midnight(
     """A done card shows as done until the end of the day."""
     await hass.config.async_set_time_zone("Europe/Budapest")
     freezer.move_to("2026-11-16 20:00:00+01:00")
-    center = await _load(hass, config_entry)
-    await center.add("Plants", _step())
+    center = await load(hass, config_entry)
+    await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     await center.call("done", "sensor.nc_plants")
     assert center.state("sensor.nc_plants") == "done"
@@ -509,7 +440,7 @@ async def test_done_card_until_midnight(
 
 async def test_disable_and_delete(hass: HomeAssistant, center: Center) -> None:
     """A disabled notification is ``disabled``; a deleted one loses its sensor."""
-    nid = await center.add("Plants", _step())
+    nid = await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     await center.manager.async_set_enabled(nid, False)
     await hass.async_block_till_done()
@@ -524,7 +455,7 @@ async def test_disable_and_delete(hass: HomeAssistant, center: Center) -> None:
 
 async def test_rename_keeps_entity_id(hass: HomeAssistant, center: Center) -> None:
     """Renaming a notification changes its name, not its entity id."""
-    nid = await center.add("Plants", _step())
+    nid = await center.add("Plants", step())
     item = center.engine.notification_config(nid)
     assert item is not None
     await center.manager.async_update("notifications", nid, {**item, "name": "Herbs"})
@@ -536,9 +467,9 @@ async def test_cards_survive_a_restart(
     hass: HomeAssistant, config_entry: MockConfigEntry, freezer: FrozenDateTimeFactory
 ) -> None:
     """Open and snoozed cards and last done times are restored."""
-    center = await _load(hass, config_entry)
-    await center.add("Plants", _step())
-    await center.add("Bell", _step())
+    center = await load(hass, config_entry)
+    await center.add("Plants", step())
+    await center.add("Bell", step())
     await center.call("trigger", "sensor.nc_plants")
     await center.call("trigger", "sensor.nc_bell")
     await center.call("snooze", "sensor.nc_bell", duration={"hours": 1})
@@ -564,7 +495,7 @@ async def test_websocket_state_and_card_actions(
 ) -> None:
     """Any user can follow the cards and mark one done."""
     hass.states.async_set("person.reader", "home", {"user_id": hass_read_only_user.id})
-    nid = await center.add("Plants", _step())
+    nid = await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     ws = await hass_ws_client(hass, hass_read_only_access_token)
 
@@ -631,7 +562,7 @@ async def test_done_when_closes_only_its_entity(center: Center) -> None:
     await center.set("binary_sensor.back", "on", device_class="door")
     await center.add(
         "Doors",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [
@@ -660,11 +591,11 @@ async def test_listed_card_closes_after_restart(
     hass: HomeAssistant, config_entry: MockConfigEntry
 ) -> None:
     """An entity that stopped matching while stopped closes its card."""
-    center = await _load(hass, config_entry)
+    center = await load(hass, config_entry)
     await center.set("binary_sensor.front", "on", device_class="door")
     await center.add(
         "Doors",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [
@@ -713,7 +644,7 @@ async def test_listed_done_stays_done_today(center: Center) -> None:
     await center.set("binary_sensor.front", "on", device_class="door")
     await center.add(
         "Doors",
-        _step(
+        step(
             start={
                 "type": "triggers",
                 "triggers": [
