@@ -288,7 +288,9 @@ class ListedTracker:
     def _check_all(self) -> None:
         members = set(self._entities.members())
         for entity_id in sorted(members):
-            self._evaluate(entity_id, None, self._hass.states.get(entity_id))
+            self._evaluate(
+                entity_id, None, self._hass.states.get(entity_id), initial=True
+            )
         for entity_id in sorted(self._matching - members):
             self._stop_matching(entity_id)
 
@@ -308,7 +310,12 @@ class ListedTracker:
 
     @callback
     def _evaluate(
-        self, entity_id: str, old_state: State | None, new_state: State | None
+        self,
+        entity_id: str,
+        old_state: State | None,
+        new_state: State | None,
+        *,
+        initial: bool = False,
     ) -> None:
         if not self.matcher.matches(new_state):
             if entity_id in self._matching:
@@ -320,6 +327,8 @@ class ListedTracker:
         if self._quiet:
             return
         variables = self._variables(entity_id, old_state, new_state)
+        if initial:
+            variables["initial"] = True
         if self.matcher.for_ is None:
             self._on_match(entity_id, variables)
             return

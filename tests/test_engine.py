@@ -605,7 +605,7 @@ async def test_done_when_closes_only_its_entity(center: Center) -> None:
 async def test_listed_card_closes_after_restart(
     hass: HomeAssistant, config_entry: MockConfigEntry
 ) -> None:
-    """An entity that stopped matching while stopped closes its card."""
+    """An entity that stopped matching while stopped closes its card (idle)."""
     center = await load(hass, config_entry)
     await center.set("binary_sensor.front", "on", device_class="door")
     await center.add(
@@ -626,7 +626,7 @@ async def test_listed_card_closes_after_restart(
     hass.states.async_set("binary_sensor.front", "off", {"device_class": "door"})
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
-    assert Center(hass, config_entry).state("sensor.nc_doors") == "done"
+    assert Center(hass, config_entry).state("sensor.nc_doors") == "idle"
 
 
 async def test_example_config_runs(
@@ -739,7 +739,7 @@ async def test_time_driven_change_has_no_cause(
 async def test_closing_is_caused_and_reopening_does_not_flicker(
     hass: HomeAssistant, center: Center
 ) -> None:
-    """The entity closing the card is the cause; a new card skips idle."""
+    """The entity closing a status card is the cause, and it goes to idle."""
     await center.set("binary_sensor.front", "off")
     await center.add(
         "Doors",
@@ -773,13 +773,13 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
     state = hass.states.get("sensor.nc_doors")
     assert door is not None
     assert state is not None
-    assert state.state == "done"
+    # A status goes back to idle, it is not "done today".
+    assert state.state == "idle"
     assert state.context.parent_id == door.context.id
 
     log.clear()
     await center.set("binary_sensor.front", "on")
-    # The sensor goes from done straight to active, and the summary and the
-    # event follow it.
+    # The sensor goes active, and the summary and the event follow it.
     assert [
         (entity, value) for entity, value in log if entity == "sensor.nc_doors"
     ] == [("sensor.nc_doors", "active")]
@@ -788,3 +788,37 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
         "sensor.notification_center",
         "event.notification_center",
     ]
+
+    sensor = hass.states.get("sensor.nc_doors")
+    summary = hass.states.get("sensor.notification_center")
+    event = hass.states.get("event.notification_center")
+    assert sensor is not None
+    assert summary is not None
+    assert event is not None
+    # Both follow the notification's sensor, each in a context of its own.
+    assert summary.context.parent_id == sensor.context.id
+    assert event.context.parent_id == sensor.context.id
+    assert summary.context.id != event.context.id
+
+
+async def test_entity_already_matching_has_no_cause(
+    hass: HomeAssistant, center: Center
+) -> None:
+    """A card opened because the entity already matched has no state cause."""
+    await center.set("binary_sensor.front", "on")
+    await center.add(
+        "Doors",
+        step(
+            start={
+                "type": "triggers",
+                "triggers": [
+                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                ],
+            },
+        ),
+        entities=[{"entity_id": "binary_sensor.front"}],
+    )
+    state = hass.states.get("sensor.nc_doors")
+    assert state is not None
+    assert state.state == "active"
+    assert state.context.parent_id is None
