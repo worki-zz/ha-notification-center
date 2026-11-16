@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -669,3 +669,40 @@ async def test_listed_done_stays_done_today(center: Center) -> None:
     assert center.state("sensor.nc_doors") == "done"
     await center.set("binary_sensor.front", "on", device_class="door")
     assert center.state("sensor.nc_doors") == "active"
+
+
+async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) -> None:
+    """The Activity log can say why: the state is a child of the cause."""
+    await center.set("binary_sensor.front", "off", device_class="door")
+    await center.add(
+        "Doors",
+        step(
+            start={
+                "type": "triggers",
+                "triggers": [
+                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                ],
+            },
+        ),
+        entities=[{"entity_id": "binary_sensor.front"}],
+    )
+    await center.set("binary_sensor.front", "on", device_class="door")
+    cause = hass.states.get("binary_sensor.front")
+    state = hass.states.get("sensor.nc_doors")
+    assert cause is not None
+    assert state is not None
+    assert state.state == "active"
+    assert state.context.parent_id == cause.context.id
+
+    context = Context()
+    await hass.services.async_call(
+        DOMAIN,
+        "done",
+        {"entity_id": "sensor.nc_doors"},
+        blocking=True,
+        context=context,
+    )
+    state = hass.states.get("sensor.nc_doors")
+    assert state is not None
+    assert state.state == "done"
+    assert state.context.parent_id == context.id

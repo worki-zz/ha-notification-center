@@ -140,6 +140,9 @@ class NotificationSensor(SensorEntity):
 
     @callback
     def _changed(self) -> None:
+        # The Activity log then shows what caused the change.
+        if (context := self._engine.contexts.get(self.notification_id)) is not None:
+            self.async_set_context(context)
         self.async_write_ha_state()
 
     @property
