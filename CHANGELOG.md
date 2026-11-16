@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.8
+
+### Changed
+
+- A step that starts or ends by the Notification state trigger (also in an automation) is caused by the sensor of the other notification in the Activity log: the other notification's sensor causes this one's.
+
 ## 0.2.7
 
 ### Fixed

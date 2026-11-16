@@ -89,8 +89,8 @@ class NotificationStateTrigger(_OptionsTrigger):
         state: str = options["state"]
 
         @callback
-        def action(variables: dict[str, Any]) -> None:
-            run_action(variables, f"{variables['notification']} {state}")
+        def action(variables: dict[str, Any], context: Context | None) -> None:
+            run_action(variables, f"{variables['notification']} {state}", context)
 
         return async_add_state_watch(
             self._hass,

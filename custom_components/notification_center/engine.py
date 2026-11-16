@@ -311,7 +311,7 @@ class StateWatch:
     step: str | int | None
     state: str
     for_: timedelta | None
-    action: Callable[[dict[str, Any]], None]
+    action: Callable[[dict[str, Any], Context | None], None]
     timers: dict[CardKey, CALLBACK_TYPE] = field(default_factory=dict)
 
     def applies_to(self, engine: Engine, card: Card) -> bool:
@@ -601,8 +601,8 @@ class StepRunner:
         period = trigger.get("for")
 
         @callback
-        def action(variables: dict[str, Any]) -> None:
-            fired(variables, None)
+        def action(variables: dict[str, Any], context: Context | None) -> None:
+            fired(variables, context)
 
         watch = StateWatch(
             notification=trigger["notification"],
@@ -1350,23 +1350,29 @@ class Engine:
                 "from_state": old,
                 "to_state": new,
             }
+            # The cause is the state of the notification's sensor.
+            cause = self.contexts.get(card.notification_id)
             if watch.for_ is None:
-                watch.action(variables)
+                watch.action(variables, cause)
                 continue
             watch.timers[card.key] = async_track_point_in_utc_time(
                 self.hass,
-                self._watch_timer(watch, card, variables),
+                self._watch_timer(watch, card, variables, cause),
                 dt_util.utcnow() + watch.for_,
             )
 
     def _watch_timer(
-        self, watch: StateWatch, card: Card, variables: dict[str, Any]
+        self,
+        watch: StateWatch,
+        card: Card,
+        variables: dict[str, Any],
+        cause: Context | None,
     ) -> Callable[[datetime], None]:
         @callback
         def fire(_now: datetime) -> None:
             watch.timers.pop(card.key, None)
             if self.cards.get(card.key) is card and card.status == watch.state:
-                watch.action(variables)
+                watch.action(variables, cause)
 
         return fire
 

@@ -423,6 +423,12 @@ async def test_notification_state_trigger_and_condition(center: Center) -> None:
     await center.call("done", "sensor.nc_waste")
     assert center.state("sensor.nc_waste_check") == "active"
     assert center.attrs("sensor.nc_waste_check")["message"] == "Bring the bin back"
+    # The other notification's sensor is the cause.
+    cause = center.hass.states.get("sensor.nc_waste")
+    effect = center.hass.states.get("sensor.nc_waste_check")
+    assert cause is not None
+    assert effect is not None
+    assert effect.context.parent_id == cause.context.id
 
     center.hass.bus.async_fire("check")
     await center.hass.async_block_till_done()
