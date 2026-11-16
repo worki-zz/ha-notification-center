@@ -1,7 +1,8 @@
 """Websocket commands of Notification Center.
 
-Every user can read the configuration and follow its changes; only
-administrators can change it.
+Every user can read the configuration, follow it and the live state of the
+cards, and act on a card (Done, Snooze, Dismiss); only administrators can
+change the configuration.
 """
 
 from __future__ import annotations
@@ -12,13 +13,20 @@ from typing import Any, Final
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from .const import DOMAIN
+from .const import CLOSED_DISMISSED, CLOSED_DONE, DOMAIN, SOURCE_BUTTON
+from .engine import Engine
 from .model import COLLECTIONS, ConfigData, ConfigValidationError
 from .store import ConfigManager, async_people_view
 
 ERR_INVALID: Final = "invalid_config"
+
+CARD_DONE: Final = "done"
+CARD_DISMISS: Final = "dismiss"
+CARD_SNOOZE: Final = "snooze"
+CARD_ACTIONS: Final = (CARD_DONE, CARD_DISMISS, CARD_SNOOZE)
 
 type Handler = Callable[
     [HomeAssistant, websocket_api.ActiveConnection, dict[str, Any], ConfigManager],
@@ -77,6 +85,8 @@ def async_register(hass: HomeAssistant) -> None:
         ws_update_general,
         ws_export,
         ws_import,
+        ws_state_subscribe,
+        ws_card_action,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -314,4 +324,87 @@ async def ws_import(
 ) -> None:
     """Replace the whole configuration with an imported YAML."""
     await manager.async_import_yaml(msg["yaml"])
+    connection.send_result(msg["id"])
+
+
+# -- Live state ---------------------------------------------------------------
+
+
+def _engine(hass: HomeAssistant) -> Engine | None:
+    entries = hass.config_entries.async_loaded_entries(DOMAIN)
+    if not entries:
+        return None
+    engine: Engine = entries[0].runtime_data.engine
+    return engine
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/state/subscribe"})
+@callback
+def ws_state_subscribe(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Send the cards and states now and after every change."""
+    engine = _engine(hass)
+    if engine is None:
+        connection.send_error(
+            msg["id"], "not_loaded", "Notification Center is not loaded"
+        )
+        return
+
+    @callback
+    def send() -> None:
+        connection.send_message(
+            websocket_api.event_message(msg["id"], engine.snapshot())
+        )
+
+    connection.subscriptions[msg["id"]] = engine.async_add_listener(send)
+    connection.send_result(msg["id"])
+    send()
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/card/action",
+        vol.Required("notification_id"): str,
+        vol.Required("step_id"): str,
+        vol.Optional("entity_id"): vol.Any(None, str),
+        vol.Required("action"): vol.In(CARD_ACTIONS),
+        vol.Optional("until"): str,
+    }
+)
+@callback
+def ws_card_action(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Mark a card done, dismiss it or snooze it (any user)."""
+    engine = _engine(hass)
+    if engine is None:
+        connection.send_error(
+            msg["id"], "not_loaded", "Notification Center is not loaded"
+        )
+        return
+    cards = [
+        card
+        for card in engine.select(msg["notification_id"], msg["step_id"], None)
+        if card.entity_id == msg.get("entity_id")
+    ]
+    if not cards:
+        connection.send_error(msg["id"], "not_found", "The card is not open")
+        return
+    context = connection.context(msg)
+    action = msg["action"]
+    if action == CARD_DONE:
+        engine.close_cards(cards, CLOSED_DONE, SOURCE_BUTTON, context)
+    elif action == CARD_DISMISS:
+        engine.close_cards(cards, CLOSED_DISMISSED, SOURCE_BUTTON, context)
+    else:
+        until = dt_util.parse_datetime(msg["until"]) if msg.get("until") else None
+        if msg.get("until") and until is None:
+            connection.send_error(msg["id"], ERR_INVALID, "until is not a time")
+            return
+        engine.snooze_cards(cards, until, SOURCE_BUTTON, context)
     connection.send_result(msg["id"])

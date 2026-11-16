@@ -2,7 +2,7 @@
 
 A Home Assistant integration that manages every notification of your home in one place: when it shows, how it looks, which channels it uses (lights, speakers, phones), and when it goes away.
 
-> **Status: early development (0.x).** Version 0.1.0 stores the configuration, but notifications do not show or sound yet. Each release in the [changelog](CHANGELOG.md) says what to try.
+> **Status: early development (0.x).** Notifications are stored and the engine decides when they show, but there is no card, light, sound or push yet. Each release in the [changelog](CHANGELOG.md) says what to try.
 
 ## Requirements
 
@@ -15,6 +15,8 @@ A Home Assistant integration that manages every notification of your home in one
 1. In Home Assistant open **Settings → Marketplace** (HACS before Home Assistant 2026.11).
 2. Open the menu, choose **Custom repositories**, and add `https://github.com/worki-zz/ha-notification-center` with the type **Integration**. Custom repositories need a GitHub connection, which the Marketplace asks for the first time.
 3. Find **Notification Center** in the list and download it. The Marketplace installs and sets it up; no restart is needed.
+
+**Updating:** after the Marketplace downloads a new version, restart Home Assistant. Until then the previous version keeps running.
 
 ### Manual
 
@@ -29,7 +31,24 @@ The release zip contains the built frontend. The repository itself does not, so 
 - **Sidebar panel:** *Notification Center*. Every user can open it; the settings pages will be limited to administrators.
 - **Dashboard card:** `custom:notification-center-card`, listed in the card picker as *Notification Center*. The integration loads it on every dashboard, so you do not add a resource by hand.
 
-Removing the integration also deletes its stored data.
+- **A sensor per notification:** `sensor.nc_<name>`, for example `sensor.nc_dishwasher`. Its state is the most important state of its cards: `active`, `hidden`, `snoozed`, `upcoming`, `done` (today), `idle` or `disabled`. The attributes tell the number of active cards, the active step, the entities of a Listed entities step, the message, the snooze end and the last done time. The entity id stays when the notification is renamed.
+- **`sensor.notification_center`:** the number of active cards, with the current mode, the counts per category and the top notification as attributes.
+- **`event.notification_center`:** an event for every change of a card: `active`, `done`, `snoozed`, `dismissed`, `expired` and `button`, with the notification's sensor, the step number, the entity, the source and the person who pressed the button.
+- **Actions:** `notification_center.trigger`, `done`, `clear`, `snooze` and `set_last_done`. They target the sensor of a notification and take the step number (`step`, default 1) and, for a Listed entities step, its `entity`:
+
+  ```yaml
+  action: notification_center.trigger
+  target:
+    entity_id: sensor.nc_doorbell
+  data:
+    message: "Someone is at the door"
+    attachments:
+      - camera: camera.front_door
+    data:
+      visitor: "{{ states('sensor.doorbell_last_person') }}"
+  ```
+
+Open cards, snoozes and last done times are kept in `.storage/notification_center.runtime`, so they survive a restart. Removing the integration also deletes its stored data.
 
 ## Development
 

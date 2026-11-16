@@ -9,5 +9,188 @@
     "abort": {
       "single_instance_allowed": "Notification Center is already set up."
     }
+  },
+  "entity": {
+    "sensor": {
+      "notification": {
+        "state": {
+          "active": "Active",
+          "hidden": "Hidden",
+          "snoozed": "Snoozed",
+          "upcoming": "Upcoming",
+          "done": "Done",
+          "idle": "Idle",
+          "disabled": "Disabled"
+        },
+        "state_attributes": {
+          "active_count": {
+            "name": "Active cards"
+          },
+          "active_step": {
+            "name": "Active step"
+          },
+          "active_since": {
+            "name": "Active since"
+          },
+          "entities": {
+            "name": "Entities"
+          },
+          "message": {
+            "name": "Message"
+          },
+          "snoozed_until": {
+            "name": "Snoozed until"
+          },
+          "next_due": {
+            "name": "Next due"
+          },
+          "last_done": {
+            "name": "Last done"
+          },
+          "category": {
+            "name": "Category"
+          }
+        }
+      },
+      "summary": {
+        "state_attributes": {
+          "mode": {
+            "name": "Mode"
+          },
+          "categories": {
+            "name": "Categories"
+          },
+          "top_notification": {
+            "name": "Top notification"
+          },
+          "top_message": {
+            "name": "Top message"
+          }
+        }
+      }
+    },
+    "event": {
+      "notification_center": {
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "active": "Active",
+              "done": "Done",
+              "snoozed": "Snoozed",
+              "dismissed": "Dismissed",
+              "expired": "Expired",
+              "button": "Button pressed"
+            }
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "trigger": {
+      "name": "Trigger",
+      "description": "Shows a step of a notification, without checking its conditions.",
+      "fields": {
+        "step": {
+          "name": "Step",
+          "description": "The number of the step; 1 is the first."
+        },
+        "entity": {
+          "name": "Entity",
+          "description": "The entity of a Listed entities card. Without it, every card of the step."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Shown instead of the step's message."
+        },
+        "info": {
+          "name": "Info",
+          "description": "Shown instead of the step's info line."
+        },
+        "attachments": {
+          "name": "Attachments",
+          "description": "Images or videos for the card: camera, image or video items."
+        },
+        "data": {
+          "name": "Data",
+          "description": "Any values, available in the texts as {{ data.name }}."
+        }
+      }
+    },
+    "done": {
+      "name": "Done",
+      "description": "Marks a step done and saves the time it was done.",
+      "fields": {
+        "step": {
+          "name": "Step",
+          "description": "The number of the step; 1 is the first."
+        },
+        "entity": {
+          "name": "Entity",
+          "description": "The entity of a Listed entities card. Without it, every card of the step."
+        }
+      }
+    },
+    "clear": {
+      "name": "Clear",
+      "description": "Closes a step without marking it done, like Dismiss.",
+      "fields": {
+        "step": {
+          "name": "Step",
+          "description": "The number of the step; 1 is the first."
+        },
+        "entity": {
+          "name": "Entity",
+          "description": "The entity of a Listed entities card. Without it, every card of the step."
+        }
+      }
+    },
+    "snooze": {
+      "name": "Snooze",
+      "description": "Snoozes a step. Without a duration or time, until tomorrow.",
+      "fields": {
+        "step": {
+          "name": "Step",
+          "description": "The number of the step; 1 is the first."
+        },
+        "entity": {
+          "name": "Entity",
+          "description": "The entity of a Listed entities card. Without it, every card of the step."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "How long to snooze."
+        },
+        "until": {
+          "name": "Until",
+          "description": "When the step comes back."
+        }
+      }
+    },
+    "set_last_done": {
+      "name": "Set last done",
+      "description": "Sets when a step was last done.",
+      "fields": {
+        "step": {
+          "name": "Step",
+          "description": "The number of the step; 1 is the first."
+        },
+        "datetime": {
+          "name": "Time",
+          "description": "When it was done. Default: now."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Notification Center is not loaded."
+    },
+    "no_target": {
+      "message": "Choose the sensor of a notification."
+    },
+    "not_a_notification": {
+      "message": "{entity_id} is not the sensor of a notification."
+    }
   }
 }

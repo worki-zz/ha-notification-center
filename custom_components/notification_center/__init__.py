@@ -7,15 +7,21 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from . import websocket_api
-from .const import DOMAIN, STORAGE_KEYS
+from .const import DOMAIN, PLATFORMS, STORAGE_KEYS
+from .engine import Engine
 from .frontend_setup import async_register_frontend, async_unregister_frontend
+from .services import async_setup_services
 from .store import ConfigManager
 
 _WEBSOCKET_REGISTERED = f"{DOMAIN}_websocket_registered"
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 @dataclass
@@ -24,9 +30,16 @@ class RuntimeData:
 
     version: str
     manager: ConfigManager
+    engine: Engine
 
 
 type NotificationCenterConfigEntry = ConfigEntry[RuntimeData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the actions."""
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(
@@ -38,7 +51,9 @@ async def async_setup_entry(
 
     manager = ConfigManager(hass)
     await manager.async_load()
-    entry.runtime_data = RuntimeData(version=version, manager=manager)
+    engine = Engine(hass, manager)
+    await engine.async_load()
+    entry.runtime_data = RuntimeData(version=version, manager=manager, engine=engine)
     hass.data[DOMAIN] = manager
 
     # Websocket commands cannot be removed, so they are registered once and
@@ -47,6 +62,7 @@ async def async_setup_entry(
         websocket_api.async_register(hass)
         hass.data[_WEBSOCKET_REGISTERED] = True
 
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_frontend(hass, version)
     return True
 
@@ -55,7 +71,10 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: NotificationCenterConfigEntry
 ) -> bool:
     """Unload a config entry."""
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
     async_unregister_frontend(hass, entry.runtime_data.version)
+    await entry.runtime_data.engine.async_unload()
     entry.runtime_data.manager.async_unload()
     hass.data.pop(DOMAIN, None)
     return True
