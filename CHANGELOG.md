@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+### Changed
+
+- The sensors of the notifications belong to the Notification Center device, like the other entities. Their names now start with the device name ("Notification Center Dishwasher"); the entity ids stay `sensor.nc_<name>`.
+
 ## 0.2.0
 
 The engine: notifications show and go away on their triggers and schedules, and Home Assistant sees them as entities, actions, a calendar, automation triggers and Repairs. No card, light, sound or push yet: the development page and the Home Assistant screens show what happens.
