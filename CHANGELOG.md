@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6
+
+### Changed
+
+- In the Activity log the notification's sensor causes `sensor.notification_center` and `event.notification_center` also when the change is time driven (a schedule, an expiry, the end of a snooze). In that case the sensor itself still has no cause.
+
 ## 0.2.5
 
 ### Changed

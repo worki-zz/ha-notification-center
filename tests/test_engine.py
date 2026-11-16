@@ -712,10 +712,10 @@ async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) 
     assert state.context.parent_id == context.id
 
 
-async def test_time_driven_changes_have_no_cause(
+async def test_time_driven_change_has_no_cause(
     hass: HomeAssistant, center: Center
 ) -> None:
-    """A change without a cause is not linked to anything."""
+    """A time driven change has no cause, but the summary still follows it."""
     nid = await center.add("Plain", step())
     runner = center.engine.runners[nid]
     center.engine.trigger(nid, next(iter(runner.steps)), None, Overrides())
@@ -726,4 +726,5 @@ async def test_time_driven_changes_have_no_cause(
     assert state.context.parent_id is None
     summary = hass.states.get("sensor.notification_center")
     assert summary is not None
-    assert summary.context.parent_id is None
+    # The summary sensor is still caused by the notification's sensor.
+    assert summary.context.parent_id == state.context.id

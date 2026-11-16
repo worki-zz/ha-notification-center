@@ -1292,14 +1292,13 @@ class Engine:
             self._record(card.notification_id, card.step_id, new, now)
             if new == CLOSED_DONE:
                 self._done_recorded(card.notification_id, card.step_id)
-            if context is not None:
-                cause = Context(parent_id=context.id)
-                self.contexts[card.notification_id] = cause
-                self.event_context = Context(parent_id=cause.id)
-            else:
-                # Time driven (a schedule, an expiry, a snooze that ends): no
-                # cause to show, the sensor just changes by itself.
-                self.contexts.pop(card.notification_id, None)
+            # The notification's sensor is caused by the context behind the
+            # change; a time driven change (a schedule, an expiry, the end of
+            # a snooze) has none, the sensor just changes by itself. Either
+            # way the summary sensor and the event are caused by the sensor.
+            cause = Context(parent_id=context.id) if context else Context()
+            self.contexts[card.notification_id] = cause
+            self.event_context = Context(parent_id=cause.id)
             self._state_reached(card, old, new)
             self._fire_event(card, new, source, context)
         self._save()
