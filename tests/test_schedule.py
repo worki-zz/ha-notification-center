@@ -365,7 +365,8 @@ async def test_calendar_entity(
     )
     state = hass.states.get("calendar.notification_center")
     assert state is not None
-    assert state.attributes["message"] in ("Mixed waste", "Filter")
+    # The state never changes, so the calendar stays out of the Activity log.
+    assert state.state == "off"
 
     result = await hass.services.async_call(
         "calendar",

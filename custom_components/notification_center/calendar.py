@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
@@ -24,9 +25,6 @@ if TYPE_CHECKING:
     from .engine import Engine
 
 PARALLEL_UPDATES = 0
-
-# How far ahead the state looks for the next event.
-_LOOK_AHEAD = timedelta(days=366)
 
 
 async def async_setup_entry(
@@ -70,6 +68,7 @@ class NotificationCalendar(CalendarEntity):
     _attr_has_entity_name = True
     _attr_name = None
     _attr_icon = "mdi:calendar-clock"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "schedule"
 
     def __init__(self, engine: Engine, info: Any) -> None:
@@ -78,35 +77,15 @@ class NotificationCalendar(CalendarEntity):
         self._attr_unique_id = UNIQUE_ID_CALENDAR
         self._attr_device_info = info
         self.entity_id = f"calendar.{DOMAIN}"
-        self._event: CalendarEvent | None = None
-
-    async def async_added_to_hass(self) -> None:
-        """Follow the engine."""
-        await super().async_added_to_hass()
-        self.async_on_remove(self._engine.async_add_listener(self._changed))
-        self._update()
-
-    @callback
-    def _changed(self) -> None:
-        self._update()
-        self.async_write_ha_state()
-
-    def _update(self) -> None:
-        now = dt_util.utcnow()
-        # An event that started up to a day ago may still be on.
-        items = self._engine.calendar_events(now - timedelta(days=1), now + _LOOK_AHEAD)
-        events = [_event(item) for item in items]
-        self._event = next(
-            (event for event in events if event.end_datetime_local > now), None
-        )
 
     @property
     def event(self) -> CalendarEvent | None:
-        """Return the current or next event."""
-        # Worked out again on every write, so the state also moves on when
-        # an event ends without any change in the engine.
-        self._update()
-        return self._event
+        """Return no current event, so the state stays off.
+
+        The calendar is for looking at the schedule. An "on" while an event
+        is on would put a row in the Activity log every day.
+        """
+        return None
 
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime
