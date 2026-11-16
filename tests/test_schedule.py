@@ -356,7 +356,7 @@ async def test_calendar_entity(
     config_entry: MockConfigEntry,
     budapest: None,
 ) -> None:
-    """The calendar lists the occurrences; without At they are all-day."""
+    """The calendar lists the occurrences as all-day events on the due day."""
     center = await load(hass, config_entry)
     await center.add("Mixed waste", _scheduled(WEEKLY_WASTE, message="Put it out"))
     await center.add(
@@ -382,11 +382,8 @@ async def test_calendar_entity(
     response: Any = result
     events: list[dict[str, Any]] = response["calendar.notification_center"]["events"]
     waste = [event for event in events if event["summary"] == "Mixed waste"]
-    assert [event["start"] for event in waste] == [
-        "2026-11-18T19:00:00+01:00",
-        "2026-11-25T19:00:00+01:00",
-    ]
-    assert waste[0]["end"] == "2026-11-19T09:00:00+01:00"
+    assert [event["start"] for event in waste] == ["2026-11-18", "2026-11-25"]
+    assert waste[0]["end"] == "2026-11-19"
     assert waste[0]["description"] == "Put it out"
     filters = [event for event in events if event["summary"] == "Filter"]
     # Never done: due now, so the card is open and the next one is tomorrow.

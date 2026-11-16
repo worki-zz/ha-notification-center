@@ -10,7 +10,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -157,6 +161,9 @@ class SummarySensor(SensorEntity):
     _attr_name = None
     _attr_icon = PANEL_ICON
     _attr_translation_key = "summary"
+    # A measurement, so the Activity log does not list every count change;
+    # the sensors of the notifications show what happened.
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _unrecorded_attributes = frozenset({"top_message", "categories"})
 
     def __init__(self, engine: Engine, info: Any) -> None:

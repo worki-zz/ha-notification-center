@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+### Changed
+
+- The calendar shows every scheduled step as an all-day event on the day it is due. The time of day and the expiry only decide when the card shows and goes away; before, a step with a time of day was a timed event that ran until it expired (a bin put out on Wednesday evening spanned two days).
+- `sensor.notification_center` is a measurement, so the Activity log no longer lists every change of the count; the sensors of the notifications show what happened.
+
 ## 0.2.1
 
 ### Changed
