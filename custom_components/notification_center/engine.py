@@ -780,8 +780,11 @@ class Engine:
         self._store = Store[dict[str, Any]](hass, RUNTIME_VERSION, RUNTIME_KEY)
         self._listeners: list[ChangeListener] = []
         self._event_listeners: list[EventListener] = []
-        # What caused the last change of each notification, for the Activity
-        # log: the entities write their states in a child of this context.
+        # For the Activity log the causes chain up: the entity that started
+        # the change, the notification's sensor, then the summary sensor and
+        # the event entity. ``contexts`` is what the notification's sensor
+        # writes in; ``event_context`` (a child of it) is what the summary
+        # sensor and the event entity write in during that change.
         self.contexts: dict[str, Context] = {}
         self.event_context: Context | None = None
         self._watches = hass.data.setdefault(DATA_WATCHES, [])
@@ -1291,11 +1294,14 @@ class Engine:
                 self._done_recorded(card.notification_id, card.step_id)
             cause = Context(parent_id=context.id) if context else Context()
             self.contexts[card.notification_id] = cause
-            self.event_context = cause
+            self.event_context = Context(parent_id=cause.id)
             self._state_reached(card, old, new)
             self._fire_event(card, new, source, context)
         self._save()
-        self._notify()
+        try:
+            self._notify()
+        finally:
+            self.event_context = None
 
     def _record(
         self, notification_id: str, step_id: str, state: str, when: datetime

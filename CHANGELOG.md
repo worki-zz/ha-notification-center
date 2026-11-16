@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4
+
+### Changed
+
+- The causes in the Activity log chain up: the entity that started the change (or the action, the button) causes the notification's sensor, and the notification's sensor causes `sensor.notification_center` and `event.notification_center`.
+
 ## 0.2.3
 
 ### Changed
