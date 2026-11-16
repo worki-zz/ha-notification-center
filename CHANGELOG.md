@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5
+
+### Changed
+
+- A change with no outside cause (a schedule, an expiry, the end of a snooze) is not linked to anything in the Activity log: the sensor just changes by itself, and so does `sensor.notification_center`.
+
 ## 0.2.4
 
 ### Changed

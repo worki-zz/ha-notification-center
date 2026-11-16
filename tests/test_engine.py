@@ -19,6 +19,7 @@ from pytest_homeassistant_custom_component.common import (
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.notification_center.const import DOMAIN
+from custom_components.notification_center.engine import Overrides
 
 from .common import DOOR_GROUP, Center, load, step
 
@@ -709,3 +710,20 @@ async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) 
     assert state is not None
     assert state.state == "done"
     assert state.context.parent_id == context.id
+
+
+async def test_time_driven_changes_have_no_cause(
+    hass: HomeAssistant, center: Center
+) -> None:
+    """A change without a cause is not linked to anything."""
+    nid = await center.add("Plain", step())
+    runner = center.engine.runners[nid]
+    center.engine.trigger(nid, next(iter(runner.steps)), None, Overrides())
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.nc_plain")
+    assert state is not None
+    assert state.state == "active"
+    assert state.context.parent_id is None
+    summary = hass.states.get("sensor.notification_center")
+    assert summary is not None
+    assert summary.context.parent_id is None
