@@ -44,7 +44,14 @@ async def test_entities_are_created(center: Center) -> None:
     await center.add("Dishwasher", step())
     assert center.state("sensor.nc_dishwasher") == "idle"
     attrs = center.attrs("sensor.nc_dishwasher")
-    assert attrs["friendly_name"] == "Dishwasher"
+    assert attrs["friendly_name"] == "Notification Center Dishwasher"
+    registry = er.async_get(center.hass)
+    sensor = registry.async_get("sensor.nc_dishwasher")
+    summary = registry.async_get("sensor.notification_center")
+    assert sensor is not None
+    assert summary is not None
+    assert sensor.device_id is not None
+    assert sensor.device_id == summary.device_id
     assert attrs["icon"] == "mdi:bell"
     assert attrs["options"] == [
         "active",
@@ -460,7 +467,8 @@ async def test_rename_keeps_entity_id(hass: HomeAssistant, center: Center) -> No
     assert item is not None
     await center.manager.async_update("notifications", nid, {**item, "name": "Herbs"})
     await hass.async_block_till_done()
-    assert center.attrs("sensor.nc_plants")["friendly_name"] == "Herbs"
+    name = center.attrs("sensor.nc_plants")["friendly_name"]
+    assert name == "Notification Center Herbs"
 
 
 async def test_cards_survive_a_restart(

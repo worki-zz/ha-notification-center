@@ -49,7 +49,7 @@ async def async_setup_entry(
     def sync(config: ConfigData) -> None:
         wanted = {item["id"]: item for item in config["notifications"]}
         new = [
-            NotificationSensor(engine, item)
+            NotificationSensor(engine, item, info)
             for nid, item in wanted.items()
             if nid not in sensors
         ]
@@ -92,16 +92,17 @@ class NotificationSensor(SensorEntity):
     """The state of one notification."""
 
     _attr_should_poll = False
-    # Not on the service device: Home Assistant would put the device name in
-    # front of the notification's name ("Notification Center Dishwasher").
-    _attr_has_entity_name = False
+    # On the service device, so the friendly name starts with the device name
+    # ("Notification Center Dishwasher").
+    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_translation_key = "notification"
     _unrecorded_attributes = frozenset({"message", "entities"})
 
-    def __init__(self, engine: Engine, notification: dict[str, Any]) -> None:
+    def __init__(self, engine: Engine, notification: dict[str, Any], info: Any) -> None:
         """Set up the sensor of a notification."""
         self._engine = engine
+        self._attr_device_info = info
         self.notification_id: str = notification["id"]
         self._attr_unique_id = UNIQUE_ID_NOTIFICATION_PREFIX + self.notification_id
         self._attr_options = list(SENSOR_STATES)
