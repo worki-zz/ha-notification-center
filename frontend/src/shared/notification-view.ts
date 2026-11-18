@@ -134,7 +134,8 @@ export class NotificationCenterView extends LitElement {
     :host {
       display: block;
       height: 100%;
-      --nc-tint-opacity: 0.12;
+      /* The background stays the card background; only Alert colours it. */
+      --nc-tint-opacity: 0;
       --nc-alert-opacity: 0.3;
     }
     @keyframes nc-alert {
@@ -150,17 +151,17 @@ export class NotificationCenterView extends LitElement {
         opacity: 0;
       }
       to {
-        opacity: 1;
+        opacity: 0.25;
       }
     }
     @keyframes nc-pulse {
       from {
         border-color: color-mix(in srgb, var(--nc-color) 50%, transparent);
-        box-shadow: inset 0 0 8px color-mix(in srgb, var(--nc-color) 30%, transparent);
+        box-shadow: inset 0 0 8px color-mix(in srgb, var(--nc-color) 25%, transparent);
       }
       to {
         border-color: var(--nc-color);
-        box-shadow: inset 0 0 15px color-mix(in srgb, var(--nc-color) 45%, transparent);
+        box-shadow: inset 0 0 15px color-mix(in srgb, var(--nc-color) 50%, transparent);
       }
     }
     ha-card {
@@ -174,14 +175,16 @@ export class NotificationCenterView extends LitElement {
       column-gap: 10px;
       padding-right: 10px;
       border-style: solid;
-      border-width: max(var(--ha-card-border-width, 1px), 1px);
+      /* Always 1 px: a theme may have no border (Material You sets the
+         width to a bare 0, which max() cannot compare with 1px). */
+      border-width: 1px;
       border-color: var(--nc-color);
       --tile-color: var(--nc-color);
       --ha-ripple-color: var(--nc-color);
       --ha-ripple-hover-opacity: 0.04;
       --ha-ripple-pressed-opacity: 0.12;
     }
-    /* The tint: the alert card's background layer. */
+    /* The alert card's background layer, used by the Alert highlight. */
     ha-card::before {
       content: "";
       position: absolute;
@@ -190,22 +193,14 @@ export class NotificationCenterView extends LitElement {
       opacity: var(--nc-tint-opacity);
       pointer-events: none;
     }
-    /* The glow: light from both sides. */
+    /* The glow: light from both sides (the old notification card's). */
     ha-card::after {
       content: "";
       position: absolute;
       inset: 0;
       background:
-        radial-gradient(
-          ellipse at 0% 50%,
-          color-mix(in srgb, var(--nc-color) 25%, transparent),
-          transparent 60%
-        ),
-        radial-gradient(
-          ellipse at 100% 50%,
-          color-mix(in srgb, var(--nc-color) 25%, transparent),
-          transparent 60%
-        );
+        radial-gradient(circle at 0% 50%, var(--nc-color) 0%, transparent 35%),
+        radial-gradient(circle at 100% 50%, var(--nc-color) 0%, transparent 35%);
       opacity: 0;
       pointer-events: none;
     }
@@ -225,7 +220,7 @@ export class NotificationCenterView extends LitElement {
       }
       ha-card.highlight-glow::after {
         animation: none;
-        opacity: 1;
+        opacity: 0.25;
       }
       ha-card.highlight-pulse {
         animation: none;
@@ -296,7 +291,7 @@ export class NotificationCenterView extends LitElement {
       color: var(--primary-text-color);
       font-size: var(--ha-font-size-l, 16px);
       font-weight: var(--ha-font-weight-medium, 500);
-      line-height: var(--ha-line-height-normal, 1.5);
+      line-height: var(--ha-line-height-condensed, 1.2);
       letter-spacing: 0.1px;
       overflow-wrap: anywhere;
     }

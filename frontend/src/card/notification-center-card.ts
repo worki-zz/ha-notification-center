@@ -343,7 +343,10 @@ export class NotificationCenterCard extends LitElement {
         });
       }
     }
-    return result;
+    // Always in this order, whatever the step's order: Snooze, Done, then
+    // Dismiss (or Mute).
+    const order: CardAction[] = ["snooze", "done", "dismiss", "silence"];
+    return result.sort((a, b) => order.indexOf(a.action) - order.indexOf(b.action));
   }
 
   private _cardKey(card: CardState): string {
@@ -391,6 +394,8 @@ export class NotificationCenterCard extends LitElement {
               key: button.key,
               label: button.label,
               icon: button.icon,
+              // Snooze is the quiet one: a background only on hover.
+              plain: button.action === "snooze",
             }));
       return {
         key,
