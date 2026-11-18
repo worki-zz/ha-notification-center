@@ -37,7 +37,7 @@ const LABELS: Record<string, string> = {
   icon: "Icon",
   color: "Color",
   highlight: "Highlight",
-  data_type: "Type",
+  data_type: "Data",
   data_attribute: "Attribute",
   data_custom: "Custom",
   data_time_format: "Time format",
@@ -149,8 +149,10 @@ class NotificationCenterCardEditor extends LitElement {
         icon: "mdi:text-short",
         flatten: true,
         expanded: true,
+        // In the order of the card: the label, its data, the message, Info.
         schema: [
           { name: "label", selector: { text: {} } },
+          ...dataFields,
           { name: "message", selector: { text: {} } },
           { name: "info", selector: { text: {} } },
         ],
@@ -181,22 +183,6 @@ class NotificationCenterCardEditor extends LitElement {
         ],
       },
       {
-        name: "data",
-        type: "expandable",
-        title: "Data",
-        icon: "mdi:information-outline",
-        flatten: true,
-        schema: dataFields,
-      },
-      {
-        name: "interactions",
-        type: "expandable",
-        title: "Interactions",
-        icon: "mdi:gesture-tap",
-        flatten: true,
-        schema: [{ name: "tap_action", selector: { ui_action: { default_action: "none" } } }],
-      },
-      {
         name: "buttons_section",
         type: "expandable",
         title: "Buttons",
@@ -221,6 +207,14 @@ class NotificationCenterCardEditor extends LitElement {
             },
           },
         ],
+      },
+      {
+        name: "interactions",
+        type: "expandable",
+        title: "Interactions",
+        icon: "mdi:gesture-tap",
+        flatten: true,
+        schema: [{ name: "tap_action", selector: { ui_action: { default_action: "none" } } }],
       },
     ];
   }
