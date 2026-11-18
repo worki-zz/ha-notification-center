@@ -1766,6 +1766,7 @@ class Engine:
             "notifications": {
                 notification["id"]: {
                     "state": self.notification_state(notification["id"]),
+                    "entity_id": self.entity_id_of(notification["id"]),
                     "cards": [
                         card.as_dict()
                         for card in self._visible_cards(notification["id"])
@@ -1868,6 +1869,17 @@ class Engine:
         """Close several cards."""
         for card in list(cards):
             self.close(card, reason, source, context)
+
+    def silence_cards(
+        self,
+        cards: Iterable[Card],
+        source: str,
+        context: Context | None = None,
+    ) -> None:
+        """Keep cards open but stop their channels (Keep it silently)."""
+        for card in list(cards):
+            if card.is_open and not card.silenced:
+                self._change(card, source=source, context=context, silenced=True)
 
     def snooze_cards(
         self,

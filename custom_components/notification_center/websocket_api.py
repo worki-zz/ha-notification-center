@@ -26,7 +26,9 @@ ERR_INVALID: Final = "invalid_config"
 CARD_DONE: Final = "done"
 CARD_DISMISS: Final = "dismiss"
 CARD_SNOOZE: Final = "snooze"
-CARD_ACTIONS: Final = (CARD_DONE, CARD_DISMISS, CARD_SNOOZE)
+# Keep the card, stop its channels: a button with "Keep it silently".
+CARD_SILENCE: Final = "silence"
+CARD_ACTIONS: Final = (CARD_DONE, CARD_DISMISS, CARD_SNOOZE, CARD_SILENCE)
 
 type Handler = Callable[
     [HomeAssistant, websocket_api.ActiveConnection, dict[str, Any], ConfigManager],
@@ -372,7 +374,7 @@ def ws_card_action(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Mark a card done, dismiss it or snooze it (any user)."""
+    """Mark a card done, dismiss, snooze or silence it (any user)."""
     engine = async_get_engine(hass)
     if engine is None:
         connection.send_error(
@@ -393,6 +395,8 @@ def ws_card_action(
         engine.close_cards(cards, CLOSED_DONE, SOURCE_BUTTON, context)
     elif action == CARD_DISMISS:
         engine.close_cards(cards, CLOSED_DISMISSED, SOURCE_BUTTON, context)
+    elif action == CARD_SILENCE:
+        engine.silence_cards(cards, SOURCE_BUTTON, context)
     else:
         until = dt_util.parse_datetime(msg["until"]) if msg.get("until") else None
         if msg.get("until") and until is None:
