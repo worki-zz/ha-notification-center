@@ -60,7 +60,7 @@ export class NotificationCenterView extends LitElement {
     return html`
       <ha-card
         class="highlight-${highlight}"
-        style="--nc-color: ${view.color}"
+        style="--nc-color: ${view.color}; --nc-border-width: ${this._borderWidth()}"
       >
         <div
           class="main ${view.clickable ? "clickable" : ""} ${view.compact ? "compact" : ""}"
@@ -109,6 +109,17 @@ export class NotificationCenterView extends LitElement {
           : nothing}
       </ha-card>
     `;
+  }
+
+  // The theme's card border, but at least 1 px. A theme may set the width
+  // to a bare 0 (Material You), which CSS max() cannot compare with 1px, so
+  // the value is read and checked here.
+  private _borderWidth(): string {
+    const raw = getComputedStyle(this).getPropertyValue("--ha-card-border-width").trim();
+    const number = parseFloat(raw);
+    if (!raw || Number.isNaN(number)) return "1px";
+    if (/^-?[\d.]+$/.test(raw)) return number >= 1 ? `${number}px` : "1px";
+    return `max(${raw}, 1px)`;
   }
 
   private _tap(): void {
@@ -175,9 +186,7 @@ export class NotificationCenterView extends LitElement {
       column-gap: 10px;
       padding-right: 10px;
       border-style: solid;
-      /* Always 1 px: a theme may have no border (Material You sets the
-         width to a bare 0, which max() cannot compare with 1px). */
-      border-width: 1px;
+      border-width: var(--nc-border-width, 1px);
       border-color: var(--nc-color);
       --tile-color: var(--nc-color);
       --ha-ripple-color: var(--nc-color);

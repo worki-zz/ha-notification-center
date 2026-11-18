@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+### Fixed
+
+- The card border follows the theme's card border width again, with at least 1 px (0.3.2 made it always 1 px). A theme's bare `0` (Material You) now gives 1 px instead of the browser's thick default.
+
 ## 0.3.2
 
 ### Fixed
