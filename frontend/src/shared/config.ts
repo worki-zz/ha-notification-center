@@ -8,18 +8,50 @@ export interface Mode {
   condition?: { type: string; [key: string]: unknown } | null;
 }
 
+export interface Duration {
+  days?: number;
+  hours?: number;
+  minutes?: number;
+  seconds?: number;
+}
+
+export type Snooze =
+  | { type: "not_allowed" }
+  | { type: "fixed"; duration: Duration }
+  | { type: "ask" };
+
 export interface Category {
   id: string;
   name: string;
   icon?: string | null;
   card_color?: string | null;
+  snooze?: Snooze;
+}
+
+export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "custom";
+
+export type CardEffect = "done" | "snooze" | "dismiss" | "keep" | "keep_silent";
+
+export interface Button {
+  id: string;
+  type: ButtonType;
+  enabled: boolean;
+  label?: string | null;
+  icon?: string | null;
+  card: CardEffect;
+  action: { type: string; [key: string]: unknown };
+  // A button's own snooze: "ask" or a duration.
+  snooze?: "ask" | Duration | null;
+  confirm: boolean;
 }
 
 export interface Step {
   id: string;
   enabled: boolean;
   message: string;
+  info?: string | null;
   start: { type: "triggers" | "schedule" };
+  buttons: Button[];
 }
 
 export interface Notification {
@@ -28,6 +60,8 @@ export interface Notification {
   category: string;
   enabled: boolean;
   icon?: string | null;
+  card_color?: string | null;
+  snooze?: Snooze | null;
   steps: Step[];
 }
 
@@ -62,6 +96,7 @@ export interface CardState {
   step_id: string;
   entity_id: string | null;
   status: "active" | "hidden" | "snoozed" | "done" | "dismissed" | "expired";
+  silenced?: boolean;
   since: string;
   state_since: string;
   snoozed_until: string | null;
@@ -71,6 +106,8 @@ export interface CardState {
 
 export interface NotificationState {
   state: string;
+  // The notification's sensor, when it is registered.
+  entity_id?: string | null;
   cards: CardState[];
   last_done: string | null;
   next_due: string | null;
@@ -81,4 +118,5 @@ export interface StateMessage {
   notifications: Record<string, NotificationState>;
 }
 
-export type CardAction = "done" | "dismiss" | "snooze";
+// "silence" keeps the card open but stops its channels (Keep it silently).
+export type CardAction = "done" | "dismiss" | "snooze" | "silence";

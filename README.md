@@ -2,7 +2,7 @@
 
 A Home Assistant integration that manages every notification of your home in one place: when it shows, how it looks, which channels it uses (lights, speakers, phones), and when it goes away.
 
-> **Status: early development (0.x).** Notifications are stored and the engine decides when they show, but there is no dashboard card, light, sound or push yet. Each release in the [changelog](CHANGELOG.md) says what to try.
+> **Status: early development (0.x).** Notifications are stored, the engine decides when they show, and a dashboard card shows them; there is no light, sound or push yet. Each release in the [changelog](CHANGELOG.md) says what to try.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ The release zip contains the built frontend. The repository itself does not, so 
 ## What you get
 
 - **Sidebar panel:** *Notification Center*. Every user can open it; the settings pages will be limited to administrators.
-- **Dashboard card:** `custom:notification-center-card`, listed in the card picker as *Notification Center*. The integration loads it on every dashboard, so you do not add a resource by hand.
+- **Dashboard card:** *Notification* (`custom:notification-center-card`), in the card picker. The integration loads it on every dashboard, so you do not add a resource by hand. See [The Notification card](#the-notification-card).
 
 - **A sensor per notification:** `sensor.nc_<name>`, for example `sensor.nc_dishwasher`. Its state is the most important state of its cards: `active`, `hidden`, `snoozed`, `upcoming`, `done` (today), `idle` or `disabled`. The attributes tell the number of active cards, the active step, the entities of a Listed entities step, the message, the snooze end and the last done time. The entity id stays when the notification is renamed.
 - **`sensor.notification_center`:** the number of active cards, with the current mode, the counts per category and the top notification as attributes.
@@ -52,6 +52,56 @@ The release zip contains the built frontend. The repository itself does not, so 
 - **Repairs and diagnostics:** problems such as a missing entity are listed in Settings → Repairs; diagnostics can be downloaded from the integration's menu, with people and push services redacted.
 
 Open cards, snoozes and last done times are kept in `.storage/notification_center.runtime`, so they survive a restart. Removing the integration also deletes its stored data.
+
+## The Notification card
+
+One notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour tints the background and the border.
+
+**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every open card of the notification shows (a Listed entities notification can have several), with its Done, Dismiss, Mute and Snooze buttons. Snooze with "Ask" offers 1 h, 3 h and Tomorrow on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
+
+```yaml
+type: custom:notification-center-card
+entity: sensor.nc_washing_machine
+```
+
+**On its own:** with any other entity (or none), the card shows what its options say; when it shows is up to the card's Visibility tab. All options are in the card editor:
+
+| Option | Description |
+| --- | --- |
+| `entity` | Gives the default label (the device or entity name), the icon, and the data. |
+| `label`, `message`, `info` | Text. A template (`{{ … }}`) and the placeholders `{Floor}`, `{Area}`, `{Device}`, `{Entity}` and `{State}` of the entity work too. |
+| `icon` | Default: the entity's icon. |
+| `color` | A colour name of the colour picker (`red`, `teal`, …), a CSS colour (`#ff9800`) or RGB (`[255, 152, 0]`). Default: the primary colour. |
+| `highlight` | `none` (default), `pulse`, `glow`, or `alert` (the background pulses like the alert card). With reduced motion it stays still. |
+| `data` | The data after the label. `type`: `state`, `attribute` (with `attribute`), `last_changed`, `last_updated` or `custom` (with `custom`, a text or template). For a time, `time_format`: `relative` (default), `duration`, `time`, `date` or `datetime`. A time within five minutes of the last restart is left out. |
+| `tap_action` | A Home Assistant action for a tap on the card. Default: nothing. |
+| `buttons` | A list of buttons, each with `icon`, `label` (the tooltip) and `tap_action`. Default: none. |
+
+```yaml
+type: custom:notification-center-card
+entity: binary_sensor.dishwasher_leak
+label: Water leak
+message: Water leak at the {Device}!
+icon: mdi:dishwasher
+color: red
+highlight: glow
+data:
+  type: last_changed
+buttons:
+  - icon: mdi:volume-off
+    label: Mute
+    tap_action:
+      action: perform-action
+      perform_action: switch.toggle
+      target:
+        entity_id: switch.dishwasher_leak_mute
+visibility:
+  - condition: state
+    entity: binary_sensor.dishwasher_leak
+    state: "on"
+```
+
+After an update the card follows the new version once Home Assistant is restarted and the browser page is reloaded.
 
 ## Development
 

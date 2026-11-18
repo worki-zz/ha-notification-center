@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- **The Notification card** (`custom:notification-center-card`, *Notification* in the card picker), in the look of the tile and alert cards: icon, label with its data, message, Info, and buttons. See the README.
+  - With a notification's sensor (`sensor.nc_<name>`) it shows that notification: every open card, with working Done, Dismiss, Mute and Snooze (Ask: 1 h, 3 h, Tomorrow), and it hides itself while nothing is active.
+  - On its own it replaces the old notification card: label, message and Info as text, templates or placeholders; colour; highlight (pulse, glow, alert); one data after the label; a tap action and a list of buttons. Every option is in the card editor.
+- `notification_center/state/subscribe` gives each notification's sensor (`entity_id`).
+- `notification_center/card/action` takes `silence`: the card stays open, its channels stop (a button set to "Keep it silently", such as Mute).
+
+### Changed
+
+- The card in the card picker is now called *Notification*. The Notification Center card with every active notification comes later, as `custom:notification-center`.
+
 ## 0.2.10
 
 ### Removed

@@ -517,8 +517,31 @@ async def test_websocket_state_and_card_actions(
     snapshot = (await ws.receive_json())["event"]
     entry = snapshot["notifications"][nid]
     assert entry["state"] == "active"
+    assert entry["entity_id"] == "sensor.nc_plants"
     card = entry["cards"][0]
     assert card["message"] == "Do it"
+    assert card["silenced"] is False
+
+    await ws.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/card/action",
+            "notification_id": nid,
+            "step_id": card["step_id"],
+            "entity_id": None,
+            "action": "silence",
+        }
+    )
+    while True:
+        message = await ws.receive_json()
+        if message.get("type") == "event":
+            silenced = message["event"]["notifications"][nid]["cards"][0]
+            assert silenced["silenced"] is True
+            assert silenced["status"] == "active"
+        if message.get("type") == "result":
+            assert message["success"], message
+            break
+    assert center.state("sensor.nc_plants") == "active"
+    events = len(center.events)
 
     await ws.send_json_auto_id(
         {
@@ -535,6 +558,7 @@ async def test_websocket_state_and_card_actions(
             assert message["success"], message
             break
     assert center.state("sensor.nc_plants") == "done"
+    assert len(center.events) == events + 1
     assert center.events[-1][1]["person"] == "person.reader"
     assert center.events[-1][1]["source"] == "button"
 
@@ -640,7 +664,13 @@ async def test_example_config_runs(
         if state.entity_id.startswith("sensor.nc_")
     ]
     assert len(sensors) == 28
-    assert {state.state for state in sensors} <= {"idle", "active", "disabled"}
+    # A scheduled step due later today makes its notification "upcoming".
+    assert {state.state for state in sensors} <= {
+        "idle",
+        "active",
+        "upcoming",
+        "disabled",
+    }
     assert not [
         record
         for record in caplog.records
