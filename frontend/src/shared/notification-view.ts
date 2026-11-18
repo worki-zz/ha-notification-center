@@ -20,6 +20,8 @@ export interface ViewButton {
   icon?: string;
   // A short text instead of an icon (the snooze choices).
   text?: string;
+  // No background, only on hover (a secondary button such as Back).
+  plain?: boolean;
 }
 
 export interface NotificationViewData {
@@ -34,6 +36,8 @@ export interface NotificationViewData {
   color: string;
   highlight?: Highlight;
   clickable?: boolean;
+  // Only the icon and the buttons: the texts give their room to a choice.
+  compact?: boolean;
   buttons?: ViewButton[];
 }
 
@@ -59,7 +63,7 @@ export class NotificationCenterView extends LitElement {
         style="--nc-color: ${view.color}"
       >
         <div
-          class="main ${view.clickable ? "clickable" : ""}"
+          class="main ${view.clickable ? "clickable" : ""} ${view.compact ? "compact" : ""}"
           role=${view.clickable ? "button" : "group"}
           tabindex=${view.clickable ? "0" : "-1"}
           @click=${this._tap}
@@ -74,7 +78,7 @@ export class NotificationCenterView extends LitElement {
               .stateObj=${view.stateObj}
             ></ha-state-icon>
           </ha-tile-icon>
-          <div class="text">
+          <div class="text" ?hidden=${view.compact}>
             ${view.label || view.data
               ? html`<div class="header">
                   ${view.label ? html`<span class="label">${view.label}</span>` : nothing}
@@ -91,7 +95,7 @@ export class NotificationCenterView extends LitElement {
               ${buttons.map(
                 (button) => html`
                   <ha-control-button
-                    class=${button.text ? "text" : ""}
+                    class="${button.text ? "text" : ""} ${button.plain ? "plain" : ""}"
                     .label=${button.label}
                     @click=${(ev: Event) => this._press(ev, button.key)}
                   >
@@ -321,6 +325,18 @@ export class NotificationCenterView extends LitElement {
       --control-button-focus-color: var(--nc-color);
       --control-button-border-radius: var(--ha-border-radius-lg, 12px);
       --ha-ripple-color: var(--nc-color);
+    }
+    ha-control-button.plain {
+      --control-button-background-opacity: 0;
+    }
+    ha-control-button.plain:hover {
+      --control-button-background-opacity: 0.2;
+    }
+    .main.compact {
+      flex: 0 0 auto;
+    }
+    .text[hidden] {
+      display: none;
     }
     ha-control-button.text {
       width: auto;

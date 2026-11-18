@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+### Changed
+
+- Notification card editor: the data after the label is set in the Content section (its field is called Data), and Buttons come before Interactions.
+- Snooze with "Ask": while the choices are open, the card shows only its icon and the choices, so it stays on one line. The Back button has no background, only on hover.
+
 ## 0.3.0
 
 ### Added

@@ -385,7 +385,7 @@ export class NotificationCenterCard extends LitElement {
                 label: choice.label,
                 text: choice.text,
               })),
-              { key: "choice:cancel", label: "Cancel", icon: "mdi:arrow-u-left-top" },
+              { key: "choice:cancel", label: "Back", icon: "mdi:arrow-u-left-top", plain: true },
             ]
           : buttons.map((button) => ({
               key: button.key,
@@ -403,6 +403,7 @@ export class NotificationCenterCard extends LitElement {
           icon,
           stateObj: icon ? undefined : hass.states[this._config!.entity!],
           color,
+          compact: this._asking === key,
           buttons: viewButtons,
         },
       };
