@@ -8,6 +8,7 @@
 
 ### Changed
 
+- The card background is the normal card background; the colour is only on the border, the icon, the label and the buttons (and the Alert highlight).
 - Glow and pulse are the old notification card's again (glow: the colour from both sides up to 25%; pulse: border and inner shadow).
 - The message lines are closer together.
 - A Notification Center notification's buttons are always in the order Snooze, Done, Dismiss (or Mute). Snooze has a background only on hover.

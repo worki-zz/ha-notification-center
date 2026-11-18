@@ -134,7 +134,8 @@ export class NotificationCenterView extends LitElement {
     :host {
       display: block;
       height: 100%;
-      --nc-tint-opacity: 0.12;
+      /* The background stays the card background; only Alert colours it. */
+      --nc-tint-opacity: 0;
       --nc-alert-opacity: 0.3;
     }
     @keyframes nc-alert {
@@ -183,7 +184,7 @@ export class NotificationCenterView extends LitElement {
       --ha-ripple-hover-opacity: 0.04;
       --ha-ripple-pressed-opacity: 0.12;
     }
-    /* The tint: the alert card's background layer. */
+    /* The alert card's background layer, used by the Alert highlight. */
     ha-card::before {
       content: "";
       position: absolute;

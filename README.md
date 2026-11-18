@@ -55,7 +55,7 @@ Open cards, snoozes and last done times are kept in `.storage/notification_cente
 
 ## The Notification card
 
-One notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour tints the background and the border.
+One notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour is used for the border, the icon, the label and the buttons; the background is the normal card background.
 
 **With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every open card of the notification shows (a Listed entities notification can have several), with its Done, Dismiss, Mute and Snooze buttons. Snooze with "Ask" offers 1 h, 3 h and Tomorrow on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
 
