@@ -1,6 +1,6 @@
 [project]
 name = "ha-notification-center"
-version = "0.4.5"
+version = "0.4.6"
 description = "Notification Center: one place for every notification of your Home Assistant home."
 requires-python = ">=3.14.2"
 

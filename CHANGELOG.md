@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.6
+
+### Changed
+
+- Switching a notification (or a step) off still clears its cards. Switched on again, it works out what is due, as after a restart: an entity that matches gets its card, and a scheduled occurrence that is not done, dismissed or expired comes back. A card started only by an action (the Trigger action) does not.
+
 ## 0.4.5
 
 ### Changed

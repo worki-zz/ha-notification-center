@@ -1036,3 +1036,29 @@ async def test_button_press(
     result = await press("done")
     assert not result["success"]
     assert result["error"]["code"] == "not_found"
+
+
+async def test_switched_on_again_entities_match(
+    hass: HomeAssistant, center: Center
+) -> None:
+    """On again, an entity that still matches gets its card back."""
+    await center.set("binary_sensor.front", "off", device_class="door")
+    nid = await center.add(
+        "Doors",
+        step(
+            start={
+                "type": "triggers",
+                "triggers": [
+                    {"trigger": "notification_center.entities_state", "to": "on"}
+                ],
+            },
+        ),
+        entities=[{"entity_id": "binary_sensor.front"}],
+    )
+    await center.set("binary_sensor.front", "on", device_class="door")
+    assert center.state("sensor.nc_doors") == "active"
+    await center.manager.async_set_enabled(nid, False)
+    await hass.async_block_till_done()
+    await center.manager.async_set_enabled(nid, True)
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_doors") == "active"

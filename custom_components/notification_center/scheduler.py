@@ -17,7 +17,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import CLOSED_DONE, SOURCE_SCHEDULE
+from .const import CLOSED_DISMISSED, CLOSED_DONE, SOURCE_SCHEDULE
 from .schedule import (
     SCHEDULE_CALENDAR,
     after_last_done_due,
@@ -181,11 +181,14 @@ class StepSchedule:
                 self._due(due)
             elif due is not None:
                 self._record(due)
+            else:
+                self._reopen(last, now)
             return
         last_done = self._last_done()
         for _ in range(_MAX_CATCH_UP):
             due = after_last_done_due(self.config, n, last_done, last, now)
             if due > now:
+                self._reopen(last, now)
                 return
             if self._still_open(due, now):
                 self._due(due)
@@ -193,6 +196,24 @@ class StepSchedule:
             # Expired while stopped: the next day is tried.
             self._record(due)
             last = due
+
+    def _reopen(self, last: datetime | None, now: datetime) -> None:
+        """Open again the last occurrence whose card is gone but still due.
+
+        Switching a notification off forgets its cards; switched on again,
+        an occurrence nobody did or dismissed comes back until it expires,
+        as it would have stayed over a restart.
+        """
+        if last is None or last > now or not self._still_open(last, now):
+            return
+        notification_id = self.step.notification.id
+        if self.engine.cards_of(notification_id, self.step.step_id):
+            return
+        for state in (CLOSED_DONE, CLOSED_DISMISSED, HISTORY_SKIPPED):
+            closed = self.engine.last_reached(notification_id, self.step.step_id, state)
+            if closed is not None and closed >= last:
+                return
+        self._due(last)
 
     def _record(self, due: datetime) -> None:
         self.engine.record(

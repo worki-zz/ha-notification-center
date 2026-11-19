@@ -482,3 +482,35 @@ async def test_done_early(
     assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == (
         "2026-11-29 Sun 22:00"
     )
+
+
+async def test_switched_on_again_reopens_a_due_card(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """Off forgets the cards; on again brings back what is still due."""
+    center = await load(hass, config_entry)
+    nid = await center.add("Mixed waste", _scheduled(WEEKLY_WASTE))
+    await _move(hass, freezer, "2026-11-18 19:00")
+    assert center.state("sensor.nc_mixed_waste") == "active"
+
+    await center.manager.async_set_enabled(nid, False)
+    await hass.async_block_till_done()
+    assert center.engine.cards_of(nid) == []
+    await _move(hass, freezer, "2026-11-18 20:00")
+    await center.manager.async_set_enabled(nid, True)
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_mixed_waste") == "active"
+    assert _fmt(center.attrs("sensor.nc_mixed_waste")["active_since"]) == (
+        "2026-11-18 Wed 19:00"
+    )
+
+    # Done, it does not come back.
+    await center.call("done", "sensor.nc_mixed_waste")
+    await center.manager.async_set_enabled(nid, False)
+    await hass.async_block_till_done()
+    await center.manager.async_set_enabled(nid, True)
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_mixed_waste") != "active"
