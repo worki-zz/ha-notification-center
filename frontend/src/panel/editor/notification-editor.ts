@@ -34,10 +34,12 @@ import {
   listedEntities,
   newNotification,
   newStep,
+  prefillPinned,
   toEditor,
   toSaved,
 } from "./model";
 import "./step-editor";
+import { setEntitiesResolver } from "./entities-form";
 
 const MAX_UNDO = 50;
 
@@ -119,6 +121,7 @@ export class NcNotificationEditor extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues): void {
+    setEntitiesResolver(this._entitiesOfSensor);
     if (changed.has("notificationId") && this._loadedFor !== this.notificationId) {
       this._draft = undefined;
     }
@@ -174,8 +177,29 @@ export class NcNotificationEditor extends LitElement {
   }
 
   private _change(changes: Partial<EditorNotification>): void {
-    this._set({ ...this._draft!, ...changes });
+    let draft = { ...this._draft!, ...changes };
+    // Before the first save, on-off entities fill in the start.
+    if (this._isNew && this.hass && ("entities" in changes || "entity_groups" in changes)) {
+      draft = prefillPinned(this.hass, draft);
+    }
+    this._set(draft);
   }
+
+  // The entities a notification lists, for the Notification entities forms.
+  private _entitiesOfSensor = (sensor: string): string[] => {
+    const hass = this.hass;
+    const draft = this._draft;
+    if (!hass || !this.config || !this.state) return [];
+    const id = Object.entries(this.state.notifications).find(
+      ([, item]) => item.entity_id === sensor,
+    )?.[0];
+    if (!id) return [];
+    if (draft && id === draft.id) return listedEntities(hass, draft);
+    const stored = this.config.notifications.find((item) => item.id === id);
+    if (!stored) return [];
+    const all = this.config.notifications as unknown as EditorNotification[];
+    return listedEntities(hass, toEditor(stored as unknown as EditorNotification, all, this.state.notifications));
+  };
 
   private _changeStep(index: number, step: EditorStep): void {
     const steps = [...this._draft!.steps];

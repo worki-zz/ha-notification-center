@@ -1,4 +1,4 @@
-"""Conditions for automations: Notification state and Listed entities.
+"""Conditions for automations: Notification state and Notification entities.
 
 The engine checks these conditions itself inside notifications. This
 platform offers them to Home Assistant automations and scripts too. In an
@@ -25,7 +25,7 @@ import voluptuous as vol
 
 from .engine import async_get_engine
 from .listed import EntityList, matching_entities
-from .model import LISTED_ENTITIES_FIELDS, NOTIFICATION_STATES
+from .model import ENTITIES_NUMERIC_FIELDS, ENTITIES_STATE_FIELDS, NOTIFICATION_STATES
 
 NOTIFICATION_STATE_OPTIONS: dict[vol.Marker, Any] = {
     vol.Required("notification"): cv.string,
@@ -36,9 +36,14 @@ NOTIFICATION_STATE_OPTIONS: dict[vol.Marker, Any] = {
     vol.Optional("within"): cv.positive_time_period,
 }
 
-LISTED_ENTITIES_OPTIONS: dict[vol.Marker, Any] = {
+ENTITIES_STATE_OPTIONS: dict[vol.Marker, Any] = {
     vol.Required("notification"): cv.string,
-    **LISTED_ENTITIES_FIELDS,
+    **ENTITIES_STATE_FIELDS,
+}
+
+ENTITIES_NUMERIC_OPTIONS: dict[vol.Marker, Any] = {
+    vol.Required("notification"): cv.string,
+    **ENTITIES_NUMERIC_FIELDS,
 }
 
 
@@ -88,10 +93,10 @@ class NotificationStateCondition(_OptionsCondition):
         return engine.check_notification_state(self._options)
 
 
-class ListedEntitiesCondition(_OptionsCondition):
-    """True if any entity listed in a notification matches."""
+class EntitiesStateCondition(_OptionsCondition):
+    """True if any entity listed in a notification is in a state."""
 
-    OPTIONS = LISTED_ENTITIES_OPTIONS
+    OPTIONS = ENTITIES_STATE_OPTIONS
 
     @override
     def _async_check(self, **kwargs: Unpack[ConditionCheckParams]) -> bool:
@@ -113,9 +118,16 @@ class ListedEntitiesCondition(_OptionsCondition):
         return bool(matching)
 
 
+class EntitiesNumericStateCondition(EntitiesStateCondition):
+    """True if any entity listed in a notification is above or below a limit."""
+
+    OPTIONS = ENTITIES_NUMERIC_OPTIONS
+
+
 CONDITIONS: dict[str, type[Condition]] = {
     "notification_state": NotificationStateCondition,
-    "listed_entities": ListedEntitiesCondition,
+    "entities_state": EntitiesStateCondition,
+    "entities_numeric_state": EntitiesNumericStateCondition,
 }
 
 

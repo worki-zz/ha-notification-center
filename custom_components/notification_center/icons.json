@@ -3,16 +3,22 @@
     "notification_state": {
       "trigger": "mdi:message-bulleted"
     },
-    "listed_entities": {
+    "entities_state": {
       "trigger": "mdi:format-list-bulleted"
+    },
+    "entities_numeric_state": {
+      "trigger": "mdi:format-list-numbered"
     }
   },
   "conditions": {
     "notification_state": {
       "condition": "mdi:message-bulleted"
     },
-    "listed_entities": {
+    "entities_state": {
       "condition": "mdi:format-list-bulleted"
+    },
+    "entities_numeric_state": {
+      "condition": "mdi:format-list-numbered"
     }
   },
   "services": {

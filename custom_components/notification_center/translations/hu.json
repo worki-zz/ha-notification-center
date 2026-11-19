@@ -200,37 +200,59 @@
         }
       }
     },
-    "listed_entities": {
-      "name": "Listázott entitások",
-      "description": "Akkor indul, amikor egy értesítés listájának egy entitása megfelel a feltételnek.",
+    "entities_state": {
+      "name": "Értesítés entitásainak állapota",
+      "description": "Akkor indít, ha egy értesítés listázott entitása egy állapotba kerül.",
       "fields": {
         "notification": {
           "name": "Értesítés",
-          "description": "Az értesítés sensora."
-        },
-        "to": {
-          "name": "Állapot",
-          "description": "A számító állapotok; üresen bármelyik."
-        },
-        "not_to": {
-          "name": "Nem ez az állapot",
-          "description": "A nem számító állapotok."
-        },
-        "above": {
-          "name": "Felett",
-          "description": "Az értéknek e felett kell lennie."
-        },
-        "below": {
-          "name": "Alatt",
-          "description": "Az értéknek ez alatt kell lennie."
+          "description": "Az értesítés szenzora, amelynek entitásait figyeli."
         },
         "attribute": {
           "name": "Attribútum",
-          "description": "Az állapot helyett ezt az attribútumot nézi."
+          "description": "Ezt az attribútumot vizsgálja az állapot helyett."
         },
         "for": {
-          "name": "Legalább ennyi ideje",
+          "name": "Időtartam",
           "description": "Mennyi ideig kell így maradnia."
+        },
+        "to": {
+          "name": "Állapot",
+          "description": "Az állapotok, amelyek számítanak (is)."
+        },
+        "not_to": {
+          "name": "Nem állapot",
+          "description": "Az állapotok, amelyek nem számítanak (is not)."
+        }
+      }
+    },
+    "entities_numeric_state": {
+      "name": "Értesítés entitásainak numerikus állapota",
+      "description": "Akkor indít, ha egy értesítés listázott entitása egy határ fölé vagy alá kerül.",
+      "fields": {
+        "notification": {
+          "name": "Értesítés",
+          "description": "Az értesítés szenzora, amelynek entitásait figyeli."
+        },
+        "attribute": {
+          "name": "Attribútum",
+          "description": "Ezt az attribútumot vizsgálja az állapot helyett."
+        },
+        "for": {
+          "name": "Időtartam",
+          "description": "Mennyi ideig kell így maradnia."
+        },
+        "above": {
+          "name": "Felett",
+          "description": "Egy szám, vagy egy entitás, amelynek állapota a szám."
+        },
+        "below": {
+          "name": "Alatt",
+          "description": "Egy szám, vagy egy entitás, amelynek állapota a szám."
+        },
+        "value_template": {
+          "name": "Érték sablon",
+          "description": "Ennek a sablonnak az értékét vizsgálja (state az entitás állapot objektuma)."
         }
       }
     }
@@ -262,37 +284,59 @@
         }
       }
     },
-    "listed_entities": {
-      "name": "Listázott entitások",
-      "description": "Azt vizsgálja, hogy egy értesítés listájának bármelyik entitása megfelel-e.",
+    "entities_state": {
+      "name": "Értesítés entitásainak állapota",
+      "description": "Igaz, ha egy értesítés valamelyik listázott entitása egy állapotban van.",
       "fields": {
         "notification": {
           "name": "Értesítés",
-          "description": "Az értesítés sensora."
-        },
-        "to": {
-          "name": "Állapot",
-          "description": "A számító állapotok; üresen bármelyik."
-        },
-        "not_to": {
-          "name": "Nem ez az állapot",
-          "description": "A nem számító állapotok."
-        },
-        "above": {
-          "name": "Felett",
-          "description": "Az értéknek e felett kell lennie."
-        },
-        "below": {
-          "name": "Alatt",
-          "description": "Az értéknek ez alatt kell lennie."
+          "description": "Az értesítés szenzora, amelynek entitásait figyeli."
         },
         "attribute": {
           "name": "Attribútum",
-          "description": "Az állapot helyett ezt az attribútumot nézi."
+          "description": "Ezt az attribútumot vizsgálja az állapot helyett."
         },
         "for": {
-          "name": "Legalább ennyi ideje",
+          "name": "Időtartam",
           "description": "Mennyi ideig kell így maradnia."
+        },
+        "to": {
+          "name": "Állapot",
+          "description": "Az állapotok, amelyek számítanak (is)."
+        },
+        "not_to": {
+          "name": "Nem állapot",
+          "description": "Az állapotok, amelyek nem számítanak (is not)."
+        }
+      }
+    },
+    "entities_numeric_state": {
+      "name": "Értesítés entitásainak numerikus állapota",
+      "description": "Igaz, ha egy értesítés valamelyik listázott entitása egy határ fölött vagy alatt van.",
+      "fields": {
+        "notification": {
+          "name": "Értesítés",
+          "description": "Az értesítés szenzora, amelynek entitásait figyeli."
+        },
+        "attribute": {
+          "name": "Attribútum",
+          "description": "Ezt az attribútumot vizsgálja az állapot helyett."
+        },
+        "for": {
+          "name": "Időtartam",
+          "description": "Mennyi ideig kell így maradnia."
+        },
+        "above": {
+          "name": "Felett",
+          "description": "Egy szám, vagy egy entitás, amelynek állapota a szám."
+        },
+        "below": {
+          "name": "Alatt",
+          "description": "Egy szám, vagy egy entitás, amelynek állapota a szám."
+        },
+        "value_template": {
+          "name": "Érték sablon",
+          "description": "Ennek a sablonnak az értékét vizsgálja (state az entitás állapot objektuma)."
         }
       }
     }

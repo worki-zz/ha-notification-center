@@ -200,29 +200,13 @@
         }
       }
     },
-    "listed_entities": {
-      "name": "Listed entities",
-      "description": "Triggers when an entity listed in a notification starts to match.",
+    "entities_state": {
+      "name": "Notification entities state",
+      "description": "Triggers when an entity listed in a notification gets a state.",
       "fields": {
         "notification": {
           "name": "Notification",
-          "description": "The sensor of the notification."
-        },
-        "to": {
-          "name": "State",
-          "description": "The states that count; empty means any state."
-        },
-        "not_to": {
-          "name": "Not state",
-          "description": "The states that do not count."
-        },
-        "above": {
-          "name": "Above",
-          "description": "The value has to be above this."
-        },
-        "below": {
-          "name": "Below",
-          "description": "The value has to be below this."
+          "description": "The sensor of the notification whose entities are watched."
         },
         "attribute": {
           "name": "Attribute",
@@ -231,6 +215,44 @@
         "for": {
           "name": "For",
           "description": "How long it has to stay so."
+        },
+        "to": {
+          "name": "State",
+          "description": "The states that count (is)."
+        },
+        "not_to": {
+          "name": "Not state",
+          "description": "The states that do not count (is not)."
+        }
+      }
+    },
+    "entities_numeric_state": {
+      "name": "Notification entities numeric state",
+      "description": "Triggers when an entity listed in a notification gets above or below a limit.",
+      "fields": {
+        "notification": {
+          "name": "Notification",
+          "description": "The sensor of the notification whose entities are watched."
+        },
+        "attribute": {
+          "name": "Attribute",
+          "description": "Test this attribute instead of the state."
+        },
+        "for": {
+          "name": "For",
+          "description": "How long it has to stay so."
+        },
+        "above": {
+          "name": "Above",
+          "description": "A number, or an entity whose state is the number."
+        },
+        "below": {
+          "name": "Below",
+          "description": "A number, or an entity whose state is the number."
+        },
+        "value_template": {
+          "name": "Value template",
+          "description": "Test the value of this template instead (state is the entity's state object)."
         }
       }
     }
@@ -262,29 +284,13 @@
         }
       }
     },
-    "listed_entities": {
-      "name": "Listed entities",
-      "description": "Tests whether any entity listed in a notification matches.",
+    "entities_state": {
+      "name": "Notification entities state",
+      "description": "Tests whether any entity listed in a notification is in a state.",
       "fields": {
         "notification": {
           "name": "Notification",
-          "description": "The sensor of the notification."
-        },
-        "to": {
-          "name": "State",
-          "description": "The states that count; empty means any state."
-        },
-        "not_to": {
-          "name": "Not state",
-          "description": "The states that do not count."
-        },
-        "above": {
-          "name": "Above",
-          "description": "The value has to be above this."
-        },
-        "below": {
-          "name": "Below",
-          "description": "The value has to be below this."
+          "description": "The sensor of the notification whose entities are watched."
         },
         "attribute": {
           "name": "Attribute",
@@ -293,6 +299,44 @@
         "for": {
           "name": "For",
           "description": "How long it has to stay so."
+        },
+        "to": {
+          "name": "State",
+          "description": "The states that count (is)."
+        },
+        "not_to": {
+          "name": "Not state",
+          "description": "The states that do not count (is not)."
+        }
+      }
+    },
+    "entities_numeric_state": {
+      "name": "Notification entities numeric state",
+      "description": "Tests whether any entity listed in a notification is above or below a limit.",
+      "fields": {
+        "notification": {
+          "name": "Notification",
+          "description": "The sensor of the notification whose entities are watched."
+        },
+        "attribute": {
+          "name": "Attribute",
+          "description": "Test this attribute instead of the state."
+        },
+        "for": {
+          "name": "For",
+          "description": "How long it has to stay so."
+        },
+        "above": {
+          "name": "Above",
+          "description": "A number, or an entity whose state is the number."
+        },
+        "below": {
+          "name": "Below",
+          "description": "A number, or an entity whose state is the number."
+        },
+        "value_template": {
+          "name": "Value template",
+          "description": "Test the value of this template instead (state is the entity's state object)."
         }
       }
     }

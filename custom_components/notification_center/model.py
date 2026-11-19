@@ -68,6 +68,11 @@ INTERVAL_UNITS: Final = ("days", "weeks", "months", "years")
 
 # Triggers and conditions of the integration itself. Their full behaviour
 # comes with the engine; the schema is checked here already.
+TRIGGER_ENTITIES_STATE: Final = f"{DOMAIN}.entities_state"
+TRIGGER_ENTITIES_NUMERIC: Final = f"{DOMAIN}.entities_numeric_state"
+# Both watch the entities a notification lists (its Entities block).
+ENTITIES_KINDS: Final = (TRIGGER_ENTITIES_STATE, TRIGGER_ENTITIES_NUMERIC)
+# The earlier single kind, read as one of the two above.
 TRIGGER_LISTED_ENTITIES: Final = f"{DOMAIN}.listed_entities"
 TRIGGER_NOTIFICATION_STATE: Final = f"{DOMAIN}.notification_state"
 NOTIFICATION_STATES: Final = ("active", "done", "snoozed", "dismissed")
@@ -771,11 +776,17 @@ def _check_references(config: ConfigData) -> None:
             check_channels(step["channels"], _path(step_where, "channels"))
             _check_unique(step["buttons"], "id", _path(step_where, "buttons"))
             for trigger in _own_items(step, "trigger"):
-                if trigger.get("trigger") == TRIGGER_NOTIFICATION_STATE and (
+                kind = trigger.get("trigger")
+                if (kind == TRIGGER_NOTIFICATION_STATE or kind in ENTITIES_KINDS) and (
                     trigger["notification"] not in notification_ids
                 ):
                     raise ConfigValidationError(
-                        _path(step_where, "notification state")
+                        _path(
+                            step_where,
+                            "notification state"
+                            if kind == TRIGGER_NOTIFICATION_STATE
+                            else "notification entities",
+                        )
                         + f": no notification '{trigger['notification']}'"
                     )
 
@@ -783,14 +794,86 @@ def _check_references(config: ConfigData) -> None:
 # ---------------------------------------------------------------------------
 # Triggers and conditions inside steps
 
-LISTED_ENTITIES_FIELDS: dict[vol.Marker, Any] = {
+
+def _for(value: Any) -> Any:
+    """Validate a ``for`` time: a duration, or a template giving one."""
+    if isinstance(value, str) and "{" in value:
+        return cv.string(value)
+    if isinstance(value, dict):
+        cv.positive_time_period_dict(value)
+        return value
+    cv.positive_time_period(value)
+    return value
+
+
+def _threshold(value: Any) -> Any:
+    """Validate a limit: a number, or an entity whose state is the number."""
+    if isinstance(value, str) and "." in value and not _is_number(value):
+        return cv.entity_id(value)
+    return vol.Coerce(float)(value)
+
+
+def _is_number(value: str) -> bool:
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
+ENTITIES_STATE_FIELDS: dict[vol.Marker, Any] = {
+    vol.Optional("attribute"): cv.string,
     vol.Optional("to"): vol.Any(cv.string, [cv.string]),
     vol.Optional("not_to"): vol.Any(cv.string, [cv.string]),
-    vol.Optional("above"): vol.Coerce(float),
-    vol.Optional("below"): vol.Coerce(float),
-    vol.Optional("attribute"): cv.string,
-    vol.Optional("for"): cv.positive_time_period_dict,
+    vol.Optional("for"): _for,
 }
+
+ENTITIES_NUMERIC_FIELDS: dict[vol.Marker, Any] = {
+    vol.Optional("attribute"): cv.string,
+    vol.Optional("above"): _threshold,
+    vol.Optional("below"): _threshold,
+    vol.Optional("value_template"): cv.string,
+    vol.Optional("for"): _for,
+}
+
+# The notification whose entities are watched; inside a notification its
+# own id when empty.
+_ENTITIES_NOTIFICATION: dict[vol.Marker, Any] = {vol.Required("notification"): _id}
+
+
+def upgrade_listed(notification: dict[str, Any]) -> None:
+    """Turn earlier Listed entities triggers and conditions into the new kinds.
+
+    With a limit (above or below) the item becomes Notification entities
+    numeric state, otherwise Notification entities state. It points to the
+    notification itself, as the earlier kind always did.
+    """
+    for step in notification.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        start = step.get("start") or {}
+        done_when = step.get("done_when") or {}
+        for items, key in (
+            (start.get("triggers"), "trigger"),
+            (done_when.get("triggers"), "trigger"),
+            (start.get("conditions"), "condition"),
+            (step.get("hide_while"), "condition"),
+        ):
+            for item in items if isinstance(items, list) else []:
+                if isinstance(item, dict) and item.get(key) == TRIGGER_LISTED_ENTITIES:
+                    _upgrade_listed_item(item, key, notification.get("id"))
+
+
+def _upgrade_listed_item(item: dict[str, Any], key: str, own_id: Any) -> None:
+    options = item.pop("options", None)
+    if isinstance(options, dict):
+        item.update(options)
+    numeric = "above" in item or "below" in item
+    item[key] = TRIGGER_ENTITIES_NUMERIC if numeric else TRIGGER_ENTITIES_STATE
+    for name in ("to", "not_to") if numeric else ("above", "below"):
+        item.pop(name, None)
+    if not item.get("notification") and own_id:
+        item["notification"] = own_id
 
 
 def _notification_state(value: Any) -> str:
@@ -808,9 +891,19 @@ _NOTIFICATION_STATE_FIELDS: dict[vol.Marker, Any] = {
 }
 
 OWN_TRIGGER_SCHEMAS: Final[dict[str, vol.Schema]] = {
-    TRIGGER_LISTED_ENTITIES: vol.Schema(
-        {vol.Required("trigger"): TRIGGER_LISTED_ENTITIES, **LISTED_ENTITIES_FIELDS},
-        extra=vol.PREVENT_EXTRA,
+    TRIGGER_ENTITIES_STATE: vol.Schema(
+        {
+            vol.Required("trigger"): TRIGGER_ENTITIES_STATE,
+            **_ENTITIES_NOTIFICATION,
+            **ENTITIES_STATE_FIELDS,
+        }
+    ),
+    TRIGGER_ENTITIES_NUMERIC: vol.Schema(
+        {
+            vol.Required("trigger"): TRIGGER_ENTITIES_NUMERIC,
+            **_ENTITIES_NOTIFICATION,
+            **ENTITIES_NUMERIC_FIELDS,
+        }
     ),
     TRIGGER_NOTIFICATION_STATE: vol.Schema(
         {
@@ -820,8 +913,19 @@ OWN_TRIGGER_SCHEMAS: Final[dict[str, vol.Schema]] = {
     ),
 }
 OWN_CONDITION_SCHEMAS: Final[dict[str, vol.Schema]] = {
-    TRIGGER_LISTED_ENTITIES: vol.Schema(
-        {vol.Required("condition"): TRIGGER_LISTED_ENTITIES, **LISTED_ENTITIES_FIELDS}
+    TRIGGER_ENTITIES_STATE: vol.Schema(
+        {
+            vol.Required("condition"): TRIGGER_ENTITIES_STATE,
+            **_ENTITIES_NOTIFICATION,
+            **ENTITIES_STATE_FIELDS,
+        }
+    ),
+    TRIGGER_ENTITIES_NUMERIC: vol.Schema(
+        {
+            vol.Required("condition"): TRIGGER_ENTITIES_NUMERIC,
+            **_ENTITIES_NOTIFICATION,
+            **ENTITIES_NUMERIC_FIELDS,
+        }
     ),
     TRIGGER_NOTIFICATION_STATE: vol.Schema(
         {
@@ -957,6 +1061,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
         raise ConfigValidationError("the configuration must be a mapping")
     config: ConfigData = _structure(CONFIG_SCHEMA, data, "configuration")
     for notification in config["notifications"]:
+        upgrade_listed(notification)
         for number, step in enumerate(notification["steps"], start=1):
             await _validate_step_automation(
                 hass,
@@ -996,3 +1101,16 @@ def validate_item(section: str, data: Any) -> dict[str, Any]:
         raise ConfigValidationError(f"unknown section '{section}'")
     item: dict[str, Any] = _structure(ITEM_SCHEMAS[section], data, section)
     return item
+
+
+def entities_references(notification: dict[str, Any]) -> set[str]:
+    """Return the other notifications whose entities this one watches."""
+    result: set[str] = set()
+    for step in notification.get("steps") or []:
+        for kind in ("trigger", "condition"):
+            for item in _own_items(step, kind):
+                if item.get(kind) in ENTITIES_KINDS:
+                    reference = item.get("notification")
+                    if reference and reference != notification.get("id"):
+                        result.add(str(reference))
+    return result

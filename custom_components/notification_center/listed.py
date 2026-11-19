@@ -1,12 +1,13 @@
-"""The Listed entities trigger and condition.
+"""The Notification entities triggers and conditions.
 
 A notification lists entities one by one (``entities``) and by group
 (``entity_groups``: a domain with an optional device class, areas, floors
 and labels).
-The Listed entities trigger watches all of them: when one starts to match
-(and keeps matching for the ``for`` time, if any) it fires for that entity,
-so every entity gets its own card. It also reports when an entity stops
-matching, which closes its card if the step asks for it.
+The Notification entities state and numeric state triggers watch all of
+them: when one starts to match (and keeps matching for the ``for`` time, if
+any) it fires for that entity, so every entity gets its own card. It also
+reports when an entity stops matching, which closes its card if the step
+asks for it.
 
 Groups are resolved live, so a new matching entity is picked up without
 saving the notification again.
@@ -28,6 +29,7 @@ from homeassistant.core import (
     callback,
     split_entity_id,
 )
+from homeassistant.exceptions import TemplateError
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
@@ -40,9 +42,10 @@ from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_filtered,
 )
+from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
-from .model import TRIGGER_LISTED_ENTITIES
+from .model import TRIGGER_ENTITIES_NUMERIC, TRIGGER_ENTITIES_STATE
 
 type MatchCallback = Callable[[str, dict[str, Any]], None]
 type UnmatchCallback = Callable[[str, Context | None], None]
@@ -57,23 +60,79 @@ def _as_list(value: Any) -> list[str] | None:
 
 
 class ListedMatcher:
-    """The state test of a Listed entities trigger or condition."""
+    """The test of a Notification entities trigger or condition.
 
-    def __init__(self, config: Mapping[str, Any]) -> None:
+    State: ``to`` (is) or ``not_to`` (is not), of the state or an attribute.
+    Numeric state: ``above`` and ``below``, each a number or an entity whose
+    state is the number, of the state, an attribute or ``value_template``
+    (with ``state`` as the entity's state object).
+    """
+
+    def __init__(
+        self, config: Mapping[str, Any], hass: HomeAssistant | None = None
+    ) -> None:
         """Read the test from a trigger or condition."""
+        self._hass = hass
         self.to = _as_list(config.get("to"))
         self.not_to = _as_list(config.get("not_to"))
-        self.above = _float(config.get("above"))
-        self.below = _float(config.get("below"))
+        self.above: Any = config.get("above")
+        self.below: Any = config.get("below")
         self.attribute: str | None = config.get("attribute")
+        template = config.get("value_template")
+        self.template: Template | None = (
+            Template(template, hass) if template and hass is not None else None
+        )
         period = config.get("for")
-        self.for_: timedelta | None = _period(period)
+        self._for_template: Template | None = None
+        self.for_: timedelta | None = None
+        if isinstance(period, str) and "{" in period:
+            self._for_template = Template(period, hass) if hass is not None else None
+        else:
+            self.for_ = _period(period)
+
+    @property
+    def threshold_entities(self) -> set[str]:
+        """Return the entities whose states are the limits."""
+        return {
+            limit
+            for limit in (self.above, self.below)
+            if isinstance(limit, str) and _float(limit) is None
+        }
+
+    @property
+    def has_for(self) -> bool:
+        """Return whether the entity has to keep matching for a while."""
+        return self.for_ is not None or self._for_template is not None
+
+    def period(self, variables: Mapping[str, Any] | None = None) -> timedelta | None:
+        """Return the ``for`` time, rendering its template if it has one."""
+        if self._for_template is None:
+            return self.for_
+        try:
+            rendered = self._for_template.async_render(dict(variables or {}))
+            return _period(rendered) if rendered else None
+        except TemplateError, ValueError, TypeError:
+            return None
+
+    def _limit(self, limit: Any) -> float | None:
+        if limit is None:
+            return None
+        number = _float(limit)
+        if number is not None or self._hass is None:
+            return number
+        state = self._hass.states.get(str(limit))
+        return _float(state.state) if state is not None else None
 
     def matches(self, state: State | None) -> bool:
         """Return whether a state passes the test."""
         if state is None:
             return False
         value = state.attributes.get(self.attribute) if self.attribute else state.state
+        if self.template is not None:
+            try:
+                value = self.template.async_render({"state": state})
+            except TemplateError:
+                return False
         if value is None:
             return False
         text = str(value)
@@ -85,10 +144,11 @@ class ListedMatcher:
             number = _float(value)
             if number is None:
                 return False
-            if self.above is not None and number <= self.above:
+            above = self._limit(self.above)
+            below = self._limit(self.below)
+            if self.above is not None and (above is None or number <= above):
                 return False
-            if self.below is not None and number >= self.below:
-                return False
+            return not (self.below is not None and (below is None or number >= below))
         if self.to is None and self.not_to is None:
             # Without an explicit state, an entity that has no state does not
             # count, so a restart does not open a card for every entity.
@@ -97,13 +157,16 @@ class ListedMatcher:
 
 
 def _period(value: Any) -> timedelta | None:
-    """Return a ``for`` time given as a duration dict or a timedelta."""
+    """Return a ``for`` time: a duration dict, a time text or a timedelta."""
     if not value:
         return None
     if isinstance(value, timedelta):
         return value
-    period: timedelta = cv.positive_time_period_dict(value)
-    return period
+    if isinstance(value, dict):
+        period: timedelta = cv.positive_time_period_dict(value)
+        return period
+    result: timedelta = cv.positive_time_period(value)
+    return result
 
 
 def _context(state: State | None) -> Context | None:
@@ -249,7 +312,7 @@ class ListedTracker:
         self._hass = hass
         self._entities = entities
         self._config = dict(config)
-        self.matcher = ListedMatcher(config)
+        self.matcher = ListedMatcher(config, hass)
         self._on_match = on_match
         self._on_unmatch = on_unmatch
         # Entities that match now, whether or not their ``for`` time passed.
@@ -269,7 +332,11 @@ class ListedTracker:
         """
         self._tracker = async_track_state_change_filtered(
             self._hass,
-            TrackStates(False, set(self._entities.explicit), self._entities.domains),
+            TrackStates(
+                False,
+                set(self._entities.explicit) | self.matcher.threshold_entities,
+                self._entities.domains,
+            ),
             self._state_changed,
         )
         if self._entities.groups:
@@ -322,6 +389,12 @@ class ListedTracker:
     def _state_changed(self, event: Event[EventStateChangedData]) -> None:
         entity_id = event.data["entity_id"]
         new_state = event.data["new_state"]
+        if entity_id in self.matcher.threshold_entities and not (
+            self._entities.contains(entity_id, new_state)
+        ):
+            # A limit changed: every entity is tested again.
+            self._check_all()
+            return
         if not self._entities.contains(entity_id, new_state):
             if entity_id in self._matching:
                 self._stop_matching(entity_id, _context(new_state))
@@ -349,7 +422,8 @@ class ListedTracker:
         variables = self._variables(entity_id, old_state, new_state)
         if initial:
             variables["initial"] = True
-        if self.matcher.for_ is None:
+        period = self.matcher.period({"trigger": variables})
+        if period is None:
             self._on_match(entity_id, variables)
             return
 
@@ -361,7 +435,7 @@ class ListedTracker:
                 entity_id, {**variables, "to_state": current or variables["to_state"]}
             )
 
-        self._timers[entity_id] = async_call_later(self._hass, self.matcher.for_, fire)
+        self._timers[entity_id] = async_call_later(self._hass, period, fire)
 
     @callback
     def _stop_matching(self, entity_id: str, context: Context | None = None) -> None:
@@ -374,7 +448,9 @@ class ListedTracker:
         self, entity_id: str, old_state: State | None, new_state: State | None
     ) -> dict[str, Any]:
         return {
-            "platform": TRIGGER_LISTED_ENTITIES,
+            "platform": TRIGGER_ENTITIES_NUMERIC
+            if "above" in self._config or "below" in self._config
+            else TRIGGER_ENTITIES_STATE,
             "entity_id": entity_id,
             "from_state": old_state,
             "to_state": new_state,
@@ -386,16 +462,17 @@ class ListedTracker:
 def matching_entities(
     hass: HomeAssistant, entities: EntityList, config: Mapping[str, Any]
 ) -> Iterable[str]:
-    """Return the listed entities that match a Listed entities condition."""
-    matcher = ListedMatcher(config)
+    """Return the listed entities that match a Notification entities condition."""
+    matcher = ListedMatcher(config, hass)
     for entity_id in entities.members():
         state = hass.states.get(entity_id)
         if not matcher.matches(state):
             continue
+        period = matcher.period({"entity_id": entity_id})
         if (
-            matcher.for_ is not None
+            period is not None
             and state is not None
-            and dt_util.utcnow() - state.last_changed < matcher.for_
+            and dt_util.utcnow() - state.last_changed < period
         ):
             continue
         yield entity_id

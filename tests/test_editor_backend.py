@@ -98,8 +98,13 @@ async def test_own_triggers_in_editor_form(
         },
     )
     steps = item["steps"]
+    # An earlier Listed entities trigger becomes Notification entities state.
     assert steps[0]["start"]["triggers"] == [
-        {"trigger": f"{DOMAIN}.listed_entities", "to": ["on"]}
+        {
+            "trigger": f"{DOMAIN}.entities_state",
+            "notification": item["id"],
+            "to": ["on"],
+        }
     ]
     own, washer = steps[1]["start"]["triggers"]
     assert own == {

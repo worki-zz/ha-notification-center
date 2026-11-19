@@ -380,6 +380,88 @@ async def test_listed_entities_for(
     assert center.state("sensor.nc_doors") == "active"
 
 
+async def test_entities_numeric_state(center: Center) -> None:
+    """A limit can be an entity, and the value can come from a template."""
+    await center.set("input_number.limit", "20")
+    await center.set("sensor.tank", "50")
+    await center.add(
+        "Tank",
+        step(
+            start={
+                "type": "triggers",
+                "triggers": [
+                    {
+                        "trigger": "notification_center.entities_numeric_state",
+                        "below": "input_number.limit",
+                        "value_template": "{{ state.state | float * 2 }}",
+                    }
+                ],
+            },
+        ),
+        entities=[{"entity_id": "sensor.tank"}],
+    )
+    # 15 * 2 = 30 is not below 20.
+    await center.set("sensor.tank", "15")
+    assert center.state("sensor.nc_tank") == "idle"
+    # The limit rises: 30 is below 40 now.
+    await center.set("input_number.limit", "40")
+    assert center.state("sensor.nc_tank") == "active"
+
+
+async def test_entities_of_another_notification(center: Center) -> None:
+    """A step can watch the entities another notification lists."""
+    await center.set("binary_sensor.leak", "off")
+    leaks = await center.add(
+        "Leaks", step(), entities=[{"entity_id": "binary_sensor.leak"}]
+    )
+    await center.add(
+        "Main valve",
+        step(
+            "Close the main valve",
+            start={
+                "type": "triggers",
+                "triggers": [
+                    {
+                        "trigger": "notification_center.entities_state",
+                        "notification": leaks,
+                        "to": "on",
+                    }
+                ],
+            },
+        ),
+    )
+    await center.set("binary_sensor.leak", "on")
+    assert center.state("sensor.nc_main_valve") == "active"
+
+
+async def test_entities_for_template(
+    hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
+) -> None:
+    """The ``for`` time can be a template."""
+    await center.set("binary_sensor.front", "off", device_class="door")
+    await center.add(
+        "Doors",
+        step(
+            start={
+                "type": "triggers",
+                "triggers": [
+                    {
+                        "trigger": "notification_center.entities_state",
+                        "to": "on",
+                        "for": "{{ '00:05:00' }}",
+                    }
+                ],
+            },
+        ),
+        entities=[{"entity_id": "binary_sensor.front"}],
+    )
+    await center.set("binary_sensor.front", "on", device_class="door")
+    await _tick(hass, freezer, timedelta(minutes=4))
+    assert center.state("sensor.nc_doors") == "idle"
+    await _tick(hass, freezer, timedelta(minutes=2))
+    assert center.state("sensor.nc_doors") == "active"
+
+
 async def test_notification_state_trigger_and_condition(center: Center) -> None:
     """A step can start when another notification's step is done."""
     waste = await center.add("Waste", step("Take out the waste"))

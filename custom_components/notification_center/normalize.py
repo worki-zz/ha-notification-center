@@ -10,7 +10,9 @@ pointing to the same notification and step after a rename or a reorder:
 - the options are moved to the top level, an empty target is dropped;
 - Notification state: no notification means this notification; a sensor
   is turned into the notification's id; a step number into the step's id;
-- Listed entities: the notification is always this one, so it is dropped.
+- Notification entities state and numeric state: like Notification state,
+  no notification means this notification and a sensor becomes an id;
+- an earlier Listed entities item becomes one of the two.
 
 An entity group with Add new matching switched off remembers the entities
 it matched when it was saved (``members``), until its filter changes.
@@ -27,10 +29,11 @@ from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, UNIQUE_ID_NOTIFICATION_PREFIX
 from .listed import group_members
 from .model import (
-    TRIGGER_LISTED_ENTITIES,
+    ENTITIES_KINDS,
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
     new_id,
+    upgrade_listed,
 )
 
 _GROUP_FILTER = ("domain", "device_class", "areas", "floors", "labels")
@@ -80,7 +83,7 @@ def _own(
     if not isinstance(item, dict):
         return item
     kind = str(item.get(key, ""))
-    if kind not in (TRIGGER_NOTIFICATION_STATE, TRIGGER_LISTED_ENTITIES):
+    if kind != TRIGGER_NOTIFICATION_STATE and kind not in ENTITIES_KINDS:
         return item
     result = {k: v for k, v in item.items() if k not in ("options", "target")}
     options = item.get("options")
@@ -88,9 +91,6 @@ def _own(
         result.update(options)
     if item.get("target"):
         result["target"] = item["target"]
-    if kind == TRIGGER_LISTED_ENTITIES:
-        result.pop("notification", None)
-        return result
     reference = result.get("notification")
     own_id = notification["id"]
     if not reference:
@@ -99,6 +99,9 @@ def _own(
         result["notification"] = resolve_reference(hass, config, reference) or (
             own_id if reference == own_id else reference
         )
+    if kind in ENTITIES_KINDS:
+        # An empty field is the same as no field.
+        return {k: v for k, v in result.items() if v not in (None, "", [])}
     if result.get("step") in (None, ""):
         result.pop("step", None)
     else:
@@ -143,6 +146,7 @@ def normalize_notification(
     it replaces, if any.
     """
     notification = copy.deepcopy(data)
+    upgrade_listed(notification)
     steps = notification.get("steps")
     for step in steps if isinstance(steps, list) else []:
         # A new step gets its id now, so a step number can point to it.

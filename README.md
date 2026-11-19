@@ -31,10 +31,10 @@ The release zip contains the built frontend. The repository itself does not, so 
 - **Sidebar panel:** *Notification Center*. Every user can open it. See [The panel](#the-panel).
 - **Dashboard cards**, in the card picker: *Notification Center* (`custom:notification-center`), every active card, and *Notification* (`custom:notification-center-card`), one notification. The integration loads them on every dashboard, so you do not add a resource by hand. See [The Notification Center card](#the-notification-center-card) and [The Notification card](#the-notification-card).
 
-- **A sensor per notification:** `sensor.nc_<name>`, for example `sensor.nc_dishwasher`. Its state is the most important state of its cards: `active`, `hidden`, `snoozed`, `upcoming`, `done` (today), `idle` or `disabled`. The attributes tell the number of active cards, the active step, the entities of a Listed entities step, the message, the snooze end and the last done time. The entity id stays when the notification is renamed.
+- **A sensor per notification:** `sensor.nc_<name>`, for example `sensor.nc_dishwasher`. Its state is the most important state of its cards: `active`, `hidden`, `snoozed`, `upcoming`, `done` (today), `idle` or `disabled`. The attributes tell the number of active cards, the active step, the entities of a step started by its entities, the message, the snooze end and the last done time. The entity id stays when the notification is renamed.
 - **`sensor.notification_center`:** the number of active cards, with the current mode, the counts per category and the top notification as attributes.
 - **`calendar.notification_center`:** a diagnostic entity, always off (so it stays out of the Activity log). The occurrences of the scheduled steps, as all-day events on the day they are due. The time of day (At) and the expiry only tell when the card shows and goes away.
-- **Actions:** `notification_center.trigger`, `done`, `clear`, `snooze` and `set_last_done`. They target the sensor of a notification and take the step number (`step`, default 1) and, for a Listed entities step, its `entity`:
+- **Actions:** `notification_center.trigger`, `done`, `clear`, `snooze` and `set_last_done`. They target the sensor of a notification and take the step number (`step`, default 1) and, for a step started by its entities, its `entity`:
 
   ```yaml
   action: notification_center.trigger
@@ -48,7 +48,7 @@ The release zip contains the built frontend. The repository itself does not, so 
       visitor: "{{ states('sensor.doorbell_last_person') }}"
   ```
 
-- **Automation triggers and conditions:** *Notification state* (a notification or one of its steps became active, done, snoozed or dismissed; as a condition also "within the last …") and *Listed entities* (an entity listed in a notification starts to match), in the automation editor.
+- **Automation triggers and conditions:** *Notification state* (a notification or one of its steps became active, done, snoozed or dismissed; as a condition also "within the last …") and *Notification entities state* and *Notification entities numeric state* (an entity listed in a notification gets a state, or gets above or below a limit), in the automation editor.
 - **Repairs and diagnostics:** problems such as a missing entity are listed in Settings → Repairs; diagnostics can be downloaded from the integration's menu, with people and push services redacted.
 
 Open cards, snoozes and last done times are kept in `.storage/notification_center.runtime`, so they survive a restart. Removing the integration also deletes its stored data.
@@ -69,9 +69,9 @@ Laid out like the automation editor: the name and status in the header, Undo and
 - **Entities:** single entities and entity categories (a domain with an optional device class, floors, areas and labels). Entities are named as in Home Assistant's pickers, with their area and device; the pencil edits or deletes. Each category is its own list, always open, and each of its entities can be switched off on its own; *Add new matching entities* off keeps the entities that matched when it was saved. A category that matches nothing yet is fine.
 - **Steps**, as tabs, with Add step and a menu (Run this step, Duplicate, Move left or right, Disable, Delete). Each step has:
   - **Message:** the message, the Info line, the entity parameters `{Floor}`, `{Area}`, `{Device}`, `{Entity}`, `{State}`, and the *Data* after the label: empty for nothing, *Notification* (active since, last done), *Entity state* (the active entity unless another is chosen; the state (default), an attribute, last changed or last updated) or *Custom* (a text, templates work). `{Floor}` shows only when there are floors.
-  - **Start:** *Triggers* (Home Assistant's trigger editor; none means only the Trigger action starts it), *Schedule* (the calendar) or *Repeat* (after last done). Both show when they come next; Repeat's next time can be set with the pencil (it is stored as the last done time). A card can expire after a duration or on the same or a later day at a time. Below, the start conditions.
+  - **Start:** *Triggers*: at the top *Notification entities*, shown when the notification lists entities: *State* (is or is not some states) or *Numeric state* (above or below a number or an entity's value, or a template), of the state or an attribute, with For. Every entity gets its own card when it starts to match. Left empty it is not used; a new notification whose entities are all on or off starts with *Is on*. It is the first trigger in YAML. Below it Home Assistant's trigger editor (none means only the Trigger action starts it); the Notification entities triggers and conditions there take any notification and show the same compact form. *Schedule* (the calendar) or *Repeat* (after last done). Both show when they come next; Repeat's next time can be set with the pencil (it is stored as the last done time). A card can expire after a duration or on the same or a later day at a time. Below, the start conditions.
   - **Hide while:** Home Assistant's condition editor.
-  - **Done when:** Home Assistant's trigger editor, and with Listed entities *Start condition no longer true*.
+  - **Done when:** Home Assistant's trigger editor, and when Notification entities is set at the top of Start, *Start condition no longer true* (an entity's card closes when that entity stops matching).
 
 Inside a notification, the Notification state trigger with no notification means this one, and its step is given by number; they are stored by id, so they keep pointing to the same step.
 
@@ -104,7 +104,7 @@ max_cards: 3
 
 One notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour is used for the border, the icon, the label and the buttons; the background is the normal card background.
 
-**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active card of the notification shows (a Listed entities notification can have several), with all its buttons and its tap (see [Buttons](#buttons)). Snooze with "Ask" offers 1 h, 3 h and Tomorrow on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
+**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active card of the notification shows (a notification started by its entities can have several), with all its buttons and its tap (see [Buttons](#buttons)). Snooze with "Ask" offers 1 h, 3 h and Tomorrow on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
 
 ```yaml
 type: custom:notification-center-card
