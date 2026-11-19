@@ -10,6 +10,7 @@ import {
   formatTime,
   formatWhen,
   monthName,
+  weekday,
 } from "../shared/format";
 import {
   cardKey,
@@ -41,6 +42,9 @@ const TITLES: Record<Page, string> = {
   done: "Done today",
   settings: "Settings",
 };
+
+// The Schedule section of the days left this week.
+const WEEK = "Week";
 
 // How often relative times are written again.
 const TICK = 30_000;
@@ -271,6 +275,7 @@ export class NotificationCenterPanel extends LitElement {
     data?: (live: LiveCard) => string,
     interactive = true,
     muted = false,
+    when?: (live: LiveCard) => string,
   ) {
     return repeat(
       cards,
@@ -281,6 +286,7 @@ export class NotificationCenterPanel extends LitElement {
           .live=${live}
           .now=${this._now}
           .data=${data?.(live)}
+          .when=${when?.(live)}
           .interactive=${interactive}
           .muted=${muted}
         ></notification-center-live-card>
@@ -351,16 +357,16 @@ export class NotificationCenterPanel extends LitElement {
         : nothing}
       ${later || done
         ? html`<div class="pages">
-            ${later
-              ? html`<ha-button appearance="plain" @click=${() => this._go("schedule")}>
-                  <ha-icon slot="start" icon="mdi:calendar"></ha-icon>
-                  Schedule
-                </ha-button>`
-              : nothing}
             ${done
-              ? html`<ha-button class="done" appearance="plain" @click=${() => this._go("done")}>
+              ? html`<ha-button appearance="plain" @click=${() => this._go("done")}>
                   <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
                   Done · ${done}
+                </ha-button>`
+              : nothing}
+            ${later
+              ? html`<ha-button class="schedule" appearance="plain" @click=${() => this._go("schedule")}>
+                  <ha-icon slot="start" icon="mdi:calendar"></ha-icon>
+                  Schedule
                 </ha-button>`
               : nothing}
           </div>`
@@ -396,7 +402,7 @@ export class NotificationCenterPanel extends LitElement {
     const year = new Date(today.getFullYear() + 1, 0, 1);
     const nextYear = new Date(today.getFullYear() + 2, 0, 1);
     const title = (due: Date): string => {
-      if (due < week) return "Week";
+      if (due < week) return WEEK;
       if (due < month) return monthName(hass, today);
       if (due < year) return "Year";
       if (due < nextYear) return "Next year";
@@ -415,7 +421,13 @@ export class NotificationCenterPanel extends LitElement {
         ${this._renderUpcoming(
           section.items.map((item) => ({
             ...item,
-            view: { ...item.view, when: formatDay(hass, item.due, this._now) },
+            view: {
+              ...item.view,
+              when:
+                section.title === WEEK
+                  ? weekday(hass, item.due)
+                  : formatDay(hass, item.due, this._now),
+            },
           })),
         )}
       `,
@@ -428,12 +440,13 @@ export class NotificationCenterPanel extends LitElement {
     const hass = this.hass!;
     return this._renderLive(
       done,
+      () => "",
+      false,
+      true,
       (live) =>
         live.card.closed_at
           ? `Done ${formatTime(hass, new Date(live.card.closed_at), "time", this._now)}`
           : "Done",
-      false,
-      true,
     );
   }
 
@@ -554,14 +567,14 @@ export class NotificationCenterPanel extends LitElement {
     h2.section:not(:first-child) {
       margin-top: 24px;
     }
-    /* Schedule at the left edge of the cards, Done at the right. */
+    /* Done at the left edge of the cards, Schedule at the right. */
     .pages {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 24px;
     }
-    .pages .done {
+    .pages .schedule {
       margin-inline-start: auto;
     }
     .empty {
