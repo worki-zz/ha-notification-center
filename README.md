@@ -28,8 +28,8 @@ The release zip contains the built frontend. The repository itself does not, so 
 
 ## What you get
 
-- **Sidebar panel:** *Notification Center*. Every user can open it; the settings pages will be limited to administrators.
-- **Dashboard card:** *Notification* (`custom:notification-center-card`), in the card picker. The integration loads it on every dashboard, so you do not add a resource by hand. See [The Notification card](#the-notification-card).
+- **Sidebar panel:** *Notification Center*. Every user can open it. See [The panel](#the-panel).
+- **Dashboard cards**, in the card picker: *Notification Center* (`custom:notification-center`), every active card, and *Notification* (`custom:notification-center-card`), one notification. The integration loads them on every dashboard, so you do not add a resource by hand. See [The Notification Center card](#the-notification-center-card) and [The Notification card](#the-notification-card).
 
 - **A sensor per notification:** `sensor.nc_<name>`, for example `sensor.nc_dishwasher`. Its state is the most important state of its cards: `active`, `hidden`, `snoozed`, `upcoming`, `done` (today), `idle` or `disabled`. The attributes tell the number of active cards, the active step, the entities of a Listed entities step, the message, the snooze end and the last done time. The entity id stays when the notification is renamed.
 - **`sensor.notification_center`:** the number of active cards, with the current mode, the counts per category and the top notification as attributes.
@@ -53,11 +53,40 @@ The release zip contains the built frontend. The repository itself does not, so 
 
 Open cards, snoozes and last done times are kept in `.storage/notification_center.runtime`, so they survive a restart. Removing the integration also deletes its stored data.
 
+## The panel
+
+The **Overview** shows the active cards meant for you, with their buttons, and below them, in a neutral colour, the scheduled steps still to come today. **Later** lists the snoozed cards, the cards hidden for now, and the scheduled steps after today; **Done today** the cards done today. A scheduled step that is not due yet can be marked *Done early*: a calendar step then skips its next occurrence, an "after last done" step counts from now. Administrators find the settings behind the gear in the header (for now the YAML import and export and the stored configuration).
+
+## Buttons
+
+A card's buttons work the same in the panel and on both cards. A button first changes the card (Done, Snooze, Dismiss, Keep it silently, or keep it as it is), then does its action:
+
+- **Home Assistant action** and **Entity action** (the listed entity's own action for that button) run in Home Assistant, as the user who pressed the button.
+- **More info** opens the entity's dialog (the button's entity, else the card's entity, else the notification's sensor); **Navigate** opens a page.
+
+The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: own buttons, Snooze, Done, Dismiss (or Mute). A step's audience decides who sees the card: empty means everyone. The Activity log names the user who changed a notification's state.
+
+## The Notification Center card
+
+Every active card of the Notification Center on a dashboard, in list order, with working buttons. It hides itself while nothing is active and leaves no gap; in the dashboard editor it shows a *Notification Center* placeholder instead.
+
+| Option | Description |
+| --- | --- |
+| `categories` | Only these categories (their ids). Default: all. |
+| `max_cards` | At most this many cards; a "+N more" row opens the Notification Center. Default: all. |
+| `ignore_audience` | Also show the cards meant for other people. Default: `false`, only the cards whose audience includes the logged in user's person (or is empty). |
+
+```yaml
+type: custom:notification-center
+categories: [emergency, chores]
+max_cards: 3
+```
+
 ## The Notification card
 
 One notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour is used for the border, the icon, the label and the buttons; the background is the normal card background.
 
-**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every open card of the notification shows (a Listed entities notification can have several), with its Done, Dismiss, Mute and Snooze buttons. Snooze with "Ask" offers 1 h, 3 h and Tomorrow on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
+**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active card of the notification shows (a Listed entities notification can have several), with all its buttons and its tap (see [Buttons](#buttons)). Snooze with "Ask" offers 1 h, 3 h and Tomorrow on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
 
 ```yaml
 type: custom:notification-center-card

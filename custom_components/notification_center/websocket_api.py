@@ -13,6 +13,7 @@ from typing import Any, Final
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
@@ -89,6 +90,8 @@ def async_register(hass: HomeAssistant) -> None:
         ws_import,
         ws_state_subscribe,
         ws_card_action,
+        ws_card_press,
+        ws_step_done_early,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -403,4 +406,83 @@ def ws_card_action(
             connection.send_error(msg["id"], ERR_INVALID, "until is not a time")
             return
         engine.snooze_cards(cards, until, SOURCE_BUTTON, context)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/card/press",
+        vol.Required("notification_id"): str,
+        vol.Required("step_id"): str,
+        vol.Optional("entity_id"): vol.Any(None, str),
+        vol.Required("button_id"): str,
+        # A snooze time the user chose; left out, the button's own is used.
+        vol.Optional("until"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_card_press(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Press a button of a card (any user)."""
+    engine = async_get_engine(hass)
+    if engine is None:
+        connection.send_error(
+            msg["id"], "not_loaded", "Notification Center is not loaded"
+        )
+        return
+    card = next(
+        (
+            card
+            for card in engine.select(msg["notification_id"], msg["step_id"], None)
+            if card.entity_id == msg.get("entity_id")
+        ),
+        None,
+    )
+    if card is None:
+        connection.send_error(msg["id"], "not_found", "The card is not open")
+        return
+    until = None
+    if msg.get("until"):
+        until = dt_util.parse_datetime(msg["until"])
+        if until is None:
+            connection.send_error(msg["id"], ERR_INVALID, "until is not a time")
+            return
+    try:
+        await engine.async_press(card, msg["button_id"], until, connection.context(msg))
+    except HomeAssistantError as err:
+        connection.send_error(msg["id"], ERR_INVALID, str(err))
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/step/done_early",
+        vol.Required("notification_id"): str,
+        vol.Required("step_id"): str,
+    }
+)
+@callback
+def ws_step_done_early(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Mark a scheduled step done before it is due (any user)."""
+    engine = async_get_engine(hass)
+    if engine is None:
+        connection.send_error(
+            msg["id"], "not_loaded", "Notification Center is not loaded"
+        )
+        return
+    try:
+        engine.done_early(
+            msg["notification_id"], msg["step_id"], connection.context(msg)
+        )
+    except HomeAssistantError as err:
+        connection.send_error(msg["id"], ERR_INVALID, str(err))
+        return
     connection.send_result(msg["id"])

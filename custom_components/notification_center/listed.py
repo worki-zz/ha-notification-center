@@ -153,6 +153,14 @@ class EntityList:
         return any(self._in_group(group, entity_id, state) for group in self.groups)
 
     @callback
+    def groups_of(self, entity_id: str) -> list[Mapping[str, Any]]:
+        """Return the groups an entity belongs to."""
+        state = self._hass.states.get(entity_id)
+        return [
+            group for group in self.groups if self._in_group(group, entity_id, state)
+        ]
+
+    @callback
     def members(self) -> list[str]:
         """Return every entity on the list now."""
         result = list(self.explicit)

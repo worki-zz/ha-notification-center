@@ -11,6 +11,8 @@ import type { HassConnection } from "./types";
 
 export interface StoreData {
   config?: NotificationCenterConfig;
+  // False until something was stored (a fresh install).
+  hasData?: boolean;
   state?: StateMessage;
   error?: string;
 }
@@ -46,7 +48,7 @@ class Store {
       this._set({ error: err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err) });
     };
     const config = this._connection.subscribeMessage<ConfigMessage>(
-      (message) => this._set({ config: message.config }),
+      (message) => this._set({ config: message.config, hasData: message.has_data }),
       { type: `${DOMAIN}/config/subscribe` },
     );
     const state = this._connection.subscribeMessage<StateMessage>(

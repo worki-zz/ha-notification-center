@@ -9,7 +9,7 @@ const outdir = fileURLToPath(
 const options = {
   entryPoints: {
     "notification-center-panel": "src/panel/notification-center-panel.ts",
-    "notification-center-card": "src/card/notification-center-card.ts",
+    "notification-center-card": "src/card/index.ts",
   },
   outdir,
   bundle: true,

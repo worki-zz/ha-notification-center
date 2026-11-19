@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from .engine import StepRunner
 
 HISTORY_SCHEDULED: Final = "scheduled"
+# The occurrence of a calendar step that was done early, so it is skipped.
+HISTORY_SKIPPED: Final = "skipped"
 # An after-last-done step that keeps expiring is tried at most this many
 # days back when Home Assistant starts.
 _MAX_CATCH_UP: Final = 400
@@ -68,6 +70,11 @@ class StepSchedule:
     def _last_due(self) -> datetime | None:
         return self.engine.last_reached(
             self.step.notification.id, self.step.step_id, HISTORY_SCHEDULED
+        )
+
+    def _skipped(self) -> datetime | None:
+        return self.engine.last_reached(
+            self.step.notification.id, self.step.step_id, HISTORY_SKIPPED
         )
 
     def _last_done(self) -> datetime | None:
@@ -116,7 +123,10 @@ class StepSchedule:
         if n == 0:
             return None
         if self.is_calendar:
-            return calendar_after(self.config, n, now)
+            due = calendar_after(self.config, n, now)
+            if due is not None and due == self._skipped():
+                due = calendar_after(self.config, n, due)
+            return due
         due = after_last_done_due(
             self.config, n, self._last_done(), self._last_due(), now
         )
@@ -153,7 +163,9 @@ class StepSchedule:
             # A new step only catches up today's occurrence.
             since = last or dt_util.start_of_local_day() - timedelta(microseconds=1)
             due = calendar_before(self.config, n, now, since)
-            if due is not None and (period is None or due + period > now):
+            if due is not None and due == self._skipped():
+                self._record(due)
+            elif due is not None and (period is None or due + period > now):
                 self._due(due)
             elif due is not None:
                 self._record(due)

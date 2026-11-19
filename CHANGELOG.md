@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.4
+
+### Added
+
+- **The Notification Center card** (`custom:notification-center`, *Notification Center* in the card picker): every active card in list order, with working buttons. Options: categories, maximum cards (a "+N more" row opens the Notification Center) and Ignore audience. It hides itself while nothing is active; the dashboard editor shows a *Notification Center* placeholder.
+- **Overview in the panel**: the active cards, and the scheduled steps still to come today in a neutral colour. **Later** (snoozed, hidden for now, upcoming after today) and **Done today** are behind their buttons. Administrators reach the settings (YAML import and export, the stored configuration) from the gear in the header.
+- **Every button works**: own buttons, the tap on the card, and each button's action: Home Assistant action, Entity action, More info, Navigate. The same in the panel, on the Notification Center card and on the Notification card of a notification's sensor.
+- **Done early** for a scheduled step that is not due yet: a calendar step skips its next occurrence, an "after last done" step counts from now.
+- Cards are shown to the step's audience (empty means everyone).
+- Websocket commands `notification_center/card/press` and `notification_center/step/done_early`; `state/subscribe` gives each notification's upcoming steps.
+
+### Changed
+
+- The Activity log names the user who changed a notification's state (for example "Washing machine → Done, By Kristóf").
+- A Snooze button snoozes for its own time, else the notification's or category's; "Ask" offers 1 h, 3 h and Tomorrow.
+
 ## 0.3.3
 
 ### Fixed

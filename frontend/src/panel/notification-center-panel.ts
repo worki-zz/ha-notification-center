@@ -1,23 +1,56 @@
-import { LitElement, css, html, nothing } from "lit";
+import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 
+import { loadDashboardElements } from "../card/elements";
+import { DOMAIN, type NotificationCenterConfig } from "../shared/config";
+import { formatTime, formatWhen } from "../shared/format";
 import {
-  DOMAIN,
-  type CardAction,
-  type CardState,
-  type ConfigMessage,
-  type NotificationCenterConfig,
-  type StateMessage,
-} from "../shared/config";
+  cardKey,
+  categoryOf,
+  doneEarly,
+  errorText,
+  inAudience,
+  liveCards,
+  navigate,
+  personOf,
+  stepOf,
+  type LiveCard,
+} from "../shared/live";
+import "../shared/live-card";
+import { type NotificationViewData } from "../shared/notification-view";
+import "../shared/notification-view";
+import { subscribeStore, type StoreData } from "../shared/store";
+import { isTemplate, replacePlaceholders } from "../shared/text";
 import type { HomeAssistant, PanelInfo } from "../shared/types";
 import { VERSION } from "../shared/version";
 
-// The sidebar panel.
-//
-// A temporary developer page: the stored configuration in simple lists, the
-// live state of every notification with Done, Snooze and Dismiss, and YAML
-// import and export for administrators. The Overview replaces it in phase 3,
-// the Settings pages in phases 4 and 5.
+type Page = "overview" | "later" | "done" | "settings";
+
+const TITLES: Record<Page, string> = {
+  overview: "Notification Center",
+  later: "Later",
+  done: "Done today",
+  settings: "Settings",
+};
+
+// The neutral colour of what is not active yet.
+const MUTED = "var(--secondary-text-color)";
+
+// How often relative times are written again.
+const TICK = 30_000;
+
+interface Upcoming {
+  key: string;
+  notificationId: string;
+  stepId: string;
+  due: Date;
+  view: NotificationViewData;
+}
+
+// The sidebar panel: the Overview of the active cards with what comes
+// today, Later and Done today behind their buttons, and the settings for
+// administrators in the header.
 @customElement("notification-center-panel")
 export class NotificationCenterPanel extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -26,9 +59,11 @@ export class NotificationCenterPanel extends LitElement {
 
   @property({ attribute: false }) public panel?: PanelInfo;
 
-  @state() private _config?: NotificationCenterConfig;
+  @property({ attribute: false }) public route?: { prefix: string; path: string };
 
-  @state() private _hasData = false;
+  @state() private _store: StoreData = {};
+
+  @state() private _now = Date.now();
 
   @state() private _error?: string;
 
@@ -39,87 +74,276 @@ export class NotificationCenterPanel extends LitElement {
 
   @state() private _busy = false;
 
-  @state() private _live?: StateMessage;
+  private _unsubscribe?: () => void;
 
-  private _unsubscribe?: Promise<() => Promise<void>>;
-
-  private _unsubscribeState?: Promise<() => Promise<void>>;
+  private _timer?: number;
 
   public override connectedCallback(): void {
     super.connectedCallback();
-    if (this.hass) {
-      this._subscribe();
-    }
+    loadDashboardElements();
+    this._timer = window.setInterval(() => {
+      this._now = Date.now();
+    }, TICK);
+    this._follow();
   }
 
   public override disconnectedCallback(): void {
     super.disconnectedCallback();
-    void this._unsubscribe?.then((unsubscribe) => unsubscribe());
+    window.clearInterval(this._timer);
+    this._timer = undefined;
+    this._unsubscribe?.();
     this._unsubscribe = undefined;
-    void this._unsubscribeState?.then((unsubscribe) => unsubscribe());
-    this._unsubscribeState = undefined;
   }
 
-  protected override updated(changed: Map<string, unknown>): void {
-    if (changed.has("hass") && this.hass && !this._unsubscribe) {
-      this._subscribe();
+  protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has("hass")) this._follow();
+    if (changed.has("route")) {
+      this._error = undefined;
+      this._notice = undefined;
     }
   }
 
-  private _subscribe(): void {
-    if (!this.hass) return;
-    this._unsubscribe = this.hass.connection.subscribeMessage<ConfigMessage>(
-      (message) => {
-        this._config = message.config;
-        this._hasData = message.has_data;
-      },
-      { type: `${DOMAIN}/config/subscribe` },
-    );
-    this._unsubscribe.catch((err: unknown) => {
-      this._error = errorMessage(err);
-    });
-    this._unsubscribeState =
-      this.hass.connection.subscribeMessage<StateMessage>(
-        (message) => {
-          this._live = message;
-        },
-        { type: `${DOMAIN}/state/subscribe` },
-      );
-    this._unsubscribeState.catch((err: unknown) => {
-      this._error = errorMessage(err);
-    });
+  private _follow(): void {
+    if (!this._unsubscribe && this.hass && this.isConnected) {
+      this._unsubscribe = subscribeStore(this.hass.connection, (data) => {
+        this._store = data;
+      });
+    }
   }
 
   private get _isAdmin(): boolean {
     return this.hass?.user?.is_admin ?? false;
   }
 
+  private get _page(): Page {
+    const page = (this.route?.path ?? "").replace(/^\/+/, "").split("/")[0];
+    if (page === "later" || page === "done") return page;
+    if (page === "settings" && this._isAdmin) return "settings";
+    return "overview";
+  }
+
+  private _go(page: Page): void {
+    const base = `/${this.panel?.url_path ?? "notification-center"}`;
+    navigate(page === "overview" ? base : `${base}/${page}`);
+  }
+
+  // -- Cards ---------------------------------------------------------------
+
+  private _cards(statuses: LiveCard["card"]["status"][]): LiveCard[] {
+    const { config, state } = this._store;
+    if (!config || !state || !this.hass) return [];
+    return liveCards(config, state, { statuses, person: personOf(this.hass) });
+  }
+
+  private _endOfToday(): number {
+    const end = new Date(this._now);
+    end.setHours(24, 0, 0, 0);
+    return end.getTime();
+  }
+
+  private _when(when: Date): string {
+    return formatWhen(this.hass!, when, this._now);
+  }
+
+  // The scheduled steps still to come, soonest first.
+  private _upcoming(): Upcoming[] {
+    const { config, state } = this._store;
+    const hass = this.hass;
+    if (!config || !state || !hass) return [];
+    const person = personOf(hass);
+    const result: Upcoming[] = [];
+    for (const notification of config.notifications) {
+      if (!notification.enabled) continue;
+      const entry = state.notifications[notification.id];
+      const category = categoryOf(config, notification);
+      for (const item of entry?.upcoming ?? []) {
+        const step = stepOf(notification, item.step_id);
+        if (!step || !inAudience(step, person)) continue;
+        // A step with an open card shows that card instead.
+        if (entry.cards.some((card) => card.step_id === step.id && card.status !== "done")) {
+          continue;
+        }
+        const due = new Date(item.due);
+        const message = isTemplate(step.message) ? "" : replacePlaceholders(step.message, {});
+        result.push({
+          key: `${notification.id}|${step.id}`,
+          notificationId: notification.id,
+          stepId: step.id,
+          due,
+          view: {
+            label: notification.name,
+            data: this._when(due),
+            message,
+            icon: notification.icon || category?.icon || "mdi:calendar-clock",
+            color: MUTED,
+            buttons: [{ key: "done_early", label: "Done early", icon: "mdi:check" }],
+          },
+        });
+      }
+    }
+    return result.sort((a, b) => a.due.getTime() - b.due.getTime());
+  }
+
+  private async _doneEarly(item: Upcoming): Promise<void> {
+    await this._run(() => doneEarly(this.hass!, item.notificationId, item.stepId));
+  }
+
+  // -- Render --------------------------------------------------------------
+
   protected override render() {
-    const title = this.panel?.title ?? "Notification Center";
+    const page = this._page;
+    const title = page === "overview" ? (this.panel?.title ?? TITLES.overview) : TITLES[page];
     return html`
       <div class="toolbar">
-        <ha-menu-button
-          .hass=${this.hass}
-          .narrow=${this.narrow}
-        ></ha-menu-button>
+        ${page === "overview"
+          ? html`<ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>`
+          : html`<ha-icon-button .label=${"Back"} @click=${() => this._go("overview")}>
+              <ha-icon icon="mdi:arrow-left"></ha-icon>
+            </ha-icon-button>`}
         <div class="main-title">${title}</div>
+        ${page === "overview" && this._isAdmin
+          ? html`<ha-icon-button .label=${"Settings"} @click=${() => this._go("settings")}>
+              <ha-icon icon="mdi:cog"></ha-icon>
+            </ha-icon-button>`
+          : nothing}
       </div>
       <div class="content">
-        <p class="intro">
-          Development view: the live state of the notifications and the stored
-          configuration. The Overview and the Settings pages replace it in later
-          versions.
-        </p>
-        ${this._error
-          ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+        ${this._store.error
+          ? html`<ha-alert alert-type="error">${this._store.error}</ha-alert>`
           : nothing}
+        ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
         ${this._notice
           ? html`<ha-alert alert-type="success">${this._notice}</ha-alert>`
           : nothing}
-        ${this._isAdmin ? this._renderImportExport() : nothing}
-        ${this._config ? this._renderConfig(this._config) : nothing}
-        <p class="version">Notification Center ${VERSION}</p>
+        ${!this._store.config || !this._store.state
+          ? this._store.error
+            ? nothing
+            : html`<div class="empty">Loading…</div>`
+          : page === "later"
+            ? this._renderLater()
+            : page === "done"
+              ? this._renderDone()
+              : page === "settings"
+                ? this._renderSettings()
+                : this._renderOverview()}
       </div>
+    `;
+  }
+
+  private _renderLive(cards: LiveCard[], data?: (live: LiveCard) => string, interactive = true) {
+    return repeat(
+      cards,
+      (live) => cardKey(live.card),
+      (live) => html`
+        <notification-center-live-card
+          .hass=${this.hass}
+          .live=${live}
+          .now=${this._now}
+          .data=${data?.(live)}
+          .interactive=${interactive}
+        ></notification-center-live-card>
+      `,
+    );
+  }
+
+  private _renderUpcoming(items: Upcoming[]) {
+    return repeat(
+      items,
+      (item) => item.key,
+      (item) => html`
+        <notification-center-view
+          class="upcoming"
+          .hass=${this.hass}
+          .view=${item.view}
+          @nc-button=${() => this._doneEarly(item)}
+        ></notification-center-view>
+      `,
+    );
+  }
+
+  private _renderOverview() {
+    const active = this._cards(["active"]);
+    const end = this._endOfToday();
+    const upcoming = this._upcoming();
+    const today = upcoming.filter((item) => item.due.getTime() < end);
+    const later =
+      this._cards(["snoozed", "hidden"]).length + upcoming.length - today.length;
+    const done = this._cards(["done"]).length;
+    return html`
+      ${active.length
+        ? this._renderLive(active)
+        : html`<div class="all-clear">
+            <ha-icon icon="mdi:message-bulleted"></ha-icon>
+            <div>No active notifications</div>
+          </div>`}
+      ${today.length
+        ? html`<h2>Today</h2>
+            ${this._renderUpcoming(today)}`
+        : nothing}
+      <div class="pages">
+        <ha-button appearance="plain" @click=${() => this._go("later")}>
+          <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
+          Later${later ? ` (${later})` : ""}
+        </ha-button>
+        <ha-button appearance="plain" @click=${() => this._go("done")}>
+          <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
+          Done today${done ? ` (${done})` : ""}
+        </ha-button>
+      </div>
+    `;
+  }
+
+  private _renderLater() {
+    const snoozed = this._cards(["snoozed"]);
+    const hidden = this._cards(["hidden"]);
+    const end = this._endOfToday();
+    const upcoming = this._upcoming().filter((item) => item.due.getTime() >= end);
+    if (!snoozed.length && !hidden.length && !upcoming.length) {
+      return html`<div class="empty">Nothing later.</div>`;
+    }
+    return html`
+      ${snoozed.length
+        ? html`<h2>Snoozed</h2>
+            ${this._renderLive(snoozed, (live) =>
+              live.card.snoozed_until ? `until ${this._when(new Date(live.card.snoozed_until))}` : "",
+            )}`
+        : nothing}
+      ${hidden.length
+        ? html`<h2>Hidden for now</h2>
+            ${this._renderLive(hidden)}`
+        : nothing}
+      ${upcoming.length
+        ? html`<h2>Upcoming</h2>
+            ${this._renderUpcoming(upcoming)}`
+        : nothing}
+    `;
+  }
+
+  private _renderDone() {
+    const done = this._cards(["done"]);
+    if (!done.length) {
+      return html`<div class="empty">Nothing done today yet.</div>`;
+    }
+    const hass = this.hass!;
+    return this._renderLive(
+      done,
+      (live) =>
+        live.card.closed_at
+          ? `done ${formatTime(hass, new Date(live.card.closed_at), "time", this._now)}`
+          : "done",
+      false,
+    );
+  }
+
+  private _renderSettings() {
+    return html`
+      <p class="intro">
+        The settings pages come in later versions. Until then: YAML import and
+        export, and the stored configuration.
+      </p>
+      ${this._renderImportExport()}
+      ${this._store.config ? this._renderConfig(this._store.config) : nothing}
+      <p class="version">Notification Center ${VERSION}</p>
     `;
   }
 
@@ -132,7 +356,7 @@ export class NotificationCenterPanel extends LitElement {
             ? html`
                 <p>
                   Importing <b>${pending.name}</b> replaces the whole
-                  configuration (${this._config?.notifications.length ?? 0}
+                  configuration (${this._store.config?.notifications.length ?? 0}
                   notifications now). The current one is downloaded first.
                 </p>
                 <div class="buttons">
@@ -181,10 +405,7 @@ export class NotificationCenterPanel extends LitElement {
               const category = categories.get(item.category);
               const icon = item.icon ?? category?.icon ?? "mdi:bell";
               const steps = item.steps.length;
-              const live = this._live?.notifications[item.id];
-              const stepNumbers = new Map(
-                item.steps.map((step, index) => [step.id, index + 1]),
-              );
+              const live = this._store.state?.notifications[item.id];
               return html`
                 <div class="row ${item.enabled ? "" : "disabled"}">
                   <ha-icon .icon=${icon}></ha-icon>
@@ -196,10 +417,10 @@ export class NotificationCenterPanel extends LitElement {
                       ${item.steps.map((step) => step.start.type).join(", ")}
                       ${item.enabled ? "" : " · disabled"}
                       ${live?.last_done
-                        ? ` · last done ${formatTime(live.last_done)}`
+                        ? ` · last done ${formatShort(live.last_done)}`
                         : ""}
                       ${live?.next_due
-                        ? ` · next ${formatTime(live.next_due)}`
+                        ? ` · next ${formatShort(live.next_due)}`
                         : ""}
                     </div>
                   </div>
@@ -209,9 +430,6 @@ export class NotificationCenterPanel extends LitElement {
                       >`
                     : nothing}
                 </div>
-                ${(live?.cards ?? []).map((card) =>
-                  this._renderCard(card, stepNumbers.get(card.step_id)),
-                )}
               `;
             })}
       </ha-card>
@@ -293,85 +511,6 @@ export class NotificationCenterPanel extends LitElement {
     URL.revokeObjectURL(link.href);
   }
 
-  private _renderCard(card: CardState, step: number | undefined) {
-    const open = ["active", "hidden", "snoozed"].includes(card.status);
-    const detail = [
-      `Step ${step ?? "?"}`,
-      card.entity_id,
-      card.status,
-      card.status === "snoozed" && card.snoozed_until
-        ? `until ${formatTime(card.snoozed_until)}`
-        : `since ${formatTime(card.state_since)}`,
-    ].filter(Boolean);
-    return html`
-      <div class="live-card ${card.status}">
-        <div class="text">
-          <div>${card.message}</div>
-          ${card.info
-            ? html`<div class="secondary">${card.info}</div>`
-            : nothing}
-          <div class="secondary">${detail.join(" · ")}</div>
-        </div>
-        ${open
-          ? html`
-              <div class="buttons">
-                <ha-button size="small" @click=${() => this._act(card, "done")}>
-                  Done
-                </ha-button>
-                <ha-button
-                  size="small"
-                  appearance="plain"
-                  @click=${() => this._act(card, "snooze", 1)}
-                >
-                  1 h
-                </ha-button>
-                <ha-button
-                  size="small"
-                  appearance="plain"
-                  @click=${() => this._act(card, "snooze", 3)}
-                >
-                  3 h
-                </ha-button>
-                <ha-button
-                  size="small"
-                  appearance="plain"
-                  @click=${() => this._act(card, "snooze")}
-                >
-                  Tomorrow
-                </ha-button>
-                <ha-button
-                  size="small"
-                  appearance="plain"
-                  @click=${() => this._act(card, "dismiss")}
-                >
-                  Dismiss
-                </ha-button>
-              </div>
-            `
-          : nothing}
-      </div>
-    `;
-  }
-
-  private async _act(
-    card: CardState,
-    action: CardAction,
-    hours?: number,
-  ): Promise<void> {
-    await this._run(async () => {
-      await this.hass?.callWS({
-        type: `${DOMAIN}/card/action`,
-        notification_id: card.notification_id,
-        step_id: card.step_id,
-        entity_id: card.entity_id,
-        action,
-        ...(hours
-          ? { until: new Date(Date.now() + hours * 3600 * 1000).toISOString() }
-          : {}),
-      });
-    });
-  }
-
   private _pickFile(): void {
     this.renderRoot
       .querySelector<HTMLInputElement>("input[type=file]")
@@ -384,7 +523,7 @@ export class NotificationCenterPanel extends LitElement {
     input.value = "";
     if (!file) return;
     const text = await file.text();
-    if (this._hasData) {
+    if (this._store.hasData) {
       this._pendingImport = { name: file.name, text };
       return;
     }
@@ -419,7 +558,7 @@ export class NotificationCenterPanel extends LitElement {
     try {
       await task();
     } catch (err) {
-      this._error = errorMessage(err);
+      this._error = errorText(err);
     } finally {
       this._busy = false;
     }
@@ -436,9 +575,9 @@ export class NotificationCenterPanel extends LitElement {
       display: flex;
       align-items: center;
       height: var(--header-height, 56px);
-      padding: 0 12px;
+      padding: 0 4px;
       box-sizing: border-box;
-      font-size: 20px;
+      font-size: var(--ha-font-size-xl, 20px);
       background-color: var(--app-header-background-color);
       color: var(--app-header-text-color, var(--primary-text-color));
       border-bottom: var(--app-header-border-bottom, none);
@@ -451,12 +590,45 @@ export class NotificationCenterPanel extends LitElement {
       text-overflow: ellipsis;
     }
     .content {
-      max-width: 800px;
+      max-width: 640px;
       margin: 0 auto;
       padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 8px;
+    }
+    h2 {
+      margin: 16px 4px 0;
+      font-size: var(--ha-font-size-m, 14px);
+      font-weight: var(--ha-font-weight-medium, 500);
+      color: var(--secondary-text-color);
+    }
+    .upcoming {
+      opacity: 0.8;
+    }
+    .all-clear {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 32px 16px;
+      color: var(--secondary-text-color);
+    }
+    .all-clear ha-icon {
+      --mdc-icon-size: 48px;
+      color: var(--disabled-text-color);
+    }
+    .pages {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .empty {
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--secondary-text-color);
     }
     .intro {
       margin: 0;
@@ -491,7 +663,7 @@ export class NotificationCenterPanel extends LitElement {
       min-width: 0;
     }
     .secondary,
-    .empty {
+    .card-content.empty {
       color: var(--secondary-text-color);
       font-size: 14px;
     }
@@ -507,22 +679,8 @@ export class NotificationCenterPanel extends LitElement {
       background-color: var(--primary-color);
       color: var(--text-primary-color);
     }
-    .live-card {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px 16px;
-      margin: 0 16px 8px 56px;
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--divider-color);
-    }
-    .live-card.hidden,
-    .live-card.snoozed {
-      opacity: 0.6;
-    }
-    .live-card .text {
-      flex: 1 1 200px;
+    ha-card {
+      margin-top: 8px;
     }
     .version {
       margin: 8px 0 0;
@@ -533,20 +691,13 @@ export class NotificationCenterPanel extends LitElement {
   `;
 }
 
-function formatTime(value: string): string {
+function formatShort(value: string): string {
   return new Date(value).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function errorMessage(err: unknown): string {
-  if (err && typeof err === "object" && "message" in err) {
-    return String((err as { message: unknown }).message);
-  }
-  return String(err);
 }
 
 declare global {
