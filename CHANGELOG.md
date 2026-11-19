@@ -9,6 +9,10 @@
 - Done when: *Start condition no longer true* follows Notification entities at the top of Start.
 - Overview: less room above the Done and Schedule buttons (24 px from the last card instead of 40 px).
 
+### Fixed
+
+- An open card kept its old message, Info and Custom data after the step was edited; it now follows the saved step.
+
 ## 0.4.4
 
 ### Changed

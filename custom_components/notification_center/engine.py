@@ -940,6 +940,9 @@ class Engine:
                 or not step.get("enabled", True)
             ):
                 self.forget(card)
+            elif self._started and card.is_open and card.notification_id in changed:
+                # The texts (message, Info, Data) follow the edited step.
+                self._start_text(card)
         if self._started:
             for nid, notification in new.items():
                 if nid not in self.runners:
