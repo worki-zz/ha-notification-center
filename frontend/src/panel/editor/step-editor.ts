@@ -8,9 +8,17 @@ import { customElement, property, state } from "lit/decorators.js";
 import { field } from "../fields";
 import { PLACEHOLDERS } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
-import { type DataType, type EditorStep, type Obj, type Schedule, type StepData, startsWithListed } from "./model";
+import {
+  type DataType,
+  type EditorStep,
+  type Obj,
+  type Schedule,
+  type StepData,
+  entityDisplay,
+  startsWithListed,
+} from "./model";
 import { defaultSchedule } from "./schedule-editor";
-import "./block";
+import { BLOCK_STYLES, block } from "./block";
 import "./schedule-editor";
 
 type StartKind = "triggers" | "schedule" | "repeat";
@@ -65,10 +73,12 @@ const DATA_OPTIONS: { value: DataType; label: string }[] = [
   { value: "due", label: "Due" },
   { value: "last_done", label: "Last done" },
   { value: "state", label: "Entity state" },
-  { value: "attribute", label: "Entity attribute" },
   { value: "last_changed", label: "Entity last changed" },
-  { value: "custom", label: "Custom text" },
+  { value: "custom", label: "Custom" },
 ];
+
+// Attributes that are not worth showing on a card.
+const HIDDEN_ATTRIBUTES = ["friendly_name", "icon", "entity_picture", "supported_features", "attribution"];
 
 const TIME_TYPES: DataType[] = ["active_since", "due", "last_done", "last_changed"];
 
@@ -98,7 +108,13 @@ export class NcStepEditor extends LitElement {
 
   @property({ attribute: false }) public expanded: Set<string> = new Set();
 
+  // The entities of the notification's Entities block, switched on.
+  @property({ attribute: false }) public entities: string[] = [];
+
   @state() private _help?: keyof typeof HELP;
+
+  // "Other entity" was chosen for the data: show the entity picker.
+  @state() private _otherEntity = false;
 
   // The text field the entity parameters go into.
   private _field: "message" | "info" = "message";
@@ -111,43 +127,38 @@ export class NcStepEditor extends LitElement {
     this._emit({ ...this.step!, ...changes });
   }
 
-  private _panel(block: StepBlock, header: string, secondary: string, content: unknown) {
-    return html`<nc-block
-      .header=${header}
-      .secondary=${secondary}
-      .expanded=${this.expanded.has(block)}
-      @toggled=${(ev: CustomEvent<{ expanded: boolean }>) => {
-        ev.stopPropagation();
-        this.dispatchEvent(
-          new CustomEvent("block-toggled", { detail: { block, expanded: ev.detail.expanded } }),
-        );
-      }}
-    >
-      ${this.expanded.has(block) ? content : nothing}
-    </nc-block>`;
+  private _panel(key: StepBlock, icon: string, header: string, count: number | undefined, content: unknown) {
+    return block({
+      icon,
+      header,
+      count,
+      expanded: this.expanded.has(key),
+      toggled: (expanded) =>
+        this.dispatchEvent(new CustomEvent("block-toggled", { detail: { block: key, expanded } })),
+      content,
+    });
   }
 
   protected override render() {
     const step = this.step;
     if (!step) return nothing;
+    const kind = this._kind(step);
+    const doneCount =
+      step.done_when.triggers.length +
+      (step.done_when.start_no_longer_true && startsWithListed(step) ? 1 : 0);
     return html`
-      ${this._panel("message", "Message", this._messageSummary(step), this._renderMessage(step))}
-      ${this._panel("start", "Start", this._startSummary(step), this._renderStart(step))}
+      ${this._panel("message", "mdi:message-text-outline", "Message", undefined, this._renderMessage(step))}
       ${this._panel(
-        "hide",
-        "Hide while",
-        step.hide_while.length ? `${step.hide_while.length} conditions` : "Always shown",
-        this._renderHide(step),
+        "start",
+        "mdi:play-circle-outline",
+        "Start",
+        kind === "triggers" ? (step.start.triggers?.length ?? 0) : undefined,
+        this._renderStart(step),
       )}
-      ${this._panel("done", "Done when", this._doneSummary(step), this._renderDone(step))}
+      ${this._panel("hide", "mdi:eye-off-outline", "Hide while", step.hide_while.length, this._renderHide(step))}
+      ${this._panel("done", "mdi:check-circle-outline", "Done when", doneCount, this._renderDone(step))}
       ${this._help ? this._renderHelp(this._help) : nothing}
     `;
-  }
-
-  // -- Summaries -------------------------------------------------------------
-
-  private _messageSummary(step: EditorStep): string {
-    return step.message || "No message yet";
   }
 
   private _kind(step: EditorStep): StartKind {
@@ -155,79 +166,39 @@ export class NcStepEditor extends LitElement {
     return step.start.schedule?.type === "after_last_done" ? "repeat" : "schedule";
   }
 
-  private _startSummary(step: EditorStep): string {
-    const kind = this._kind(step);
-    if (kind === "triggers") {
-      const count = step.start.triggers?.length ?? 0;
-      return count ? `Triggers · ${count}` : "Only by the trigger action";
-    }
-    const schedule = step.start.schedule!;
-    const every = typeof schedule.every === "number" ? schedule.every : "N";
-    const unit = every === 1 ? schedule.unit.replace(/s$/, "") : schedule.unit;
-    return kind === "schedule"
-      ? `Schedule · every ${every === 1 ? "" : `${every} `}${unit}${schedule.at ? ` at ${schedule.at}` : ""}`
-      : `Repeat · ${every} ${unit} after done`;
-  }
-
-  private _doneSummary(step: EditorStep): string {
-    const parts: string[] = [];
-    if (step.done_when.start_no_longer_true && startsWithListed(step)) {
-      parts.push("start no longer true");
-    }
-    if (step.done_when.triggers.length) parts.push(`${step.done_when.triggers.length} triggers`);
-    return parts.length ? parts.join(" · ") : "Only by the Done button";
-  }
-
   // -- Message -------------------------------------------------------------
 
   private _renderMessage(step: EditorStep) {
     const data = step.data ?? { type: "none" };
+    // Entity state and attribute are one choice: the attribute is State by default.
+    const type: DataType = data.type === "attribute" ? "state" : data.type;
     return html`<div class="block">
-      <ha-selector
-        class="message"
-        .hass=${this.hass}
-        .selector=${{ text: { multiline: true } }}
-        .value=${step.message}
-        .label=${"Message"}
-        .required=${false}
-        @focusin=${() => (this._field = "message")}
-        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-          ev.stopPropagation();
-          this._change({ message: ev.detail.value ?? "" });
-        }}
-      ></ha-selector>
-      <ha-selector
-        class="info"
-        .hass=${this.hass}
-        .selector=${{ text: {} }}
-        .value=${step.info ?? ""}
-        .label=${"Info"}
-        .required=${false}
-        .helper=${"A second line, smaller."}
-        @focusin=${() => (this._field = "info")}
-        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-          ev.stopPropagation();
-          this._change({ info: ev.detail.value || null });
-        }}
-      ></ha-selector>
+      <div class="row">
+        ${this._text("message", "Message", step.message, (value) => this._change({ message: value }))}
+        ${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
+      </div>
       <div class="chips">
         <span class="chips-label">Entity parameters</span>
         ${PLACEHOLDERS.map(
-          (name) => html`<ha-assist-chip
-            .label=${name}
+          (name) => html`<button
+            class="param"
+            type="button"
             @mousedown=${(ev: Event) => ev.preventDefault()}
             @click=${() => this._insert(`{${name}}`)}
-          ></ha-assist-chip>`,
+          >
+            {${name}}
+          </button>`,
         )}
       </div>
-      <div class="row">
+      <div class="row data">
         ${this._selector(
           { select: { mode: "dropdown", options: DATA_OPTIONS } },
-          data.type,
-          "Data after the label",
+          type,
+          "Data",
           (value) => this._dataChanged({ type: (value as DataType) || "none" }),
+          "data-type",
         )}
-        ${TIME_TYPES.includes(data.type)
+        ${TIME_TYPES.includes(type)
           ? this._selector(
               { select: { mode: "dropdown", options: FORMATS } },
               data.format ?? "relative",
@@ -235,47 +206,116 @@ export class NcStepEditor extends LitElement {
               (value) => this._dataChanged({ format: (value as StepData["format"]) ?? null }),
             )
           : nothing}
+        ${type === "state" || type === "last_changed" ? this._renderDataEntity(data) : nothing}
+        ${type === "state" ? this._renderAttribute(data) : nothing}
+        ${type === "custom"
+          ? this._selector(
+              { text: {} },
+              data.text ?? "",
+              "Custom",
+              (value) => this._dataChanged({ text: (value as string) || null }),
+            )
+          : nothing}
       </div>
-      ${["state", "attribute", "last_changed"].includes(data.type)
-        ? html`<div class="row">
-            ${this._selector(
-              { entity: {} },
-              data.entity_id ?? undefined,
-              "Entity",
-              (value) => this._dataChanged({ entity_id: (value as string) || null }),
-              "The card's entity when empty.",
-            )}
-            ${data.type === "attribute"
-              ? this._selector(
-                  { attribute: { entity_id: data.entity_id ?? undefined } },
-                  data.attribute ?? undefined,
-                  "Attribute",
-                  (value) => this._dataChanged({ attribute: (value as string) || null }),
-                )
-              : nothing}
-          </div>`
-        : nothing}
-      ${data.type === "custom"
-        ? this._selector(
-            { text: {} },
-            data.text ?? "",
-            "Text",
-            (value) => this._dataChanged({ text: (value as string) || null }),
-            "A template; the entity parameters work too.",
-          )
-        : nothing}
     </div>`;
+  }
+
+  private _text(name: "message" | "info", label: string, value: string, changed: (value: string) => void) {
+    return html`<ha-selector
+      class=${name}
+      .hass=${this.hass}
+      .selector=${{ text: {} }}
+      .value=${value}
+      .label=${label}
+      .required=${false}
+      @focusin=${() => (this._field = name)}
+      @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+        ev.stopPropagation();
+        changed(ev.detail.value ?? "");
+      }}
+    ></ha-selector>`;
+  }
+
+  // The entity of the data: the card's own (from the Entities block) unless
+  // another one is chosen.
+  private _renderDataEntity(data: StepData) {
+    const hass = this.hass!;
+    const listed = this.entities;
+    if (!listed.length && !data.entity_id) {
+      return this._selector(
+        { entity: {} },
+        undefined,
+        "Entity",
+        (value) => this._dataChanged({ entity_id: (value as string) || null }),
+      );
+    }
+    if (this._otherEntity || (data.entity_id && !listed.includes(data.entity_id))) {
+      return this._selector(
+        { entity: {} },
+        data.entity_id ?? undefined,
+        "Entity",
+        (value) => this._dataChanged({ entity_id: (value as string) || null, attribute: null }),
+      );
+    }
+    const options = [
+      { value: "card", label: "The card's entity" },
+      ...listed.map((entityId) => ({ value: entityId, label: entityDisplay(hass, entityId).primary })),
+      { value: "other", label: "Other entity…" },
+    ];
+    return this._selector(
+      { select: { mode: "dropdown", options } },
+      data.entity_id ?? "card",
+      "Entity",
+      (value) => {
+        if (value === "other") {
+          this._dataChanged({ entity_id: null, attribute: null });
+          this._otherEntity = true;
+          return;
+        }
+        this._dataChanged({ entity_id: value === "card" ? null : (value as string), attribute: null });
+      },
+    );
+  }
+
+  private _renderAttribute(data: StepData) {
+    const hass = this.hass!;
+    const entityId = data.entity_id ?? this.entities[0];
+    const stateObj = entityId ? hass.states[entityId] : undefined;
+    const names = stateObj
+      ? Object.keys(stateObj.attributes).filter((name) => !HIDDEN_ATTRIBUTES.includes(name))
+      : [];
+    if (data.attribute && !names.includes(data.attribute)) names.push(data.attribute);
+    const options = [
+      { value: "state", label: "State" },
+      ...names.map((name) => ({
+        value: name,
+        label: stateObj && hass.formatEntityAttributeName
+          ? hass.formatEntityAttributeName(stateObj, name)
+          : name,
+      })),
+    ];
+    return this._selector(
+      { select: { mode: "dropdown", options } },
+      data.attribute ?? "state",
+      "Attribute",
+      (value) => this._dataChanged({ attribute: value === "state" ? null : (value as string) }),
+    );
   }
 
   private _dataChanged(changes: Partial<StepData>): void {
     const data: StepData = { ...(this.step!.data ?? { type: "none" }), ...changes };
+    if (data.type === "attribute") data.type = "state";
     const clean: StepData = { type: data.type };
     if (TIME_TYPES.includes(data.type) && data.format) clean.format = data.format;
-    if (["state", "attribute", "last_changed"].includes(data.type) && data.entity_id) {
+    if (["state", "last_changed"].includes(data.type) && data.entity_id) {
       clean.entity_id = data.entity_id;
     }
-    if (data.type === "attribute" && data.attribute) clean.attribute = data.attribute;
+    if (data.type === "state" && data.attribute) {
+      clean.type = "attribute";
+      clean.attribute = data.attribute;
+    }
     if (data.type === "custom" && data.text) clean.text = data.text;
+    this._otherEntity = false;
     this._change({ data: data.type === "none" ? null : clean });
   }
 
@@ -308,9 +348,9 @@ export class NcStepEditor extends LitElement {
     value: unknown,
     label: string,
     changed: (value: unknown) => void,
-    helper?: string,
+    className?: string,
   ) {
-    return field(this.hass, selector, value, label, changed, { helper });
+    return field(this.hass, selector, value, label, changed, { className });
   }
 
   // -- Start -----------------------------------------------------------------
@@ -319,7 +359,7 @@ export class NcStepEditor extends LitElement {
     const kind = this._kind(step);
     return html`<div class="block">
       <ha-button-toggle-group
-        full-width
+        size="s"
         .buttons=${[
           { label: "Triggers", value: "triggers" },
           { label: "Schedule", value: "schedule" },
@@ -475,7 +515,25 @@ export class NcStepEditor extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      padding: 8px 0 8px;
+    }
+    ha-button-toggle-group {
+      align-self: flex-start;
+    }
+    .row > .data-type {
+      flex: 0 1 220px;
+    }
+    .param {
+      font-family: var(--ha-font-family-code, monospace);
+      font-size: var(--ha-font-size-s, 12px);
+      color: var(--primary-color);
+      background-color: rgb(from var(--primary-color) r g b / 0.1);
+      border: none;
+      border-radius: 4px;
+      padding: 3px 6px;
+      cursor: pointer;
+    }
+    .param:hover {
+      background-color: rgb(from var(--primary-color) r g b / 0.2);
     }
     .row {
       display: flex;
@@ -494,7 +552,6 @@ export class NcStepEditor extends LitElement {
     }
     .chips-label {
       color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s, 12px);
       margin-inline-end: 4px;
     }
     .title {
@@ -533,6 +590,7 @@ export class NcStepEditor extends LitElement {
       color: var(--secondary-text-color);
       font-size: var(--ha-font-size-s, 12px);
     }
+    ${BLOCK_STYLES}
   `;
 }
 

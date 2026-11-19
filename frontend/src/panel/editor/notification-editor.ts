@@ -20,15 +20,16 @@ import type { NotificationViewData } from "../../shared/notification-view";
 import { isTemplate } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import { confirmDialog } from "../confirm";
-import { type FieldOptions, field } from "../fields";
+import { type FieldOptions, field, iconSelect } from "../fields";
 import { STATUS_STYLES, renderStatus, statusOf } from "../status";
 import { domainName, groupName, newGroup } from "./group-dialog";
-import "./block";
+import { BLOCK_STYLES, block } from "./block";
 import "./group-dialog";
 import {
   type EditorNotification,
   type EditorStep,
   type EntityGroup,
+  entityDisplay,
   groupMatches,
   listedEntities,
   newNotification,
@@ -76,11 +77,9 @@ export class NcNotificationEditor extends LitElement {
 
   @state() private _preview: PreviewText[] = [];
 
-  @state() private _addingEntity = false;
-
   @state() private _group?: { index: number; group: EntityGroup };
 
-  @state() private _openGroups = new Set<number>();
+  @state() private _entity?: { index: number; entityId: string };
 
   // The draft as it was loaded or saved, to tell whether it changed.
   private _original = "";
@@ -340,6 +339,7 @@ export class NcNotificationEditor extends LitElement {
             @group-closed=${this._groupClosed}
           ></nc-group-dialog>`
         : nothing}
+      ${this._entity ? this._renderEntityDialog() : nothing}
     `;
   }
 
@@ -430,26 +430,32 @@ export class NcNotificationEditor extends LitElement {
 
   private _renderEditor(draft: EditorNotification) {
     const view = this._previewView();
+    const count = this.hass ? listedEntities(this.hass, draft).length : 0;
     return html`
       ${view
         ? html`<notification-center-view class="preview" .hass=${this.hass} .view=${view}></notification-center-view>`
         : nothing}
-      ${this._panel("settings", "Settings", this._settingsSummary(draft), () => this._renderSettings(draft))}
-      ${this._panel("entities", "Entities", this._entitiesSummary(draft), () => this._renderEntities(draft))}
+      ${this._panel("settings", "mdi:cog-outline", "Settings", undefined, () => this._renderSettings(draft))}
+      ${this._panel("entities", "mdi:format-list-bulleted", "Entities", count, () => this._renderEntities(draft))}
       ${this._renderSteps(draft)}
     `;
   }
 
-  private _panel(key: string, header: string, secondary: string, content: () => unknown) {
-    const expanded = this._expanded.has(key);
-    return html`<nc-block
-      .header=${header}
-      .secondary=${secondary}
-      .expanded=${expanded}
-      @toggled=${(ev: CustomEvent<{ expanded: boolean }>) => this._toggle(key, ev.detail.expanded)}
-    >
-      ${expanded ? content() : nothing}
-    </nc-block>`;
+  private _panel(
+    key: string,
+    icon: string,
+    header: string,
+    count: number | undefined,
+    content: () => unknown,
+  ) {
+    return block({
+      icon,
+      header,
+      count,
+      expanded: this._expanded.has(key),
+      toggled: (expanded) => this._toggle(key, expanded),
+      content: content(),
+    });
   }
 
   private _toggle(key: string, expanded: boolean): void {
@@ -461,11 +467,6 @@ export class NcNotificationEditor extends LitElement {
 
   // -- Settings block ------------------------------------------------------
 
-  private _settingsSummary(draft: EditorNotification): string {
-    const category = this.config?.categories.find((item) => item.id === draft.category);
-    return category?.name ?? draft.category;
-  }
-
   private _renderSettings(draft: EditorNotification) {
     const category = categoryOf(this.config!, draft as unknown as Notification);
     return html`<div class="block">
@@ -475,64 +476,36 @@ export class NcNotificationEditor extends LitElement {
           draft.name,
           "Name",
           (value) => this._change({ name: (value as string) ?? "" }),
-          { required: true },
+        )}
+        ${iconSelect(
+          draft.category,
+          "Category",
+          this.config!.categories.map((item) => ({
+            value: item.id,
+            label: item.name,
+            icon: item.icon || "mdi:shape-outline",
+          })),
+          (value) => this._change({ category: value || "general" }),
+        )}
+      </div>
+      <div class="row">
+        ${this._selector(
+          { icon: { placeholder: category?.icon ?? "mdi:bell" } },
+          draft.icon ?? "",
+          "Icon",
+          (value) => this._change({ icon: (value as string) || null }),
         )}
         ${this._selector(
           {
-            select: {
-              mode: "dropdown",
-              options: this.config!.categories.map((item) => ({ value: item.id, label: item.name })),
+            ui_color: {
+              include_none: false,
+              default_color: category?.card_color ?? "primary",
             },
           },
-          draft.category,
-          "Category",
-          (value) => this._change({ category: (value as string) || "general" }),
-          { required: true },
-        )}
-      </div>
-      ${this._selector(
-        { icon: { placeholder: category?.icon ?? "mdi:bell" } },
-        draft.icon ?? "",
-        "Icon",
-        (value) => this._change({ icon: (value as string) || null }),
-        { helper: `Empty: the category's icon.` },
-      )}
-      <div class="row">
-        ${this._selector(
-          { ui_color: { include_none: false } },
           draft.card_color ?? undefined,
           "Card color",
           (value) => this._change({ card_color: (value as string) || null }),
-          { helper: `Empty: the category's (${category?.card_color ?? "primary"}).` },
         )}
-        <div class="color">
-          ${draft.light_color
-            ? html`${this._selector(
-                  { color_rgb: {} },
-                  draft.light_color,
-                  "Light color",
-                  (value) => this._change({ light_color: (value as number[]) ?? null }),
-                )}
-                <ha-icon-button
-                  .label=${"Use the category's light color"}
-                  @click=${() => this._change({ light_color: null })}
-                >
-                  <ha-icon icon="mdi:close"></ha-icon>
-                </ha-icon-button>`
-            : html`<div class="unset">
-                <div>
-                  <div>Light color</div>
-                  <div class="secondary">The category's.</div>
-                </div>
-                <ha-button
-                  appearance="plain"
-                  size="s"
-                  @click=${() => this._change({ light_color: [255, 160, 0] })}
-                >
-                  Set
-                </ha-button>
-              </div>`}
-        </div>
       </div>
     </div>`;
   }
@@ -549,25 +522,18 @@ export class NcNotificationEditor extends LitElement {
 
   // -- Entities block ------------------------------------------------------
 
-  private _entitiesSummary(draft: EditorNotification): string {
-    const count = this.hass ? listedEntities(this.hass, draft).length : 0;
-    if (!draft.entities.length && !draft.entity_groups.length) return "None";
-    return `${count} ${count === 1 ? "entity" : "entities"}`;
-  }
-
-  private _entityName(entityId: string): string {
-    const state = this.hass?.states[entityId];
-    return (state?.attributes.friendly_name as string | undefined) ?? entityId;
+  private _renderEntityText(entityId: string) {
+    const { primary, secondary } = entityDisplay(this.hass!, entityId);
+    return html`<div class="item-text">
+      <div>${primary}</div>
+      ${secondary ? html`<div class="secondary">${secondary}</div>` : nothing}
+    </div>`;
   }
 
   private _renderEntities(draft: EditorNotification) {
     const hass = this.hass!;
     return html`<div class="block">
-      <p class="hint">
-        The entities a Listed entities trigger watches. Each gets its own card, and the
-        message can name it with the entity parameters.
-      </p>
-      ${draft.entities.length || draft.entity_groups.length
+      ${draft.entities.length
         ? html`<ha-card outlined class="list">
             ${draft.entities.map(
               (item, index) => html`<div class="item">
@@ -580,52 +546,39 @@ export class NcNotificationEditor extends LitElement {
                   }}
                 ></ha-switch>
                 <ha-state-icon .hass=${hass} .stateObj=${hass.states[item.entity_id]}></ha-state-icon>
-                <div class="item-text">
-                  <div>${this._entityName(item.entity_id)}</div>
-                  <div class="secondary">${item.entity_id}</div>
-                </div>
-                <ha-icon-button
-                  .label=${"Remove"}
-                  @click=${() =>
-                    this._change({ entities: draft.entities.filter((_item, i) => i !== index) })}
-                >
-                  <ha-icon icon="mdi:close"></ha-icon>
+                ${this._renderEntityText(item.entity_id)}
+                <ha-icon-button .label=${"Edit"} @click=${() => (this._entity = { index, entityId: item.entity_id })}>
+                  <ha-icon icon="mdi:pencil"></ha-icon>
                 </ha-icon-button>
               </div>`,
             )}
-            ${draft.entity_groups.map((group, index) => this._renderGroup(draft, group, index))}
           </ha-card>`
         : nothing}
-      ${this._addingEntity
-        ? html`<ha-selector
-            .hass=${hass}
-            .selector=${{
-              entity: { exclude_entities: draft.entities.map((item) => item.entity_id) },
-            }}
-            .label=${"Entity"}
-            @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-              ev.stopPropagation();
-              const entityId = ev.detail.value;
-              this._addingEntity = false;
-              if (entityId) {
-                this._change({
-                  entities: [...draft.entities, { entity_id: entityId, enabled: true, actions: {} }],
-                });
-              }
-            }}
-          ></ha-selector>`
-        : nothing}
+      ${draft.entity_groups.map((group, index) => this._renderGroup(draft, group, index))}
       <div class="buttons">
-        <ha-button appearance="filled" size="s" @click=${() => (this._addingEntity = true)}>
-          <ha-icon slot="start" icon="mdi:plus"></ha-icon>
-          Add entity
-        </ha-button>
+        <ha-entity-picker
+          .hass=${hass}
+          .value=${""}
+          .excludeEntities=${draft.entities.map((item) => item.entity_id)}
+          add-button
+          add-button-label="Add entity"
+          @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+            ev.stopPropagation();
+            const entityId = ev.detail.value;
+            if (entityId) {
+              this._change({
+                entities: [...draft.entities, { entity_id: entityId, enabled: true, actions: {} }],
+              });
+            }
+            (ev.target as HTMLElement & { value?: string }).value = "";
+          }}
+        ></ha-entity-picker>
         <ha-button
           appearance="filled"
           size="s"
           @click=${() => (this._group = { index: -1, group: newGroup() })}
         >
-          <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+          <ha-icon slot="start" icon="mdi:shape-plus-outline"></ha-icon>
           Add entity category
         </ha-button>
       </div>
@@ -636,65 +589,101 @@ export class NcNotificationEditor extends LitElement {
     const hass = this.hass!;
     const members = groupMatches(hass, group);
     const active = members.filter((id) => !group.excluded.includes(id)).length;
-    const open = this._openGroups.has(index);
     const setGroup = (changes: Partial<EntityGroup>) => {
       const groups = [...draft.entity_groups];
       groups[index] = { ...group, ...changes };
       this._change({ entity_groups: groups });
     };
-    return html`<div class="item group">
+    return html`<ha-card outlined class="list">
+      <div class="item group">
         <ha-switch
           .checked=${group.enabled}
           @change=${(ev: Event) => setGroup({ enabled: (ev.target as HTMLInputElement).checked })}
         ></ha-switch>
         <ha-icon icon="mdi:shape-outline"></ha-icon>
-        <div class="item-text clickable" @click=${() => this._toggleGroup(index)}>
+        <div class="item-text">
           <div>${groupName(hass, group)}</div>
-          <div class="secondary">
-            ${active} ${active === 1 ? "entity" : "entities"}${group.add_new ? "" : " · fixed list"}
-          </div>
+          ${group.add_new ? nothing : html`<div class="secondary">Fixed list</div>`}
         </div>
-        <ha-icon-button .label=${open ? "Hide the entities" : "Show the entities"} @click=${() => this._toggleGroup(index)}>
-          <ha-icon .icon=${open ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
-        </ha-icon-button>
+        <span class="count">${active}</span>
         <ha-icon-button .label=${"Edit"} @click=${() => (this._group = { index, group })}>
           <ha-icon icon="mdi:pencil"></ha-icon>
         </ha-icon-button>
       </div>
-      ${open
-        ? html`<div class="members">
-            ${members.length
-              ? members.map(
-                  (entityId) => html`<div class="member">
-                    <ha-switch
-                      .checked=${!group.excluded.includes(entityId)}
-                      @change=${(ev: Event) => {
-                        const on = (ev.target as HTMLInputElement).checked;
-                        setGroup({
-                          excluded: on
-                            ? group.excluded.filter((id) => id !== entityId)
-                            : [...group.excluded, entityId],
-                        });
-                      }}
-                    ></ha-switch>
-                    <div class="item-text">
-                      <div>${this._entityName(entityId)}</div>
-                      <div class="secondary">${entityId}</div>
-                    </div>
-                  </div>`,
-                )
-              : html`<div class="secondary empty-group">
-                  No ${domainName(group.domain).toLowerCase()} entities match yet.
-                </div>`}
-          </div>`
-        : nothing}`;
+      ${members.length
+        ? members.map(
+            (entityId) => html`<div class="item member">
+              <ha-switch
+                .checked=${!group.excluded.includes(entityId)}
+                @change=${(ev: Event) => {
+                  const on = (ev.target as HTMLInputElement).checked;
+                  setGroup({
+                    excluded: on
+                      ? group.excluded.filter((id) => id !== entityId)
+                      : [...group.excluded, entityId],
+                  });
+                }}
+              ></ha-switch>
+              ${this._renderEntityText(entityId)}
+            </div>`,
+          )
+        : html`<div class="item member secondary">
+            No ${domainName(group.domain).toLowerCase()} entities match yet.
+          </div>`}
+    </ha-card>`;
   }
 
-  private _toggleGroup(index: number): void {
-    const next = new Set(this._openGroups);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
-    this._openGroups = next;
+  private _renderEntityDialog() {
+    const edit = this._entity!;
+    const draft = this._draft!;
+    const close = () => (this._entity = undefined);
+    return html`<ha-dialog
+      open
+      width="small"
+      header-title="Entity"
+      @closed=${(ev: Event) => {
+        ev.stopPropagation();
+        close();
+      }}
+    >
+      <ha-icon-button
+        slot="headerActionItems"
+        .label=${"Delete"}
+        @click=${() => {
+          this._change({ entities: draft.entities.filter((_item, i) => i !== edit.index) });
+          close();
+        }}
+      >
+        <ha-icon icon="mdi:delete"></ha-icon>
+      </ha-icon-button>
+      <ha-entity-picker
+        .hass=${this.hass}
+        .value=${edit.entityId}
+        .label=${"Entity"}
+        .excludeEntities=${draft.entities
+          .filter((_item, i) => i !== edit.index)
+          .map((item) => item.entity_id)}
+        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+          ev.stopPropagation();
+          this._entity = { ...edit, entityId: ev.detail.value ?? "" };
+        }}
+      ></ha-entity-picker>
+      <ha-dialog-footer slot="footer">
+        <ha-button slot="secondaryAction" appearance="plain" @click=${close}>Cancel</ha-button>
+        <ha-button
+          slot="primaryAction"
+          .disabled=${!edit.entityId}
+          @click=${() => {
+            const entities = [...draft.entities];
+            entities[edit.index] = { ...entities[edit.index], entity_id: edit.entityId };
+            this._change({ entities });
+            close();
+          }}
+        >
+          Save
+        </ha-button>
+      </ha-dialog-footer>
+    </ha-dialog>`;
   }
 
   private _groupClosed(ev: CustomEvent<{ result?: EntityGroup | "delete" }>): void {
@@ -705,7 +694,6 @@ export class NcNotificationEditor extends LitElement {
     const groups = [...this._draft.entity_groups];
     if (result === "delete") {
       groups.splice(edit.index, 1);
-      this._openGroups = new Set();
     } else if (edit.index < 0) {
       groups.push(result);
     } else {
@@ -755,11 +743,13 @@ export class NcNotificationEditor extends LitElement {
               .active=${i === index}
               class=${item.enabled ? "" : "off"}
             >
+              <span class="step-number">${i + 1}</span>
               ${this._stepLabel(item, i)}
             </ha-tab-group-tab>`,
           )}
         </ha-tab-group>
-        <ha-button appearance="plain" size="s" @click=${this._addStep}>
+        <span class="spacer"></span>
+        <ha-button appearance="outlined" size="s" @click=${this._addStep}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
           Add step
         </ha-button>
@@ -814,6 +804,7 @@ export class NcNotificationEditor extends LitElement {
           .notificationId=${draft.id}
           .saved=${savedStep}
           .expanded=${expanded}
+          .entities=${this.hass ? listedEntities(this.hass, draft) : []}
           @value-changed=${(ev: CustomEvent<{ value: EditorStep }>) => {
             ev.stopPropagation();
             this._changeStep(index, ev.detail.value);
@@ -1089,7 +1080,6 @@ export class NcNotificationEditor extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 16px;
-      padding: 8px 0 12px;
     }
     .row {
       display: flex;
@@ -1100,41 +1090,19 @@ export class NcNotificationEditor extends LitElement {
       flex: 1 1 240px;
       min-width: 0;
     }
-    .color {
-      display: flex;
-      align-items: flex-start;
-      gap: 4px;
-    }
-    .color ha-selector {
-      flex: 1;
-    }
-    .unset {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      min-height: 56px;
-      padding: 0 4px 0 16px;
-      border-bottom: 1px solid var(--secondary-text-color);
-      background-color: var(--input-fill-color, rgba(127, 127, 127, 0.08));
-      border-radius: 4px 4px 0 0;
-      color: var(--secondary-text-color);
-    }
-    .hint {
-      margin: 0;
-      color: var(--secondary-text-color);
+    .list {
+      overflow: hidden;
     }
     .list {
       overflow: hidden;
     }
-    .item,
-    .member {
+    .item {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 8px 8px 8px 16px;
-      min-height: 48px;
+      padding: 4px 4px 4px 16px;
+      min-height: 56px;
+      box-sizing: border-box;
       border-top: 1px solid var(--divider-color);
     }
     .item:first-child {
@@ -1144,18 +1112,23 @@ export class NcNotificationEditor extends LitElement {
     .item > ha-state-icon {
       color: var(--state-icon-color, var(--secondary-text-color));
       flex: none;
+      width: 24px;
     }
-    .members {
-      padding-inline-start: 40px;
+    .item.group {
+      background-color: rgb(from var(--primary-text-color) r g b / 0.03);
+      font-weight: var(--ha-font-weight-medium, 500);
     }
-    .member {
-      border-top: none;
-      min-height: 40px;
-      padding-top: 4px;
-      padding-bottom: 4px;
+    /* Members line up their texts with the group's name. */
+    .item.member {
+      padding-inline-start: calc(16px + 24px + 12px);
+      font-weight: normal;
     }
-    .empty-group {
-      padding: 8px 16px 12px;
+    .item.member.secondary {
+      padding-inline-start: 16px;
+    }
+    .count {
+      color: var(--secondary-text-color);
+      padding: 0 8px;
     }
     .item-text {
       flex: 1;
@@ -1167,8 +1140,8 @@ export class NcNotificationEditor extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .clickable {
-      cursor: pointer;
+    .item-text .secondary {
+      font-weight: normal;
     }
     .secondary {
       color: var(--secondary-text-color);
@@ -1178,6 +1151,36 @@ export class NcNotificationEditor extends LitElement {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: center;
+    }
+    .spacer {
+      flex: 1;
+    }
+    .tabs > ha-button {
+      flex: none;
+      white-space: nowrap;
+    }
+    .icon-select {
+      display: block;
+    }
+    .icon-select ha-picker-field {
+      display: block;
+      width: 100%;
+    }
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 10px;
+      margin-inline-end: 8px;
+      font-size: var(--ha-font-size-s, 12px);
+      color: var(--text-primary-color, #fff);
+      background-color: var(--secondary-text-color);
+    }
+    ha-tab-group-tab[active] .step-number {
+      background-color: var(--primary-color);
     }
     .steps {
       overflow: hidden;
@@ -1213,6 +1216,7 @@ export class NcNotificationEditor extends LitElement {
       bottom: calc(16px + var(--safe-area-inset-bottom, 0px));
     }
     ${unsafeCSS(STATUS_STYLES)}
+    ${BLOCK_STYLES}
   `;
 }
 
