@@ -2049,6 +2049,29 @@ class Engine:
         schedule = step.schedule
         if schedule.is_calendar and schedule.next is not None:
             self._record(notification_id, step_id, HISTORY_SKIPPED, schedule.next)
-        self.set_last_done(notification_id, step_id, dt_util.utcnow())
+        # A done card, as if it had been done on the card: it shows as done
+        # today and the Activity log tells who did it.
+        now = dt_util.utcnow()
+        if (old := self.cards.get((notification_id, step_id, ""))) is not None:
+            self.forget(old, notify=False)
+        card = Card(
+            notification_id=notification_id,
+            step_id=step_id,
+            entity_id=None,
+            phase=PHASE_CLOSED,
+            since=now,
+            state_since=now,
+            source=SOURCE_BUTTON,
+            closed_reason=CLOSED_DISMISSED,
+        )
+        self.cards[card.key] = card
+        self._render(card)
+        self._change(
+            card,
+            source=SOURCE_BUTTON,
+            context=context,
+            closed_reason=CLOSED_DONE,
+            closed_at=now,
+        )
         if schedule.is_calendar:
             schedule.reschedule()

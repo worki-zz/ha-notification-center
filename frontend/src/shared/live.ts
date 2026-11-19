@@ -85,8 +85,8 @@ const DEFAULTS: Record<string, { label: string; icon: string }> = {
   custom: { label: "", icon: "mdi:gesture-tap-button" },
 };
 
-// Always in this order: the own buttons, then Snooze, Done and Dismiss.
-const ORDER = ["custom", "snooze", "done", "dismiss"];
+// Always in this order: Snooze, the own buttons, Done, Dismiss.
+const ORDER = ["snooze", "custom", "done", "dismiss"];
 
 /** The buttons a card shows, in their fixed order. */
 export function liveButtons(live: LiveCard): LiveButton[] {

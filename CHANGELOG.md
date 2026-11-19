@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.5
+
+### Changed
+
+- Button order: Snooze, the own buttons, Done, Dismiss (or Mute).
+- A scheduled step marked Done before its time is a normal done card: it shows in Done today, the notification is done today, and the Activity log names who did it. Its button is called Done.
+- Later and Done today on the Overview, and the "+N more" row of the Notification Center card, are Home Assistant list rows (with the count and an arrow).
+
 ## 0.3.4
 
 ### Added

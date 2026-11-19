@@ -446,6 +446,12 @@ async def test_done_early(
 
     center.engine.done_early(waste, step_id)
     await hass.async_block_till_done()
+    # It counts as done today, like a card done on the day.
+    assert center.state("sensor.nc_mixed_waste") == "done"
+    assert center.kinds()[-1] == "done"
+    done = center.engine.cards_of(waste)[0]
+    assert done.status == "done"
+    assert done.message == "Do it"
     assert _fmt(center.attrs("sensor.nc_mixed_waste")["next_due"]) == (
         "2026-11-25 Wed 19:00"
     )
