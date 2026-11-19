@@ -83,5 +83,8 @@ export const BLOCK_STYLES = css`
   }
   .block-content {
     padding: 16px;
+    /* The panels inside (trigger and condition rows) keep their own spacing. */
+    --expansion-panel-summary-padding: initial;
+    --expansion-panel-content-padding: initial;
   }
 `;

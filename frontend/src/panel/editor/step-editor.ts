@@ -82,6 +82,7 @@ const NOTIFICATION_OPTIONS: { value: DataType; label: string }[] = [
 ];
 
 // Attribute values for the times of the entity, apart from its attributes.
+const STATE = "__state";
 const LAST_CHANGED = "__last_changed";
 const LAST_UPDATED = "__last_updated";
 
@@ -244,10 +245,10 @@ export class NcStepEditor extends LitElement {
         : nothing}
       ${kind === "entity"
         ? html`<ha-entity-picker
+              class="data-entity"
               .hass=${this.hass}
               .value=${data.entity_id ?? ""}
-              .label=${"Entity"}
-              .placeholder=${"The card's entity"}
+              .placeholder=${"Active entity"}
               @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
                 ev.stopPropagation();
                 this._dataChanged({ entity_id: ev.detail.value || null });
@@ -257,7 +258,7 @@ export class NcStepEditor extends LitElement {
         : nothing}
       ${kind === "custom"
         ? this._selector(
-            { template: {} },
+            { text: {} },
             data.text ?? "",
             "Template",
             (value) => this._dataChanged({ text: (value as string) || null }),
@@ -282,7 +283,7 @@ export class NcStepEditor extends LitElement {
     ></ha-selector>`;
   }
 
-  // Empty: the state. The entity is the card's own unless one is chosen.
+  // State by default. The entity is the card's own unless one is chosen.
   private _renderAttribute(data: StepData) {
     const hass = this.hass!;
     const entityId = data.entity_id ?? this.entities[0];
@@ -292,6 +293,7 @@ export class NcStepEditor extends LitElement {
       : [];
     if (data.attribute && !names.includes(data.attribute)) names.push(data.attribute);
     const options = [
+      { value: STATE, label: "State" },
       ...names.map((name) => ({
         value: name,
         label:
@@ -307,20 +309,18 @@ export class NcStepEditor extends LitElement {
         ? LAST_CHANGED
         : data.type === "last_updated"
           ? LAST_UPDATED
-          : (data.attribute ?? "");
+          : (data.attribute ?? STATE);
     return this._selector(
       { select: { mode: "dropdown", options } },
       value,
       "Attribute",
       (picked) => {
-        const name = (picked as string | undefined) ?? "";
+        const name = (picked as string | undefined) ?? STATE;
         if (name === LAST_CHANGED) this._dataChanged({ type: "last_changed", attribute: null });
         else if (name === LAST_UPDATED) this._dataChanged({ type: "last_updated", attribute: null });
-        else if (name) this._dataChanged({ type: "attribute", attribute: name });
+        else if (name !== STATE) this._dataChanged({ type: "attribute", attribute: name });
         else this._dataChanged({ type: "state", attribute: null });
       },
-      "",
-      true,
     );
   }
 
@@ -611,6 +611,10 @@ export class NcStepEditor extends LitElement {
       font-size: var(--ha-font-size-s, 12px);
     }
     ${BLOCK_STYLES}
+    /* The step's blocks stand out on the steps card. */
+    ha-expansion-panel.nc-block {
+      background-color: var(--primary-background-color);
+    }
   `;
 }
 
