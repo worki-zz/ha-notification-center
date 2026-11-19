@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.8
+
+### Changed
+
+- Upcoming and Later cards keep their colour on the icon and the label; only the border and the buttons are grey, and the texts have their normal colour.
+- Notification Center card: "N more" is a Home Assistant button.
+- Done today: the time reads "Done 12:26".
+
 ## 0.3.7
 
 ### Changed

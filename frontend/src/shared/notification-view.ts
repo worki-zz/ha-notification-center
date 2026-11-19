@@ -37,6 +37,9 @@ export interface NotificationViewData {
   // A CSS colour.
   color: string;
   highlight?: Highlight;
+  // Not active yet (upcoming, later): the border and the buttons are grey,
+  // the icon and the label keep the colour.
+  muted?: boolean;
   clickable?: boolean;
   // Only the icon and the buttons: the texts give their room to a choice.
   compact?: boolean;
@@ -62,7 +65,9 @@ export class NotificationCenterView extends LitElement {
     return html`
       <ha-card
         class="highlight-${highlight}"
-        style="--nc-color: ${view.color}; --nc-border-width: ${this._borderWidth()}"
+        style="--nc-color: ${view.color}; --nc-frame-color: ${view.muted
+          ? "var(--secondary-text-color)"
+          : view.color}; --nc-border-width: ${this._borderWidth()}"
       >
         <div
           class="main ${view.clickable ? "clickable" : ""} ${view.compact ? "compact" : ""}"
@@ -190,7 +195,7 @@ export class NotificationCenterView extends LitElement {
       padding-right: 10px;
       border-style: solid;
       border-width: var(--nc-border-width, 1px);
-      border-color: var(--nc-color);
+      border-color: var(--nc-frame-color, var(--nc-color));
       --tile-color: var(--nc-color);
       --ha-ripple-color: var(--nc-color);
       --ha-ripple-hover-opacity: 0.04;
@@ -333,9 +338,9 @@ export class NotificationCenterView extends LitElement {
     ha-control-button {
       width: 36px;
       height: 36px;
-      --control-button-background-color: var(--nc-color);
-      --control-button-icon-color: var(--nc-color);
-      --control-button-focus-color: var(--nc-color);
+      --control-button-background-color: var(--nc-frame-color, var(--nc-color));
+      --control-button-icon-color: var(--nc-frame-color, var(--nc-color));
+      --control-button-focus-color: var(--nc-frame-color, var(--nc-color));
       --control-button-border-radius: var(--ha-border-radius-lg, 12px);
       --ha-ripple-color: var(--nc-color);
     }
