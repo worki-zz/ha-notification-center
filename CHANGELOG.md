@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.9
+
+### Changed
+
+- The panel header looks like a dashboard's: the theme's header colours and border, the same title and button positions, and a shadow while the page is scrolled.
+- Upcoming and Later cards have the border of a Home Assistant card.
+- Later, Done today and the "N more" button of the Notification Center card look like the Export and Import buttons.
+
 ## 0.3.8
 
 ### Added

@@ -71,6 +71,9 @@ export class NotificationCenterPanel extends LitElement {
 
   @state() private _busy = false;
 
+  // The page under the header is scrolled: the header casts a shadow.
+  @state() private _scrolled = false;
+
   private _unsubscribe?: () => void;
 
   private _timer?: number;
@@ -192,7 +195,7 @@ export class NotificationCenterPanel extends LitElement {
     const page = this._page;
     const title = page === "overview" ? (this.panel?.title ?? TITLES.overview) : TITLES[page];
     return html`
-      <div class="toolbar">
+      <div class="toolbar ${this._scrolled ? "scrolled" : ""}">
         ${page === "overview"
           ? html`<ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>`
           : html`<ha-icon-button .label=${"Back"} @click=${() => this._go("overview")}>
@@ -205,7 +208,12 @@ export class NotificationCenterPanel extends LitElement {
             </ha-icon-button>`
           : nothing}
       </div>
-      <div class="scroller"><div class="content">
+      <div
+        class="scroller"
+        @scroll=${(ev: Event) => {
+          this._scrolled = (ev.target as HTMLElement).scrollTop > 0;
+        }}
+      ><div class="content">
         ${this._store.error
           ? html`<ha-alert alert-type="error">${this._store.error}</ha-alert>`
           : nothing}
@@ -310,11 +318,11 @@ export class NotificationCenterPanel extends LitElement {
             )}`
         : nothing}
       <div class="pages">
-        <ha-button appearance="filled" variant="neutral" @click=${() => this._go("later")}>
+        <ha-button @click=${() => this._go("later")}>
           <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
           Later
         </ha-button>
-        <ha-button appearance="filled" variant="neutral" @click=${() => this._go("done")}>
+        <ha-button @click=${() => this._go("done")}>
           <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
           Done today${done ? ` · ${done}` : ""}
         </ha-button>
@@ -585,17 +593,33 @@ export class NotificationCenterPanel extends LitElement {
       background-color: var(--primary-background-color);
       color: var(--primary-text-color);
     }
-    /* Fixed, and without a background of its own, like a dashboard's. */
+    /* Fixed, with a dashboard header's look (the theme's app header). */
     .toolbar {
       flex: none;
+      position: relative;
+      z-index: 4;
       display: flex;
       align-items: center;
       height: var(--header-height, 56px);
-      padding: 0 4px;
+      padding: 0 12px;
       box-sizing: border-box;
       font-size: var(--ha-font-size-xl, 20px);
-      background-color: var(--primary-background-color);
-      color: var(--primary-text-color);
+      font-weight: var(--ha-font-weight-normal, 400);
+      background-color: var(--app-header-background-color);
+      color: var(--app-header-text-color, white);
+      border-bottom: var(--app-header-border-bottom, none);
+      backdrop-filter: var(--app-header-backdrop-filter, none);
+    }
+    .toolbar.scrolled {
+      box-shadow: var(
+        --bar-box-shadow,
+        0px 2px 4px -1px #0003,
+        0px 4px 5px 0px #00000024,
+        0px 1px 10px 0px #0000001f
+      );
+    }
+    :host([narrow]) .toolbar {
+      padding: 0 4px;
     }
     .scroller {
       flex: 1;
@@ -603,11 +627,16 @@ export class NotificationCenterPanel extends LitElement {
       overflow-y: auto;
     }
     .main-title {
-      margin-inline-start: 12px;
+      margin-inline-start: var(--ha-space-6, 24px);
+      line-height: var(--ha-line-height-normal, 1.5);
+      min-width: 0;
       flex: 1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    :host([narrow]) .main-title {
+      margin-inline-start: var(--ha-space-2, 8px);
     }
     /* Twice a dashboard's gap between the cards. */
     .content {
