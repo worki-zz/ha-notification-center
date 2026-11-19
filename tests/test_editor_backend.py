@@ -21,8 +21,7 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 from custom_components.notification_center import schedule as sched
 from custom_components.notification_center.const import DOMAIN
 from custom_components.notification_center.listed import EntityList
-from custom_components.notification_center.model import DATA_SCHEMA
-from custom_components.notification_center.model import validate_item
+from custom_components.notification_center.model import DATA_SCHEMA, validate_item
 
 from .common import load
 

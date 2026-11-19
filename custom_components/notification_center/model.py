@@ -569,7 +569,6 @@ DATA_TYPES: Final = (
 DATA_FORMATS: Final = ("relative", "duration", "time", "date", "datetime")
 
 
-
 def _old_data_type(value: Any) -> Any:
     """Read the data types of 0.4.1 and before: Due is now Active since."""
     return "active_since" if value == "due" else value
