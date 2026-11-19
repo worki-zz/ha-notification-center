@@ -1,0 +1,35 @@
+{
+  "triggers": {
+    "notification_state": {
+      "trigger": "mdi:message-bulleted"
+    },
+    "listed_entities": {
+      "trigger": "mdi:format-list-bulleted"
+    }
+  },
+  "conditions": {
+    "notification_state": {
+      "condition": "mdi:message-bulleted"
+    },
+    "listed_entities": {
+      "condition": "mdi:format-list-bulleted"
+    }
+  },
+  "services": {
+    "trigger": {
+      "service": "mdi:play"
+    },
+    "done": {
+      "service": "mdi:check"
+    },
+    "clear": {
+      "service": "mdi:close"
+    },
+    "snooze": {
+      "service": "mdi:alarm-snooze"
+    },
+    "set_last_done": {
+      "service": "mdi:calendar-check"
+    }
+  }
+}

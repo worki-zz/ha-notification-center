@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.4
+
+### Changed
+
+- Repeat: the number is titled *Every*, and the choice before it is *Type* (*Manual* or *Entity*).
+- Schedule and Repeat: the At time, the entity with the number and the Expires duration and time have no title, and the weekday buttons sit in line with the fields, so a row lines up. Times have no seconds.
+- Expires on: *Same day* or *Next day*.
+- Expires after: hours only, no days field (hours can be more than 24).
+
+### Added
+
+- Icons for the Listed entities and Notification state triggers and conditions, and for the actions.
+
 ## 0.4.3
 
 ### Changed
