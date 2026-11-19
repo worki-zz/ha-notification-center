@@ -1,4 +1,4 @@
-"""Triggers for automations: Notification state and Listed entities.
+"""Triggers for automations: Notification state and Notification entities.
 
 The engine runs these triggers itself inside notifications. This platform
 offers them to Home Assistant automations as well, so they show in the
@@ -26,7 +26,7 @@ import voluptuous as vol
 
 from .engine import StateWatch, async_add_state_watch, async_get_engine
 from .listed import EntityList, ListedTracker
-from .model import LISTED_ENTITIES_FIELDS, NOTIFICATION_STATES
+from .model import ENTITIES_NUMERIC_FIELDS, ENTITIES_STATE_FIELDS, NOTIFICATION_STATES
 
 NOTIFICATION_STATE_OPTIONS: dict[vol.Marker, Any] = {
     vol.Required("notification"): cv.string,
@@ -35,9 +35,14 @@ NOTIFICATION_STATE_OPTIONS: dict[vol.Marker, Any] = {
     vol.Optional("for"): cv.positive_time_period,
 }
 
-LISTED_ENTITIES_OPTIONS: dict[vol.Marker, Any] = {
+ENTITIES_STATE_OPTIONS: dict[vol.Marker, Any] = {
     vol.Required("notification"): cv.string,
-    **LISTED_ENTITIES_FIELDS,
+    **ENTITIES_STATE_FIELDS,
+}
+
+ENTITIES_NUMERIC_OPTIONS: dict[vol.Marker, Any] = {
+    vol.Required("notification"): cv.string,
+    **ENTITIES_NUMERIC_FIELDS,
 }
 
 
@@ -104,10 +109,10 @@ class NotificationStateTrigger(_OptionsTrigger):
         )
 
 
-class ListedEntitiesTrigger(_OptionsTrigger):
-    """Fire when an entity listed in a notification starts to match."""
+class EntitiesStateTrigger(_OptionsTrigger):
+    """Fire when an entity listed in a notification gets a state."""
 
-    OPTIONS = LISTED_ENTITIES_OPTIONS
+    OPTIONS = ENTITIES_STATE_OPTIONS
 
     @override
     async def async_attach_runner(
@@ -165,9 +170,16 @@ class ListedEntitiesTrigger(_OptionsTrigger):
         return remove
 
 
+class EntitiesNumericStateTrigger(EntitiesStateTrigger):
+    """Fire when an entity listed in a notification gets above or below a limit."""
+
+    OPTIONS = ENTITIES_NUMERIC_OPTIONS
+
+
 TRIGGERS: dict[str, type[Trigger]] = {
     "notification_state": NotificationStateTrigger,
-    "listed_entities": ListedEntitiesTrigger,
+    "entities_state": EntitiesStateTrigger,
+    "entities_numeric_state": EntitiesNumericStateTrigger,
 }
 
 

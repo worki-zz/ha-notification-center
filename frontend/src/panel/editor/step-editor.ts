@@ -11,11 +11,17 @@ import type { HomeAssistant } from "../../shared/types";
 import {
   type DataType,
   type EditorStep,
+  ENTITIES_NUMERIC,
+  ENTITIES_STATE,
   type Obj,
+  PINNED,
   type Schedule,
   type StepData,
-  startsWithListed,
+  pinnedEntities,
+  pinnedFilled,
 } from "./model";
+import { type EntitiesKind, entitiesFilled } from "./entities-form";
+import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
 import { BLOCK_STYLES, block } from "./block";
 import "./schedule-editor";
@@ -27,8 +33,8 @@ const HELP: Record<StartKind | "conditions" | "hide" | "done", { title: string; 
     title: "Triggers",
     text: [
       "The step starts when one of its triggers fires, like an automation.",
-      "With the Listed entities trigger every entity of the Entities block gets its own card when it starts to match.",
-      "Notification state starts the step when this or another notification (or one of its steps) reaches a state, for example when step 1 is snoozed.",
+      "Notification entities, at the top, watches the entities of the Entities block: every entity gets its own card when it starts to match, for example when a leak sensor turns on. State tests the state or an attribute; Numeric state tests a number against a limit. Left empty, it is not used.",
+      "The Notification entities triggers in the list do the same with the entities of any notification, and Notification state starts the step when this or another notification (or one of its steps) reaches a state, for example when step 1 is snoozed.",
       "Without triggers, only the Trigger action (or Run now) starts the step.",
     ],
   },
@@ -61,7 +67,7 @@ const HELP: Record<StartKind | "conditions" | "hide" | "done", { title: string; 
     title: "Done when",
     text: [
       "The card closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
-      "Start condition no longer true: with Listed entities, an entity's card closes when that entity stops matching (the leak is dry again).",
+      "Start condition no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Start (the leak is dry again).",
     ],
   },
 };
@@ -159,20 +165,26 @@ export class NcStepEditor extends LitElement {
     const kind = this._kind(step);
     const doneCount =
       step.done_when.triggers.length +
-      (step.done_when.start_no_longer_true && startsWithListed(step) ? 1 : 0);
+      (step.done_when.start_no_longer_true && pinnedFilled(step) ? 1 : 0);
     return html`
       ${this._panel("message", "mdi:message-text-outline", "Message", undefined, this._renderMessage(step))}
       ${this._panel(
         "start",
         "mdi:play-circle-outline",
         "Start",
-        kind === "triggers" ? (step.start.triggers?.length ?? 0) : undefined,
+        kind === "triggers" ? this._startCount(step) : undefined,
         this._renderStart(step),
       )}
       ${this._panel("hide", "mdi:eye-off-outline", "Hide while", step.hide_while.length, this._renderHide(step))}
       ${this._panel("done", "mdi:check-circle-outline", "Done when", doneCount, this._renderDone(step))}
       ${this._help ? this._renderHelp(this._help) : nothing}
     `;
+  }
+
+  private _startCount(step: EditorStep): number {
+    const triggers = step.start.triggers ?? [];
+    const pinned = pinnedEntities(step);
+    return pinned && !entitiesFilled(pinned.kind, pinned.options) ? triggers.length - 1 : triggers.length;
   }
 
   private _kind(step: EditorStep): StartKind {
@@ -390,13 +402,15 @@ export class NcStepEditor extends LitElement {
       ></ha-button-toggle-group>
       ${this._title(HELP[kind].title, kind)}
       ${kind === "triggers"
-        ? html`<ha-automation-trigger
+        ? html`${this._renderPinned(step)}<ha-automation-trigger
             .hass=${this.hass}
             .narrow=${this.narrow}
-            .triggers=${step.start.triggers ?? []}
+            .triggers=${this._listTriggers(step)}
             @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
               ev.stopPropagation();
-              this._change({ start: { ...step.start, triggers: ev.detail.value } });
+              const pinned = pinnedEntities(step);
+              const triggers = pinned ? [pinned.item, ...ev.detail.value] : ev.detail.value;
+              this._change({ start: { ...step.start, triggers } });
             }}
           ></ha-automation-trigger>`
         : html`<nc-schedule-editor
@@ -422,6 +436,70 @@ export class NcStepEditor extends LitElement {
         }}
       ></ha-automation-condition>
     </div>`;
+  }
+
+  // The triggers of the list: all but the one at the top.
+  private _listTriggers(step: EditorStep): Obj[] {
+    const triggers = step.start.triggers ?? [];
+    return pinnedEntities(step) ? triggers.slice(1) : triggers;
+  }
+
+  // Notification entities at the top of Start, when the notification lists
+  // entities: it edits the first trigger, on this notification's entities.
+  private _renderPinned(step: EditorStep) {
+    const pinned = pinnedEntities(step);
+    if (!pinned && !this.entities.length) return nothing;
+    const kind: EntitiesKind = pinned?.kind ?? "state";
+    const options = pinned?.options ?? {};
+    return html`<ha-card outlined class="pinned">
+      <div class="pinned-header">
+        <ha-icon icon="mdi:format-list-bulleted"></ha-icon>
+        <div class="own-text">
+          <div>Notification entities</div>
+          <div class="secondary">
+            ${this.entities.length === 1 ? "1 entity" : `${this.entities.length} entities`} ·
+            ${entitiesFilled(kind, options) ? "each gets its own card" : "not used while empty"}
+          </div>
+        </div>
+        <ha-button-toggle-group
+          size="s"
+          .buttons=${[
+            { label: "State", value: "state" },
+            { label: "Numeric state", value: "numeric" },
+          ]}
+          .active=${kind}
+          @value-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
+            ev.stopPropagation();
+            if (ev.detail.value === kind) return;
+            // Attribute and For stay; the test itself differs.
+            const kept: Obj = {};
+            if (options.attribute !== undefined) kept.attribute = options.attribute;
+            if (options.for !== undefined) kept.for = options.for;
+            this._pinnedChanged(step, ev.detail.value, kept);
+          }}
+        ></ha-button-toggle-group>
+      </div>
+      <nc-entities-form
+        .hass=${this.hass}
+        .kind=${kind}
+        .value=${options}
+        .entities=${this.entities}
+        @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
+          ev.stopPropagation();
+          this._pinnedChanged(step, kind, ev.detail.value);
+        }}
+      ></nc-entities-form>
+    </ha-card>`;
+  }
+
+  private _pinnedChanged(step: EditorStep, kind: EntitiesKind, options: Obj): void {
+    const item: Obj = {
+      trigger: kind === "numeric" ? ENTITIES_NUMERIC : ENTITIES_STATE,
+      options,
+      [PINNED]: true,
+    };
+    const rest = this._listTriggers(step);
+    this._change({ start: { ...step.start, triggers: [item, ...rest] } });
   }
 
   private _kindChanged(kind: StartKind): void {
@@ -468,7 +546,7 @@ export class NcStepEditor extends LitElement {
   }
 
   private _renderDone(step: EditorStep) {
-    const listed = startsWithListed(step);
+    const listed = pinnedFilled(step);
     return html`<div class="block">
       ${this._title("Triggers", "done")}
       ${listed
@@ -477,7 +555,7 @@ export class NcStepEditor extends LitElement {
             <div class="own-text">
               <div>Start condition no longer true</div>
               <div class="secondary">
-                An entity's card closes when that entity stops matching the Listed entities trigger.
+                An entity's card closes when that entity no longer matches Notification entities at the top of Start.
               </div>
             </div>
             <ha-switch
@@ -591,6 +669,22 @@ export class NcStepEditor extends LitElement {
       height: 1px;
       background-color: var(--divider-color);
       margin: 4px -16px 0;
+    }
+    .pinned {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px 16px 16px;
+    }
+    .pinned-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .pinned-header ha-icon {
+      color: var(--secondary-text-color);
+      flex: none;
     }
     .own-row {
       display: flex;

@@ -1,10 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.4.5
 
 ### Changed
 
+- The Listed entities trigger and condition are now two, after Home Assistant's own State and Numeric state: *Notification entities state* (is or is not some states, of the state or an attribute, with For as a duration or a template) and *Notification entities numeric state* (above and below, each a fixed number or the value of an entity, a value template, an attribute and For). Their notification is required, so a step can also watch the entities of another notification. In the editor they show Home Assistant's compact form instead of a check box per field. Saved Listed entities items are turned into one of the two by themselves (with a limit, Numeric state).
+- Start: *Notification entities* sits at the top of Triggers when the notification lists entities, with State or Numeric state to choose. It edits the first trigger, on the notification's own entities; left empty it is not saved. A new notification whose listed entities are all on or off (binary sensors, switches and the like) starts with *Is on*.
+- Done when: *Start condition no longer true* follows Notification entities at the top of Start.
 - Overview: less room above the Done and Schedule buttons (24 px from the last card instead of 40 px).
+
+### Fixed
+
+- An open card kept its old message, Info and Custom data after the step was edited; it now follows the saved step.
 
 ## 0.4.4
 

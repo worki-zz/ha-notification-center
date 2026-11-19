@@ -85,9 +85,10 @@ from .const import (
 from .issues import IssueTracker
 from .listed import EntityList, ListedMatcher, ListedTracker, matching_entities
 from .model import (
-    TRIGGER_LISTED_ENTITIES,
+    ENTITIES_KINDS,
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
+    entities_references,
 )
 from .modes import ModeTracker
 from .render import TextTracker, render_text
@@ -547,9 +548,12 @@ class StepRunner:
         others: list[dict[str, Any]] = []
         for trigger in triggers:
             kind = trigger.get("trigger", trigger.get("platform"))
-            if kind == TRIGGER_LISTED_ENTITIES:
+            if kind in ENTITIES_KINDS:
                 tracker = ListedTracker(
-                    self.hass, self.notification.entities, trigger, *listed
+                    self.hass,
+                    self.notification.entities_of(trigger.get("notification")),
+                    trigger,
+                    *listed,
                 )
                 self._trackers.append(tracker)
                 if start:
@@ -745,9 +749,9 @@ class StepRunner:
 
     @property
     def has_listed_start(self) -> bool:
-        """Return whether a Listed entities trigger starts the step."""
+        """Return whether a Notification entities trigger starts the step."""
         return any(
-            trigger.get("trigger", trigger.get("platform")) == TRIGGER_LISTED_ENTITIES
+            trigger.get("trigger", trigger.get("platform")) in ENTITIES_KINDS
             for trigger in self.step["start"].get("triggers", [])
         )
 
@@ -762,10 +766,20 @@ class NotificationRunner:
         self.id: str = notification["id"]
         self.name: str = notification["name"]
         self.entities = EntityList(engine.hass, notification)
+        # The other notifications whose entities its steps watch.
+        self.references = entities_references(notification)
         self.steps: dict[str, StepRunner] = {}
         for number, step in enumerate(notification["steps"], start=1):
             if step.get("enabled", True):
                 self.steps[step["id"]] = StepRunner(engine, self, step, number)
+
+    def entities_of(self, reference: Any) -> EntityList:
+        """Return the entity list of this or another notification."""
+        if not reference or reference == self.id:
+            return self.entities
+        other_id = self.engine.resolve_notification(str(reference))
+        other = self.engine.notification_config(other_id) if other_id else None
+        return EntityList(self.engine.hass, other or {})
 
     async def async_start(self) -> None:
         """Set up every step."""
@@ -911,8 +925,10 @@ class Engine:
             if self._started:
                 self.modes.async_start()
         new = {item["id"]: item for item in config["notifications"]}
+        changed = {nid for nid in set(old) | set(new) if new.get(nid) != old.get(nid)}
         for nid in list(self.runners):
-            if nid not in new or new[nid] != old.get(nid):
+            # A notification watching another one's entities follows its list.
+            if nid in changed or self.runners[nid].references & changed:
                 self.runners.pop(nid).async_stop()
         for card in list(self.cards.values()):
             notification = new.get(card.notification_id)
@@ -924,6 +940,9 @@ class Engine:
                 or not step.get("enabled", True)
             ):
                 self.forget(card)
+            elif self._started and card.is_open and card.notification_id in changed:
+                # The texts (message, Info, Data) follow the edited step.
+                self._start_text(card)
         if self._started:
             for nid, notification in new.items():
                 if nid not in self.runners:
@@ -1607,16 +1626,16 @@ class Engine:
         notification: NotificationRunner,
         variables: Mapping[str, Any],
     ) -> bool:
-        """Check a Listed entities or Notification state condition."""
+        """Check a Notification entities or Notification state condition."""
         kind = condition["condition"]
-        if kind == TRIGGER_LISTED_ENTITIES:
+        if kind in ENTITIES_KINDS:
+            entities = notification.entities_of(condition.get("notification"))
             entity_id = variables.get("entity")
-            if isinstance(entity_id, str) and notification.entities.contains(entity_id):
-                return ListedMatcher(condition).matches(self.hass.states.get(entity_id))
-            return any(
-                True
-                for _ in matching_entities(self.hass, notification.entities, condition)
-            )
+            if isinstance(entity_id, str) and entities.contains(entity_id):
+                return ListedMatcher(condition, self.hass).matches(
+                    self.hass.states.get(entity_id)
+                )
+            return any(True for _ in matching_entities(self.hass, entities, condition))
         return self.check_notification_state(condition)
 
     def check_notification_state(self, condition: Mapping[str, Any]) -> bool:

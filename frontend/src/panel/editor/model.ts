@@ -3,6 +3,7 @@
 
 import type { Button, Duration, NotificationState } from "../../shared/config";
 import type { HomeAssistant } from "../../shared/types";
+import { type EntitiesKind, entitiesFilled } from "./entities-form";
 
 export type Obj = Record<string, unknown>;
 
@@ -97,7 +98,9 @@ export interface EditorNotification {
 
 export const DOMAIN_PREFIX = "notification_center.";
 export const NOTIFICATION_STATE = "notification_center.notification_state";
-export const LISTED_ENTITIES = "notification_center.listed_entities";
+export const ENTITIES_STATE = "notification_center.entities_state";
+export const ENTITIES_NUMERIC = "notification_center.entities_numeric_state";
+export const ENTITIES_KINDS = [ENTITIES_STATE, ENTITIES_NUMERIC];
 
 /** A new notification: one step that only the trigger action starts. */
 export function newNotification(): EditorNotification {
@@ -161,7 +164,7 @@ function toEditorItem(
   state: SensorMap | undefined,
 ): Obj {
   const kind = String(item[key] ?? "");
-  if (kind !== NOTIFICATION_STATE && kind !== LISTED_ENTITIES) return item;
+  if (kind !== NOTIFICATION_STATE && !ENTITIES_KINDS.includes(kind)) return item;
   if (item.options && typeof item.options === "object") return item;
   const { [key]: _kind, target, ...options } = item;
   void _kind;
@@ -178,7 +181,12 @@ function toEditorItem(
       if (number !== undefined) options.step = number;
     }
   } else {
-    delete options.notification;
+    // Notification entities: the notification is always shown, this one's
+    // sensor too; empty (this one) only until it has a sensor.
+    const ref = options.notification;
+    const sensor = sensorOf(state, ref || selfId);
+    if (sensor) options.notification = sensor;
+    else if (!ref || ref === selfId) delete options.notification;
   }
   const result: Obj = { [key]: kind, options };
   if (target) result.target = target;
@@ -205,9 +213,25 @@ export function toEditor(
     (items ?? []).map((item) => toEditorItem(item, "trigger", draft.id, numbers, state));
   const conditions = (items: Obj[] | undefined) =>
     (items ?? []).map((item) => toEditorItem(item, "condition", draft.id, numbers, state));
+  const selfSensor = sensorOf(state, draft.id);
   for (const step of draft.steps) {
     step.start.conditions = conditions(step.start.conditions);
-    if (step.start.type === "triggers") step.start.triggers = triggers(step.start.triggers);
+    if (step.start.type === "triggers") {
+      step.start.triggers = triggers(step.start.triggers);
+      // The first trigger on this notification's own entities is the one
+      // at the top of Start, which has no notification field.
+      const first = step.start.triggers[0];
+      const options = first?.options as Obj | undefined;
+      if (
+        first &&
+        options &&
+        ENTITIES_KINDS.includes(String(first.trigger)) &&
+        (!options.notification || options.notification === selfSensor)
+      ) {
+        delete options.notification;
+        first[PINNED] = true;
+      }
+    }
     step.hide_while = conditions(step.hide_while);
     step.done_when = {
       triggers: triggers(step.done_when?.triggers),
@@ -230,10 +254,19 @@ export function toSaved(draft: EditorNotification): EditorNotification {
   delete saved.id;
   for (const step of saved.steps) {
     const start = step.start;
+    // The trigger at the top of Start is saved only when it tests something.
+    const pinned = pinnedEntities(step);
+    const triggers = (start.triggers ?? [])
+      .filter((item) => item !== pinned?.item || entitiesFilled(pinned.kind, pinned.options))
+      .map((item) => {
+        const { [PINNED]: _pinned, ...rest } = item;
+        void _pinned;
+        return rest;
+      });
     step.start =
       start.type === "schedule"
         ? { type: "schedule", schedule: start.schedule!, conditions: start.conditions }
-        : { type: "triggers", triggers: start.triggers ?? [], conditions: start.conditions };
+        : { type: "triggers", triggers, conditions: start.conditions };
     if (step.data && step.data.type === "none") step.data = null;
     if (!step.info) delete step.info;
     // A new step's buttons get their ids from Home Assistant.
@@ -311,12 +344,60 @@ export function listedEntities(hass: HomeAssistant, draft: EditorNotification): 
   return result;
 }
 
-/** True when a step starts with a Listed entities trigger. */
-export function startsWithListed(step: EditorStep): boolean {
-  return (
-    step.start.type === "triggers" &&
-    (step.start.triggers ?? []).some((item) => item.trigger === LISTED_ENTITIES)
-  );
+// Marks the trigger at the top of Start while it is edited; not saved.
+export const PINNED = "_nc_pinned";
+
+export interface PinnedEntities {
+  item: Obj;
+  kind: EntitiesKind;
+  options: Obj;
+}
+
+/**
+ * The trigger at the top of Start: the first trigger, when it tests this
+ * notification's own entities (it has no notification field).
+ */
+export function pinnedEntities(step: EditorStep): PinnedEntities | undefined {
+  if (step.start.type !== "triggers") return undefined;
+  const item = step.start.triggers?.[0];
+  if (!item?.[PINNED]) return undefined;
+  const options = (item.options as Obj | undefined) ?? {};
+  return { item, kind: item.trigger === ENTITIES_NUMERIC ? "numeric" : "state", options };
+}
+
+/** True when the trigger at the top of Start tests something. */
+export function pinnedFilled(step: EditorStep): boolean {
+  const pinned = pinnedEntities(step);
+  return !!pinned && entitiesFilled(pinned.kind, pinned.options);
+}
+
+// Domains whose entities are on or off.
+const ON_OFF_DOMAINS = ["binary_sensor", "input_boolean", "switch", "light", "fan"];
+
+/**
+ * A new notification whose listed entities are all on or off: its first
+ * step starts when one of them turns on, unless it has a start already.
+ */
+export function prefillPinned(hass: HomeAssistant, draft: EditorNotification): EditorNotification {
+  const listed = listedEntities(hass, draft);
+  const step = draft.steps[0];
+  if (
+    !listed.length ||
+    !step ||
+    step.start.type !== "triggers" ||
+    (step.start.triggers ?? []).length ||
+    !listed.every((entityId) => ON_OFF_DOMAINS.includes(entityId.split(".")[0]))
+  ) {
+    return draft;
+  }
+  const first: EditorStep = {
+    ...step,
+    start: {
+      ...step.start,
+      triggers: [{ trigger: ENTITIES_STATE, options: { to: ["on"] }, [PINNED]: true }],
+    },
+  };
+  return { ...draft, steps: [first, ...draft.steps.slice(1)] };
 }
 
 /**

@@ -72,7 +72,7 @@ async def test_notification_state_trigger(hass: HomeAssistant, center: Center) -
     assert fired[0].data["notification"] == "sensor.nc_plants"
 
 
-async def test_listed_entities_trigger(hass: HomeAssistant, center: Center) -> None:
+async def test_entities_state_trigger(hass: HomeAssistant, center: Center) -> None:
     """An automation fires when a listed entity starts to match."""
     await center.set("binary_sensor.front", "on", device_class="door")
     await center.set("binary_sensor.back", "off", device_class="door")
@@ -81,7 +81,7 @@ async def test_listed_entities_trigger(hass: HomeAssistant, center: Center) -> N
     await _automation(
         hass,
         {
-            "trigger": "notification_center.listed_entities",
+            "trigger": "notification_center.entities_state",
             "options": {"notification": "sensor.nc_doors", "to": "on"},
         },
     )
@@ -118,7 +118,7 @@ async def test_notification_state_condition(
     assert len(fired) == 1
 
 
-async def test_listed_entities_condition(hass: HomeAssistant, center: Center) -> None:
+async def test_entities_state_condition(hass: HomeAssistant, center: Center) -> None:
     """An automation checks whether any listed entity matches."""
     await center.set("binary_sensor.front", "off", device_class="door")
     await center.add("Doors", step(), entity_groups=[DOOR_GROUP])
@@ -128,7 +128,7 @@ async def test_listed_entities_condition(hass: HomeAssistant, center: Center) ->
         {"trigger": "event", "event_type": "check"},
         conditions=[
             {
-                "condition": "notification_center.listed_entities",
+                "condition": "notification_center.entities_state",
                 "notification": "sensor.nc_doors",
                 "to": "on",
             }
@@ -147,7 +147,11 @@ async def test_editor_descriptions(hass: HomeAssistant, center: Center) -> None:
     """The automation editor finds the triggers with their fields."""
     descriptions = await async_get_all_descriptions(hass)
     assert "notification_center.notification_state" in descriptions
-    listed = descriptions["notification_center.listed_entities"]
+    listed = descriptions["notification_center.entities_state"]
     assert listed is not None
-    fields = listed["fields"]
-    assert {"notification", "to", "above", "for"} <= set(fields)
+    assert {"notification", "to", "not_to", "for"} <= set(listed["fields"])
+    numeric = descriptions["notification_center.entities_numeric_state"]
+    assert numeric is not None
+    assert {"notification", "above", "below", "value_template"} <= set(
+        numeric["fields"]
+    )

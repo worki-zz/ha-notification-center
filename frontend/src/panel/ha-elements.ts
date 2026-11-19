@@ -5,6 +5,9 @@
 // them on demand. They are loaded here the way Home Assistant's own panel
 // resolver does, so the editor uses the very same elements.
 
+import "./editor/entities-form";
+import type { EntitiesKind, NcEntitiesForm } from "./editor/entities-form";
+
 interface Routes {
   routerOptions: { routes: Record<string, { load: () => Promise<unknown> }> };
 }
@@ -36,7 +39,64 @@ async function load(): Promise<boolean> {
   );
   await loadSelectors();
   patchTriggerEditor();
+  patchPlatform("ha-automation-trigger-platform", "trigger");
+  patchPlatform("ha-automation-condition-platform", "condition");
   return true;
+}
+
+// The Notification entities triggers and conditions: inside the editor
+// they show the compact form of Home Assistant's own State and Numeric
+// state triggers instead of the generic form (with a check box for each
+// optional field) that Home Assistant builds from their description.
+const ENTITIES_KINDS: Record<string, EntitiesKind> = {
+  "notification_center.entities_state": "state",
+  "notification_center.entities_numeric_state": "numeric",
+};
+
+interface PlatformElement extends HTMLElement {
+  hass: unknown;
+  disabled: boolean;
+  _ncForm?: NcEntitiesForm;
+  [key: string]: unknown;
+}
+
+function patchPlatform(name: string, key: "trigger" | "condition"): void {
+  void customElements.whenDefined(name).then(() => {
+    const element = customElements.get(name) as unknown as { prototype: { render(): unknown } };
+    const proto = element.prototype as { render(): unknown; _ncPatched?: boolean };
+    if (proto._ncPatched) return;
+    proto._ncPatched = true;
+    const original = proto.render;
+    proto.render = function (this: PlatformElement) {
+      const item = this[key] as Record<string, unknown> | undefined;
+      const kind = item ? ENTITIES_KINDS[String(item[key])] : undefined;
+      if (!item || !kind) return original.call(this);
+      let form = this._ncForm;
+      if (!form) {
+        form = document.createElement("nc-entities-form");
+        form.setAttribute("with-notification", "");
+        form.addEventListener("value-changed", (ev) => {
+          ev.stopPropagation();
+          const current = this[key] as Record<string, unknown>;
+          const { target: _target, ...rest } = current;
+          void _target;
+          this.dispatchEvent(
+            new CustomEvent("value-changed", {
+              detail: { value: { ...rest, options: (ev as CustomEvent<{ value: unknown }>).detail.value } },
+              bubbles: true,
+              composed: true,
+            }),
+          );
+        });
+        this._ncForm = form;
+      }
+      form.hass = this.hass as NcEntitiesForm["hass"];
+      form.kind = kind;
+      form.disabled = this.disabled;
+      form.value = { ...((item.options as Record<string, unknown> | undefined) ?? {}) };
+      return form;
+    };
+  });
 }
 
 // Home Assistant's trigger editor misses the padding its condition and
@@ -69,6 +129,8 @@ const SELECTORS: Record<string, Record<string, unknown>> = {
   date: { date: {} },
   duration: { duration: {} },
   attribute: { attribute: {} },
+  state: { state: {} },
+  choose: { choose: { choices: { a: { selector: { text: {} } } } } },
   template: { template: {} },
 };
 

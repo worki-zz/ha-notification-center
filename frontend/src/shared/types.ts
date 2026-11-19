@@ -84,6 +84,7 @@ export interface HomeAssistant {
   formatEntityState?(stateObj: HassEntity, state?: string): string;
   formatEntityAttributeValue?(stateObj: HassEntity, attribute: string): string;
   formatEntityAttributeName?(stateObj: HassEntity, attribute: string): string;
+  localize?(key: string, ...args: unknown[]): string;
 }
 
 export interface PanelInfo {

@@ -29,33 +29,42 @@ notification_state:
       selector:
         duration:
 
-listed_entities:
+entities_state:
   fields:
-    notification: *notification
-    to: &to
-      required: false
+    notification: &entities_notification
+      required: true
       selector:
-        text:
-          multiple: true
-    not_to: &not_to
-      required: false
-      selector:
-        text:
-          multiple: true
-    above: &above
-      required: false
-      selector:
-        number:
-          mode: box
-          step: any
-    below: &below
-      required: false
-      selector:
-        number:
-          mode: box
-          step: any
+        entity:
+          filter:
+            integration: notification_center
+            domain: sensor
     attribute: &attribute
       required: false
       selector:
         text:
+    to:
+      required: false
+      selector:
+        text:
+          multiple: true
+    not_to:
+      required: false
+      selector:
+        text:
+          multiple: true
+    for: *for
+
+entities_numeric_state:
+  fields:
+    notification: *entities_notification
+    attribute: *attribute
+    above: &above
+      required: false
+      selector:
+        text:
+    below: *above
+    value_template:
+      required: false
+      selector:
+        template:
     for: *for

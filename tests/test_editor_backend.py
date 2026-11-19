@@ -98,8 +98,13 @@ async def test_own_triggers_in_editor_form(
         },
     )
     steps = item["steps"]
+    # An earlier Listed entities trigger becomes Notification entities state.
     assert steps[0]["start"]["triggers"] == [
-        {"trigger": f"{DOMAIN}.listed_entities", "to": ["on"]}
+        {
+            "trigger": f"{DOMAIN}.entities_state",
+            "notification": item["id"],
+            "to": ["on"],
+        }
     ]
     own, washer = steps[1]["start"]["triggers"]
     assert own == {
@@ -248,6 +253,20 @@ async def test_text_preview_and_custom_data(
     card = center.engine.cards_of(center.manager.config["notifications"][0]["id"])[0]
     assert card.data_text == "6 min"
     assert card.as_dict()["data_text"] == "6 min"
+
+    # An open card follows the edited step.
+    item = center.manager.config["notifications"][0]
+    step = {
+        **item["steps"][0],
+        "message": "Closed",
+        "data": {"type": "custom", "text": "{{ 2 * 4 }} min"},
+    }
+    await center.manager.async_update(
+        "notifications", item["id"], {**item, "steps": [step]}
+    )
+    await hass.async_block_till_done()
+    card = center.engine.cards_of(item["id"])[0]
+    assert (card.message, card.data_text) == ("Closed", "8 min")
 
 
 def test_due_data_reads_as_active_since() -> None:
