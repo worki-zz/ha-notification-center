@@ -135,6 +135,8 @@ export class NcStepEditor extends LitElement {
 
   @state() private _help?: keyof typeof HELP;
 
+  @state() private _pinnedOpen = false;
+
 
   // The text field the entity parameters go into.
   private _field: "message" | "info" = "message";
@@ -197,10 +199,7 @@ export class NcStepEditor extends LitElement {
   private _renderMessage(step: EditorStep) {
     const data = step.data ?? { type: "none" };
     return html`<div class="block">
-      <div class="row">
-        ${this._text("message", "Message", step.message, (value) => this._change({ message: value }))}
-        ${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
-      </div>
+      ${this._text("message", "Message", step.message, (value) => this._change({ message: value }))}
       <div class="chips">
         <span class="chips-label">Entity parameters</span>
         ${PLACEHOLDERS.filter(
@@ -216,6 +215,7 @@ export class NcStepEditor extends LitElement {
           </button>`,
         )}
       </div>
+      ${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
       <div class="row data">${this._renderData(data)}</div>
     </div>`;
   }
@@ -446,50 +446,41 @@ export class NcStepEditor extends LitElement {
 
   // Notification entities at the top of Start, when the notification lists
   // entities: it edits the first trigger, on this notification's entities.
+  // It opens and closes like a trigger row, closed at first.
   private _renderPinned(step: EditorStep) {
     const pinned = pinnedEntities(step);
     if (!pinned && !this.entities.length) return nothing;
     const kind: EntitiesKind = pinned?.kind ?? "state";
     const options = pinned?.options ?? {};
-    return html`<ha-card outlined class="pinned">
-      <div class="pinned-header">
-        <ha-icon icon="mdi:format-list-bulleted"></ha-icon>
-        <div class="own-text">
-          <div>Notification entities</div>
-          <div class="secondary">
-            ${this.entities.length === 1 ? "1 entity" : `${this.entities.length} entities`} ·
-            ${entitiesFilled(kind, options) ? "each gets its own card" : "not used while empty"}
-          </div>
-        </div>
-        <ha-button-toggle-group
-          size="s"
-          .buttons=${[
-            { label: "State", value: "state" },
-            { label: "Numeric state", value: "numeric" },
-          ]}
-          .active=${kind}
-          @value-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
-            ev.stopPropagation();
-            if (ev.detail.value === kind) return;
-            // Attribute and For stay; the test itself differs.
-            const kept: Obj = {};
-            if (options.attribute !== undefined) kept.attribute = options.attribute;
-            if (options.for !== undefined) kept.for = options.for;
-            this._pinnedChanged(step, ev.detail.value, kept);
-          }}
-        ></ha-button-toggle-group>
-      </div>
+    return html`<ha-expansion-panel
+      outlined
+      class="pinned"
+      .expanded=${this._pinnedOpen}
+      @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
+        ev.stopPropagation();
+        if (ev.target === ev.currentTarget) this._pinnedOpen = ev.detail.expanded;
+      }}
+      @expanded-will-change=${(ev: Event) => ev.stopPropagation()}
+    >
+      <ha-icon slot="leading-icon" class="builtin" icon="mdi:format-list-checks"></ha-icon>
+      <div slot="header" class="pinned-title">Notification entities</div>
       <nc-entities-form
+        kind-switch
         .hass=${this.hass}
         .kind=${kind}
         .value=${options}
         .entities=${this.entities}
+        @kind-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
+          ev.stopPropagation();
+          // Every field stays, so switching back brings them again.
+          this._pinnedChanged(step, ev.detail.value, options);
+        }}
         @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
           ev.stopPropagation();
           this._pinnedChanged(step, kind, ev.detail.value);
         }}
       ></nc-entities-form>
-    </ha-card>`;
+    </ha-expansion-panel>`;
   }
 
   private _pinnedChanged(step: EditorStep, kind: EntitiesKind, options: Obj): void {
@@ -551,7 +542,7 @@ export class NcStepEditor extends LitElement {
       ${this._title("Triggers", "done")}
       ${listed
         ? html`<ha-card outlined class="own-row">
-            <ha-icon icon="mdi:format-list-checks"></ha-icon>
+            <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
             <div class="own-text">
               <div>Start condition no longer true</div>
               <div class="secondary">
@@ -620,6 +611,13 @@ export class NcStepEditor extends LitElement {
     .row > .data-type {
       flex: 0 1 220px;
     }
+    /* On a phone each Data field takes the whole width. */
+    @media (max-width: 600px) {
+      .row.data > *,
+      .row.data > .data-type {
+        flex: 1 1 100%;
+      }
+    }
     .param {
       font-family: var(--ha-font-family-code, monospace);
       font-size: var(--ha-font-size-s, 12px);
@@ -670,21 +668,22 @@ export class NcStepEditor extends LitElement {
       background-color: var(--divider-color);
       margin: 4px -16px 0;
     }
-    .pinned {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding: 12px 16px 16px;
+    /* Like a trigger row of Home Assistant's list. */
+    ha-expansion-panel.pinned {
+      display: block;
+      background-color: var(--card-background-color);
+      --expansion-panel-summary-padding: 0 8px 0 16px;
+      --expansion-panel-content-padding: 0 16px 16px;
     }
-    .pinned-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
+    ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {
+      margin-inline-end: 12px;
     }
-    .pinned-header ha-icon {
-      color: var(--secondary-text-color);
-      flex: none;
+    .pinned-title {
+      flex: 1;
+    }
+    /* The built-in rows, which are not Home Assistant's triggers. */
+    ha-icon.builtin {
+      color: var(--amber-color, #ffc107);
     }
     .own-row {
       display: flex;
@@ -693,7 +692,6 @@ export class NcStepEditor extends LitElement {
       padding: 12px 16px;
     }
     .own-row ha-icon {
-      color: var(--secondary-text-color);
       flex: none;
     }
     .own-text {
@@ -705,10 +703,6 @@ export class NcStepEditor extends LitElement {
       font-size: var(--ha-font-size-s, 12px);
     }
     ${BLOCK_STYLES}
-    /* The step's blocks stand out on the steps card. */
-    ha-expansion-panel.nc-block {
-      background-color: var(--primary-background-color);
-    }
   `;
 }
 

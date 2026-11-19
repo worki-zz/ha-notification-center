@@ -460,7 +460,7 @@ export class NcNotificationEditor extends LitElement {
         ? html`<notification-center-view class="preview" .hass=${this.hass} .view=${view}></notification-center-view>`
         : nothing}
       ${this._panel("settings", "mdi:cog-outline", "Settings", undefined, () => this._renderSettings(draft))}
-      ${this._panel("entities", "mdi:format-list-bulleted", "Entities", count, () => this._renderEntities(draft))}
+      ${this._panel("entities", "mdi:format-list-checks", "Entities", count, () => this._renderEntities(draft))}
       ${this._renderSteps(draft)}
     `;
   }
@@ -735,7 +735,14 @@ export class NcNotificationEditor extends LitElement {
   // -- Steps -----------------------------------------------------------------
 
   private _stepLabel(step: EditorStep, index: number): string {
-    const text = step.message.trim();
+    // Placeholders and template variables read as plain words: {Area} and
+    // {{ states('sensor.x') }} lose their braces.
+    const text = step.message
+      .replace(/\{\{-?\s*(.*?)\s*-?\}\}/g, "$1")
+      .replace(/\{%-?.*?-?%\}/g, "")
+      .replace(/\{(\w+)\}/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
     if (!text) return `Step ${index + 1}`;
     return text.length > 28 ? `${text.slice(0, 27)}…` : text;
   }
@@ -752,7 +759,9 @@ export class NcNotificationEditor extends LitElement {
       [...this._expanded].filter((key) => key.startsWith("step:")).map((key) => key.slice(5)),
     );
     const count = draft.steps.length;
-    return html`<ha-card outlined class="steps">
+    // The tabs sit on the page, without a card around the step, like Home
+    // Assistant's tabbed pages.
+    return html`<div class="steps">
       <div class="tabs">
         <ha-tab-group
           @wa-tab-show=${(ev: CustomEvent<{ name: string }>) => {
@@ -767,7 +776,7 @@ export class NcNotificationEditor extends LitElement {
               .active=${i === index}
               class=${item.enabled ? "" : "off"}
             >
-              <span class="step-number">${i + 1}</span>
+              ${count > 1 ? html`<span class="step-number">${i + 1}</span>` : nothing}
               ${this._stepLabel(item, i)}
             </ha-tab-group-tab>`,
           )}
@@ -837,7 +846,7 @@ export class NcNotificationEditor extends LitElement {
             this._toggle(`step:${ev.detail.block}`, ev.detail.expanded)}
         ></nc-step-editor>
       </div>
-    </ha-card>`;
+    </div>`;
   }
 
   private _addStep(): void {
@@ -1207,7 +1216,7 @@ export class NcNotificationEditor extends LitElement {
       background-color: var(--primary-color);
     }
     .steps {
-      overflow: hidden;
+      display: block;
     }
     .tabs {
       display: flex;
@@ -1223,10 +1232,8 @@ export class NcNotificationEditor extends LitElement {
     ha-tab-group-tab.off {
       opacity: 0.5;
     }
-    /* The step's blocks stand out on the steps card. */
     .step {
-      background-color: var(--card-background-color);
-      padding: 16px;
+      padding: 16px 0 0;
       display: flex;
       flex-direction: column;
       gap: 12px;

@@ -261,7 +261,13 @@ export function toSaved(draft: EditorNotification): EditorNotification {
       .map((item) => {
         const { [PINNED]: _pinned, ...rest } = item;
         void _pinned;
-        return rest;
+        if (item !== pinned?.item) return rest;
+        // Only the fields of the chosen kind: both are kept while editing.
+        const drop = pinned.kind === "state" ? NUMERIC_ONLY : STATE_ONLY;
+        const options = Object.fromEntries(
+          Object.entries(pinned.options).filter(([key]) => !drop.includes(key)),
+        );
+        return { ...rest, options };
       });
     step.start =
       start.type === "schedule"
@@ -343,6 +349,9 @@ export function listedEntities(hass: HomeAssistant, draft: EditorNotification): 
   }
   return result;
 }
+
+const STATE_ONLY = ["to", "not_to"];
+const NUMERIC_ONLY = ["above", "below", "value_template"];
 
 // Marks the trigger at the top of Start while it is edited; not saved.
 export const PINNED = "_nc_pinned";
