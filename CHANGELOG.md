@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.7
+
+### Changed
+
+- Editor, Message: Message and Info take the full width, with Info under the entity parameters. On a narrow screen Data, Time and Format each take a full row.
+- Editor, steps: no frame around the steps under the tabs, and no number in front of the tab when there is only one step. A tab names its step without braces (`{Area}` reads as Area).
+- Editor, Start: *Notification entities* is a collapsible block, collapsed by default, without the explanation under its title. Attribute comes first and offers *State* (the state itself) instead of being empty, then State or Numeric state. Switching between the two keeps what was filled in on the other side until saving. Above and Below sit side by side on a wide screen.
+- Editor: Notification entities and the Entities block use the icon of *Start condition no longer true*; the built-in Start and Done items have amber icons.
+
 ## 0.4.6
 
 ### Changed

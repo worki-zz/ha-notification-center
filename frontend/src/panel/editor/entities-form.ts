@@ -7,6 +7,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HomeAssistant } from "../../shared/types";
+import { field } from "../fields";
 import type { Obj } from "./model";
 
 export type EntitiesKind = "state" | "numeric";
@@ -72,12 +73,8 @@ const FOR = {
   },
 };
 
-function attributeField(entities: string[]) {
-  return {
-    name: "attribute",
-    selector: { attribute: { entity_id: entities, hide_attributes: HIDE_ATTRIBUTES } },
-  };
-}
+// The attribute choice: the state itself (empty) first.
+const STATE = "__state";
 
 // Labels Home Assistant's translations lack in this version.
 const OWN_LABELS: Record<string, string> = {
@@ -109,7 +106,6 @@ function threshold(name: "above" | "below") {
 function stateSchema(entities: string[], attribute: string | undefined) {
   const states = { state: { multiple: true, entity_id: entities, attribute } };
   return [
-    attributeField(entities),
     {
       name: "state",
       selector: {
@@ -123,11 +119,10 @@ function stateSchema(entities: string[], attribute: string | undefined) {
   ];
 }
 
-function numericSchema(entities: string[]) {
+function numericSchema() {
   return [
-    attributeField(entities),
-    threshold("above"),
-    threshold("below"),
+    // Side by side where there is room.
+    { name: "", type: "grid", schema: [threshold("above"), threshold("below")] },
     { name: "value_template", selector: { template: {} } },
     FOR,
   ];
@@ -171,6 +166,10 @@ export class NcEntitiesForm extends LitElement {
 
   @property({ type: Boolean }) public disabled = false;
 
+  // Offer State or Numeric state under the attribute (the trigger at the
+  // top of Start); the form then sends kind-changed.
+  @property({ type: Boolean, attribute: "kind-switch" }) public kindSwitch = false;
+
   protected override render() {
     if (!this.hass) return nothing;
     const options = this.value;
@@ -190,8 +189,29 @@ export class NcEntitiesForm extends LitElement {
     const base =
       this.kind === "state"
         ? stateSchema(entities, options.attribute as string | undefined)
-        : numericSchema(entities);
-    const schema = this.withNotification ? [NOTIFICATION, ...base] : base;
+        : numericSchema();
+    return html`${this.withNotification ? this._form([NOTIFICATION], data) : nothing}
+      ${this._attribute(entities, options.attribute as string | undefined)}
+      ${this.kindSwitch
+        ? html`<ha-button-toggle-group
+            size="s"
+            .buttons=${[
+              { label: "State", value: "state" },
+              { label: "Numeric state", value: "numeric" },
+            ]}
+            .active=${this.kind}
+            @value-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
+              ev.stopPropagation();
+              if (ev.detail.value !== this.kind) {
+                this.dispatchEvent(new CustomEvent("kind-changed", { detail: { value: ev.detail.value } }));
+              }
+            }}
+          ></ha-button-toggle-group>`
+        : nothing}
+      ${this._form(base, data)}`;
+  }
+
+  private _form(schema: unknown[], data: Obj) {
     return html`<ha-form
       .hass=${this.hass}
       .data=${data}
@@ -201,6 +221,39 @@ export class NcEntitiesForm extends LitElement {
       .computeLabel=${this._label}
       @value-changed=${this._changed}
     ></ha-form>`;
+  }
+
+  // The attribute, as a choice with the state itself first.
+  private _attribute(entities: string[], attribute: string | undefined) {
+    const hass = this.hass!;
+    const names = new Set<string>();
+    for (const entityId of entities) {
+      for (const name of Object.keys(hass.states[entityId]?.attributes ?? {})) {
+        if (!HIDE_ATTRIBUTES.includes(name)) names.add(name);
+      }
+    }
+    if (attribute) names.add(attribute);
+    const first = entities.map((id) => hass.states[id]).find(Boolean);
+    const options = [
+      { value: STATE, label: "State" },
+      ...[...names].sort().map((name) => ({
+        value: name,
+        label: first && hass.formatEntityAttributeName ? hass.formatEntityAttributeName(first, name) : name,
+      })),
+    ];
+    return field(
+      hass,
+      { select: { mode: "dropdown", options } },
+      attribute || STATE,
+      this._label({ name: "attribute" }),
+      (value) => {
+        const next: Obj = { ...this.value };
+        if (value && value !== STATE) next.attribute = value;
+        else delete next.attribute;
+        this.dispatchEvent(new CustomEvent("value-changed", { detail: { value: next } }));
+      },
+      { className: "attribute" },
+    );
   }
 
   // The entities another notification lists.
@@ -229,7 +282,8 @@ export class NcEntitiesForm extends LitElement {
 
   private _changed(ev: CustomEvent<{ value: Obj }>): void {
     ev.stopPropagation();
-    const value: Obj = { ...ev.detail.value };
+    // The fields of the other kind stay, so switching back keeps them.
+    const value: Obj = { ...this.value, ...ev.detail.value };
     value.for = unwrap(value.for);
     if (this.kind === "state") {
       const match = value.state as { active_choice?: string; is?: unknown; is_not?: unknown } | undefined;
@@ -254,7 +308,12 @@ export class NcEntitiesForm extends LitElement {
 
   static override styles = css`
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    ha-button-toggle-group {
+      align-self: flex-start;
     }
     /* Inside Home Assistant's trigger and condition rows. */
     :host([with-notification]) {
