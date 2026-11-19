@@ -8,11 +8,18 @@
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { DOMAIN } from "../../shared/config";
+import { DOMAIN, type Duration } from "../../shared/config";
 import { errorText } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { field } from "../fields";
 import type { ExpiresOnDay, Schedule, Unit } from "./model";
+
+// After a duration is shown in hours: days count as 24 hours each.
+function inHours(expires: Duration): Duration {
+  if (!expires.days) return expires;
+  const { days, ...rest } = expires;
+  return { ...rest, hours: (rest.hours ?? 0) + days * 24 };
+}
 
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const UNITS: Unit[] = ["days", "weeks", "months", "years"];
@@ -132,14 +139,14 @@ export class NcScheduleEditor extends LitElement {
           ? this._selector(
               { entity: { domain: ["input_number", "number", "sensor", "counter"] } },
               schedule.every,
-              "Entity with the number",
+              "",
               (value) => this._change({ every: (value as string) || 1 }),
               "grow",
             )
           : this._selector(
               { number: { min: 1, max: 999, mode: "box" } },
               schedule.every,
-              calendar ? "Every" : "Number",
+              "Every",
               (value) => this._change({ every: Math.max(1, Number(value) || 1) }),
               "number",
             )}
@@ -160,9 +167,9 @@ export class NcScheduleEditor extends LitElement {
         )}
         ${calendar ? this._renderOn(schedule) : nothing}
         ${this._selector(
-          { time: {} },
+          { time: { no_second: true } },
           schedule.at ?? undefined,
-          calendar ? "At" : "At (optional)",
+          "",
           (value) => this._change({ at: (value as string) || (calendar ? "00:00" : null) }),
           "grow",
         )}
@@ -188,13 +195,13 @@ export class NcScheduleEditor extends LitElement {
         select: {
           mode: "dropdown",
           options: [
-            { value: "number", label: "Fixed number" },
-            { value: "entity", label: "Numeric value of an entity" },
+            { value: "number", label: "Manual" },
+            { value: "entity", label: "Entity" },
           ],
         },
       },
       typeof schedule.every === "string" ? "entity" : "number",
-      "Every",
+      "Type",
       (value) => {
         if (value === "entity" && typeof schedule.every !== "string") {
           this._change({ every: "" as unknown as string });
@@ -234,8 +241,7 @@ export class NcScheduleEditor extends LitElement {
         ),
       );
       return html`<div class="field">
-        <div class="label">On</div>
-        <div class="days">
+        <div class="days" role="group" aria-label="On">
           ${WEEKDAYS.map(
             (day, index) => html`<ha-button
               size="s"
@@ -296,11 +302,10 @@ export class NcScheduleEditor extends LitElement {
     const days = [
       { value: "0", label: "Same day" },
       { value: "1", label: "Next day" },
-      ...Array.from({ length: 6 }, (_item, index) => ({
-        value: String(index + 2),
-        label: `${index + 2} days later`,
-      })),
     ];
+    // Older settings may hold a later day: keep it choosable.
+    const later = kind === "on" ? (expires as ExpiresOnDay).day : 0;
+    if (later > 1) days.push({ value: String(later), label: `${later} days later` });
     return html`<div class="row">
       ${this._selector(
         {
@@ -330,9 +335,9 @@ export class NcScheduleEditor extends LitElement {
       )}
       ${kind === "after"
         ? this._selector(
-            { duration: { enable_day: true } },
-            expires,
-            "Duration",
+            { duration: {} },
+            inHours(expires as Duration),
+            "",
             (value) => this._change({ expires: (value as Schedule["expires"]) || { hours: 6 } }),
             "grow",
           )
@@ -347,9 +352,9 @@ export class NcScheduleEditor extends LitElement {
             "grow",
           )}
           ${this._selector(
-            { time: {} },
+            { time: { no_second: true } },
             (expires as ExpiresOnDay).at,
-            "At",
+            "",
             (value) =>
               this._change({
                 expires: { ...(expires as ExpiresOnDay), at: (value as string) || "23:59" },
@@ -500,13 +505,10 @@ export class NcScheduleEditor extends LitElement {
       flex: 0 1 auto;
       min-width: 0;
     }
-    .field .label {
-      font-size: var(--ha-font-size-s, 12px);
-      color: var(--secondary-text-color);
-      margin: 0 0 6px;
-    }
     .days {
       display: flex;
+      align-items: center;
+      min-height: 56px;
       gap: 6px;
       flex-wrap: wrap;
     }
