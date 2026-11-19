@@ -3,7 +3,6 @@ import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import { loadDashboardElements } from "../card/elements";
-import { DOMAIN, type NotificationCenterConfig } from "../shared/config";
 import { cssColor, formatTime, formatWhen } from "../shared/format";
 import {
   cardKey,
@@ -23,7 +22,9 @@ import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
 import { isTemplate, replacePlaceholders } from "../shared/text";
 import type { HomeAssistant, PanelInfo } from "../shared/types";
-import { VERSION } from "../shared/version";
+import "./editor/notification-editor";
+import { loadSettingsElements } from "./ha-elements";
+import "./settings-page";
 
 type Page = "overview" | "later" | "done" | "settings";
 
@@ -66,10 +67,9 @@ export class NotificationCenterPanel extends LitElement {
 
   @state() private _notice?: string;
 
-  // An import waiting for confirmation, because it would replace data.
-  @state() private _pendingImport?: { name: string; text: string };
 
-  @state() private _busy = false;
+  // Home Assistant's settings elements are loaded (for the settings pages).
+  @state() private _haReady = false;
 
   // The page under the header is scrolled: the header casts a shadow.
   @state() private _scrolled = false;
@@ -97,6 +97,11 @@ export class NotificationCenterPanel extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has("hass")) this._follow();
+    if (!this._haReady && this._page === "settings") {
+      void loadSettingsElements().then((ready) => {
+        this._haReady = ready;
+      });
+    }
     if (changed.has("route")) {
       this._error = undefined;
       this._notice = undefined;
@@ -115,8 +120,12 @@ export class NotificationCenterPanel extends LitElement {
     return this.hass?.user?.is_admin ?? false;
   }
 
+  private _parts(): string[] {
+    return (this.route?.path ?? "").replace(/^\/+/, "").split("/");
+  }
+
   private get _page(): Page {
-    const page = (this.route?.path ?? "").replace(/^\/+/, "").split("/")[0];
+    const page = this._parts()[0];
     if (page === "later" || page === "done") return page;
     if (page === "settings" && this._isAdmin) return "settings";
     return "overview";
@@ -193,6 +202,11 @@ export class NotificationCenterPanel extends LitElement {
 
   protected override render() {
     const page = this._page;
+    if (page === "settings") {
+      return this._store.config && this._store.state
+        ? this._renderSettingsPage()
+        : html`<div class="empty">${this._store.error ?? "Loading…"}</div>`;
+    }
     const title = page === "overview" ? (this.panel?.title ?? TITLES.overview) : TITLES[page];
     return html`
       <div class="toolbar ${this._scrolled ? "scrolled" : ""}">
@@ -202,7 +216,7 @@ export class NotificationCenterPanel extends LitElement {
               <ha-icon icon="mdi:arrow-left"></ha-icon>
             </ha-icon-button>`}
         <div class="main-title">${title}</div>
-        ${page !== "settings" && this._isAdmin
+        ${this._isAdmin
           ? html`<ha-icon-button .label=${"Settings"} @click=${() => this._go("settings")}>
               <ha-icon icon="mdi:cog"></ha-icon>
             </ha-icon-button>`
@@ -229,9 +243,7 @@ export class NotificationCenterPanel extends LitElement {
             ? this._renderLater()
             : page === "done"
               ? this._renderDone()
-              : page === "settings"
-                ? this._renderSettings()
-                : this._renderOverview()}
+              : this._renderOverview()}
       </div></div>
     `;
   }
@@ -370,232 +382,43 @@ export class NotificationCenterPanel extends LitElement {
     );
   }
 
-  private _renderSettings() {
-    return html`
-      <p class="intro">
-        The settings pages come in later versions. Until then: YAML import and
-        export, and the stored configuration.
-      </p>
-      ${this._renderImportExport()}
-      ${this._store.config ? this._renderConfig(this._store.config) : nothing}
-      <p class="version">Notification Center ${VERSION}</p>
-    `;
-  }
-
-  private _renderImportExport() {
-    const pending = this._pendingImport;
-    return html`
-      <ha-card header="YAML">
-        <div class="card-content">
-          ${pending
-            ? html`
-                <p>
-                  Importing <b>${pending.name}</b> replaces the whole
-                  configuration (${this._store.config?.notifications.length ?? 0}
-                  notifications now). The current one is downloaded first.
-                </p>
-                <div class="buttons">
-                  <ha-button
-                    .disabled=${this._busy}
-                    @click=${this._confirmImport}
-                  >
-                    Replace
-                  </ha-button>
-                  <ha-button appearance="plain" @click=${this._cancelImport}>
-                    Cancel
-                  </ha-button>
-                </div>
-              `
-            : html`
-                <p>Export downloads the configuration; import replaces it.</p>
-                <div class="buttons">
-                  <ha-button .disabled=${this._busy} @click=${this._export}>
-                    Export
-                  </ha-button>
-                  <ha-button .disabled=${this._busy} @click=${this._pickFile}>
-                    Import
-                  </ha-button>
-                  <input
-                    type="file"
-                    accept=".yaml,.yml,text/yaml"
-                    hidden
-                    @change=${this._fileChosen}
-                  />
-                </div>
-              `}
-        </div>
-      </ha-card>
-    `;
-  }
-
-  private _renderConfig(config: NotificationCenterConfig) {
-    const categories = new Map(
-      config.categories.map((item) => [item.id, item]),
-    );
-    return html`
-      <ha-card header="Notifications (${config.notifications.length})">
-        ${config.notifications.length === 0
-          ? html`<div class="card-content empty">No notifications yet.</div>`
-          : config.notifications.map((item) => {
-              const category = categories.get(item.category);
-              const icon = item.icon ?? category?.icon ?? "mdi:bell";
-              const steps = item.steps.length;
-              const live = this._store.state?.notifications[item.id];
-              return html`
-                <div class="row ${item.enabled ? "" : "disabled"}">
-                  <ha-icon .icon=${icon}></ha-icon>
-                  <div class="text">
-                    <div>${item.name}</div>
-                    <div class="secondary">
-                      ${category?.name ?? item.category} · ${steps}
-                      ${steps === 1 ? "step" : "steps"} ·
-                      ${item.steps.map((step) => step.start.type).join(", ")}
-                      ${item.enabled ? "" : " · disabled"}
-                      ${live?.last_done
-                        ? ` · last done ${formatShort(live.last_done)}`
-                        : ""}
-                      ${live?.next_due
-                        ? ` · next ${formatShort(live.next_due)}`
-                        : ""}
-                    </div>
-                  </div>
-                  ${live
-                    ? html`<span class="badge ${live.state}"
-                        >${live.state}</span
-                      >`
-                    : nothing}
-                </div>
-              `;
-            })}
-      </ha-card>
-      <ha-card header="Categories (${config.categories.length})">
-        ${config.categories.map(
-          (item) => html`
-            <div class="row">
-              <ha-icon .icon=${item.icon ?? "mdi:shape"}></ha-icon>
-              <div class="text">
-                <div>${item.name}</div>
-                <div class="secondary">${item.card_color ?? "no colour"}</div>
-              </div>
-            </div>
-          `,
-        )}
-      </ha-card>
-      <ha-card header="Modes (${config.modes.length})">
-        ${config.modes.map(
-          (item) => html`
-            <div class="row">
-              <ha-icon .icon=${item.icon ?? "mdi:home-variant"}></ha-icon>
-              <div class="text">
-                <div>${item.name}</div>
-                <div class="secondary">
-                  ${item.condition
-                    ? item.condition.type
-                    : "when no other mode applies"}
-                </div>
-              </div>
-            </div>
-          `,
-        )}
-      </ha-card>
-      <ha-card header="People (${config.people.length})">
-        ${config.people.length === 0
-          ? html`<div class="card-content empty">
-              No people in Home Assistant.
-            </div>`
-          : config.people.map(
-              (item) => html`
-                <div class="row">
-                  <ha-icon icon="mdi:account"></ha-icon>
-                  <div class="text">
-                    <div>${item.name}</div>
-                    <div class="secondary">
-                      ${item.person} · ${item.notify ?? "no push"} ·
-                      ${item.device_type}
-                    </div>
-                  </div>
-                </div>
-              `,
-            )}
-      </ha-card>
-      <ha-card header="Devices">
-        <div class="card-content secondary">
-          ${config.lights.length} lights · ${config.speakers.length} speakers ·
-          ${config.chimes.length} chimes
-        </div>
-      </ha-card>
-    `;
-  }
-
-  private async _export(): Promise<void> {
-    await this._run(async () => {
-      await this._download();
-    });
-  }
-
-  private async _download(): Promise<void> {
-    if (!this.hass) return;
-    const { yaml } = await this.hass.callWS<{ yaml: string }>({
-      type: `${DOMAIN}/config/export`,
-    });
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([yaml], { type: "text/yaml" }));
-    link.download = `notification_center_${stamp}.yaml`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  }
-
-  private _pickFile(): void {
-    this.renderRoot
-      .querySelector<HTMLInputElement>("input[type=file]")
-      ?.click();
-  }
-
-  private async _fileChosen(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = "";
-    if (!file) return;
-    const text = await file.text();
-    if (this._store.hasData) {
-      this._pendingImport = { name: file.name, text };
-      return;
+  // The settings: Home Assistant's own subpage layout, the list or the
+  // editor of one notification.
+  private _renderSettingsPage() {
+    if (!this._haReady) {
+      return html`<div class="empty">Loading…</div>`;
     }
-    await this._import(text, false);
-  }
-
-  private async _confirmImport(): Promise<void> {
-    const pending = this._pendingImport;
-    if (!pending) return;
-    await this._import(pending.text, true);
-    this._pendingImport = undefined;
-  }
-
-  private _cancelImport(): void {
-    this._pendingImport = undefined;
-  }
-
-  private async _import(text: string, backup: boolean): Promise<void> {
-    await this._run(async () => {
-      if (backup) {
-        await this._download();
-      }
-      await this.hass?.callWS({ type: `${DOMAIN}/config/import`, yaml: text });
-      this._notice = "Imported.";
-    });
+    const { config, state, hasData } = this._store;
+    const base = `/${this.panel?.url_path ?? "notification-center"}`;
+    const parts = this._parts();
+    if (parts[1] === "notifications" && parts[2]) {
+      return html`<nc-notification-editor
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .config=${config}
+        .state=${state}
+        .notificationId=${parts[2]}
+        .base=${base}
+      ></nc-notification-editor>`;
+    }
+    return html`<nc-settings
+      .hass=${this.hass}
+      .narrow=${this.narrow}
+      .config=${config}
+      .state=${state}
+      .hasData=${hasData ?? false}
+      .tab=${parts[1] === "general" ? "general" : "notifications"}
+      .base=${base}
+    ></nc-settings>`;
   }
 
   private async _run(task: () => Promise<void>): Promise<void> {
-    this._busy = true;
     this._error = undefined;
     this._notice = undefined;
     try {
       await task();
     } catch (err) {
       this._error = errorText(err);
-    } finally {
-      this._busy = false;
     }
   }
 
@@ -606,6 +429,11 @@ export class NotificationCenterPanel extends LitElement {
       height: 100%;
       background-color: var(--primary-background-color);
       color: var(--primary-text-color);
+    }
+    nc-settings,
+    nc-notification-editor {
+      flex: 1;
+      min-height: 0;
     }
     /* Fixed, with a dashboard header's look (the theme's app header). */
     .toolbar {
@@ -750,15 +578,6 @@ export class NotificationCenterPanel extends LitElement {
       color: var(--disabled-text-color);
     }
   `;
-}
-
-function formatShort(value: string): string {
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 declare global {

@@ -55,7 +55,25 @@ Open cards, snoozes and last done times are kept in `.storage/notification_cente
 
 ## The panel
 
-The **Overview** shows the active cards meant for you, with their buttons. Below them, under *Upcoming*, the scheduled steps due today and the snoozed cards in one list, by time, in a neutral colour, with a line that tells when they come. **Later** lists the scheduled steps due after today, by their next time; **Done today** the cards done today. A scheduled step is meant for its day; its time only says when it reaches you. So a step that is not due yet can be marked *Done* already: it shows in Done today like any done card, a calendar step skips its next occurrence, and an "after last done" step counts from now. A card hidden by *Hide while* is not shown. Administrators find the settings behind the gear in the header (for now the YAML import and export and the stored configuration).
+The **Overview** shows the active cards meant for you, with their buttons. Below them, under *Upcoming*, the scheduled steps due today and the snoozed cards in one list, by time, in a neutral colour, with a line that tells when they come. **Later** lists the scheduled steps due after today, by their next time; **Done today** the cards done today. A scheduled step is meant for its day; its time only says when it reaches you. So a step that is not due yet can be marked *Done* already: it shows in Done today like any done card, a calendar step skips its next occurrence, and an "after last done" step counts from now. A card hidden by *Hide while* is not shown. Administrators find the settings behind the gear in the header (see [Settings](#settings)).
+
+## Settings
+
+The settings use Home Assistant's own layout and elements. **Notifications** lists every notification with its category (and its number of steps), and a status chip: *Active*, *Upcoming* (due today), *Snoozed* or *Disabled*. Search and the category filter narrow the list; drag a row by its handle to reorder (not while filtering). The row menu has Run now, Duplicate, Disable and Delete. **General** shows what is set up and, at the bottom, YAML export and import.
+
+### The notification editor
+
+Laid out like the automation editor: the name and status in the header, Undo and Redo (Ctrl+Z, Ctrl+Y), the Enabled switch (saved at once) and the menu: *Information* (the sensor's dialog, where its entity id can be changed), *Run now* (the selected step, like the Trigger action), *Clear notifications*, *Duplicate* (a disabled copy), *Disable* and *Delete*. Under the header a preview of the selected step's card, with the templates rendered for the first listed entity. Save appears when something changed; leaving asks first.
+
+- **Settings:** name, category, icon, card colour and light colour. Left empty, they come from the category.
+- **Entities:** single entities and entity categories (a domain with an optional device class, floors, areas and labels). Each entity of a category can be switched off on its own; *Add new matching entities* off keeps the entities that matched when it was saved. A category that matches nothing yet is fine.
+- **Steps**, as tabs, with Add step and a menu (Run this step, Duplicate, Move left or right, Disable, Delete). Each step has:
+  - **Message:** the message, the Info line, the entity parameters `{Floor}`, `{Area}`, `{Device}`, `{Entity}`, `{State}`, and the *Data* after the label (nothing by default; active since, due, last done, an entity's state, attribute or last change, or a custom text).
+  - **Start:** *Triggers* (Home Assistant's trigger editor; none means only the Trigger action starts it), *Schedule* (the calendar) or *Repeat* (after last done). Both show when they come next; Repeat's next time can be set with the pencil (it is stored as the last done time). A card can expire after a duration or on the same or a later day at a time. Below, the start conditions.
+  - **Hide while:** Home Assistant's condition editor.
+  - **Done when:** Home Assistant's trigger editor, and with Listed entities *Start condition no longer true*.
+
+Inside a notification, the Notification state trigger with no notification means this one, and its step is given by number; they are stored by id, so they keep pointing to the same step.
 
 ## Buttons
 

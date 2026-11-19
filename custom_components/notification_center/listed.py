@@ -1,7 +1,8 @@
 """The Listed entities trigger and condition.
 
 A notification lists entities one by one (``entities``) and by group
-(``entity_groups``: a domain with an optional device class, area and label).
+(``entity_groups``: a domain with an optional device class, areas, floors
+and labels).
 The Listed entities trigger watches all of them: when one starts to match
 (and keeps matching for the ``for`` time, if any) it fires for that entity,
 so every entity gets its own card. It also reports when an entity stops
@@ -195,31 +196,42 @@ class EntityList:
                 device_class = entry.device_class or entry.original_device_class
             if device_class != group["device_class"]:
                 return False
-        if group.get("area") and not self._in_area(group["area"], entry, device):
+        areas = list(group.get("areas") or [])
+        floors = list(group.get("floors") or [])
+        if (areas or floors) and not self._in_place(areas, floors, entry, device):
             return False
-        if group.get("label"):
+        if wanted_labels := group.get("labels"):
             labels: set[str] = set(entry.labels) if entry is not None else set()
             if device is not None:
                 labels |= set(device.labels)
-            if group["label"] not in labels:
+            if not labels.intersection(wanted_labels):
                 return False
+        if not group.get("add_new", True) and group.get("members") is not None:
+            return entity_id in group["members"]
         return True
 
-    def _in_area(
+    def _in_place(
         self,
-        wanted: str,
+        areas: list[str],
+        floors: list[str],
         entry: er.RegistryEntry | None,
         device: dr.BaseDeviceEntry | None,
     ) -> bool:
+        """Return whether an entity is in one of the areas or floors."""
         area_id = (entry.area_id if entry is not None else None) or (
             device.area_id if device is not None else None
         )
         if area_id is None:
             return False
-        if area_id == wanted:
-            return True
         area = ar.async_get(self._hass).async_get_area(area_id)
-        return area is not None and area.name.casefold() == wanted.casefold()
+        if area_id in areas or (
+            area is not None
+            and area.name.casefold() in {name.casefold() for name in areas}
+        ):
+            return True
+        return (
+            area is not None and area.floor_id is not None and area.floor_id in floors
+        )
 
 
 class ListedTracker:
@@ -387,3 +399,11 @@ def matching_entities(
         ):
             continue
         yield entity_id
+
+
+@callback
+def group_members(hass: HomeAssistant, group: Mapping[str, Any]) -> list[str]:
+    """Return the entities a group matches now, ignoring Add new matching."""
+    probe = {**group, "add_new": True, "excluded": [], "enabled": True}
+    entities = EntityList(hass, {"entity_groups": [probe]})
+    return entities.members()

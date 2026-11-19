@@ -25,7 +25,7 @@ from .schedule import (
     calendar_before,
     every,
     every_entity,
-    expires,
+    expires_at,
 )
 
 if TYPE_CHECKING:
@@ -57,10 +57,14 @@ class StepSchedule:
         """Return whether the schedule follows the calendar."""
         return bool(self.config["type"] == SCHEDULE_CALENDAR)
 
-    @property
-    def expires(self) -> timedelta | None:
-        """Return how long a card stays open, if limited."""
-        return expires(self.config)
+    def expires_at(self, due: datetime) -> datetime | None:
+        """Return when a card due at a time expires, if it does."""
+        return expires_at(self.config, due)
+
+    def _still_open(self, due: datetime, now: datetime) -> bool:
+        """Return whether a card due at a time would still be open now."""
+        until = self.expires_at(due)
+        return until is None or until > now
 
     @property
     def n(self) -> int:
@@ -85,6 +89,15 @@ class StepSchedule:
     @callback
     def async_start(self) -> None:
         """Open a card missed while stopped, then wait for the next one."""
+        if not self.is_calendar and self._last_done() is None:
+            # Never done: counted from when the step got its schedule (the
+            # notification was made or imported), so it is not due at once.
+            self.engine.record(
+                self.step.notification.id,
+                self.step.step_id,
+                CLOSED_DONE,
+                dt_util.utcnow(),
+            )
         if (entity_id := every_entity(self.config)) is not None:
             self._unsub_every = async_track_state_change_event(
                 self.hass, [entity_id], self._every_changed
@@ -158,14 +171,13 @@ class StepSchedule:
             return
         now = dt_util.utcnow()
         last = self._last_due()
-        period = self.expires
         if self.is_calendar:
             # A new step only catches up today's occurrence.
             since = last or dt_util.start_of_local_day() - timedelta(microseconds=1)
             due = calendar_before(self.config, n, now, since)
             if due is not None and due == self._skipped():
                 self._record(due)
-            elif due is not None and (period is None or due + period > now):
+            elif due is not None and self._still_open(due, now):
                 self._due(due)
             elif due is not None:
                 self._record(due)
@@ -175,7 +187,7 @@ class StepSchedule:
             due = after_last_done_due(self.config, n, last_done, last, now)
             if due > now:
                 return
-            if period is None or due + period > now:
+            if self._still_open(due, now):
                 self._due(due)
                 return
             # Expired while stopped: the next day is tried.
@@ -189,12 +201,11 @@ class StepSchedule:
 
     def _due(self, due: datetime) -> None:
         self._record(due)
-        period = self.expires
         self.engine.open(
             self.step,
             None,
             {"platform": "schedule", "due": due.isoformat()},
             SOURCE_SCHEDULE,
             since=due,
-            expires_at=due + period if period is not None else None,
+            expires_at=self.expires_at(due),
         )

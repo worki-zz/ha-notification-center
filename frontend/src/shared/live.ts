@@ -17,6 +17,7 @@ import {
   type StateMessage,
   type Step,
 } from "./config";
+import { entityAttribute, entityState, formatTime } from "./format";
 import type { HomeAssistant } from "./types";
 
 export const SNOOZE_CHOICES: { key: string; text: string; label: string; hours?: number }[] = [
@@ -45,6 +46,8 @@ export interface LiveCard {
   step?: Step;
   // The notification's sensor.
   entityId?: string;
+  // When the notification was last done.
+  lastDone?: string | null;
 }
 
 export function cardKey(card: CardState): string {
@@ -175,6 +178,7 @@ export function liveCards(
         category,
         step,
         entityId: entry.entity_id ?? undefined,
+        lastDone: entry.last_done,
       });
     }
   }
@@ -252,4 +256,29 @@ export function errorText(err: unknown): string {
     return String((err as { message: unknown }).message);
   }
   return String(err);
+}
+
+/** The text after the label of a card, as its step's Data says. */
+export function cardData(hass: HomeAssistant, live: LiveCard, now = Date.now()): string {
+  const data = live.step?.data;
+  if (!data || data.type === "none") return "";
+  const format = data.format ?? "relative";
+  const target = data.entity_id || live.card.entity_id || undefined;
+  const stateObj = target ? hass.states[target] : undefined;
+  switch (data.type) {
+    case "active_since":
+    case "due":
+      return formatTime(hass, new Date(live.card.since), format, now);
+    case "last_done":
+      return live.lastDone ? formatTime(hass, new Date(live.lastDone), format, now) : "";
+    case "last_changed":
+      return stateObj ? formatTime(hass, new Date(stateObj.last_changed), format, now) : "";
+    case "state":
+      return stateObj ? entityState(hass, stateObj) : "";
+    case "attribute":
+      return stateObj && data.attribute ? entityAttribute(hass, stateObj, data.attribute) : "";
+    case "custom":
+      return live.card.data_text ?? "";
+  }
+  return "";
 }

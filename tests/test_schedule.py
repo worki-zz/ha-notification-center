@@ -266,6 +266,15 @@ async def test_after_last_donestep(
              "unit": "days", "at": "22:00", "expires": {"hours": 6}},
         ),
     )  # fmt: skip
+    # Never done: counted from when the notification was made.
+    assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == (
+        "2026-11-19 Thu 22:00"
+    )
+    await center.call(
+        "set_last_done",
+        "sensor.nc_watering",
+        datetime=_local("2026-11-13 21:00").isoformat(),
+    )
     assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == (
         "2026-11-16 Mon 22:00"
     )
@@ -388,8 +397,8 @@ async def test_calendar_entity(
     assert waste[0]["end"] == "2026-11-19"
     assert waste[0]["description"] == "Put it out"
     filters = [event for event in events if event["summary"] == "Filter"]
-    # Never done: due now, so the card is open and the next one is tomorrow.
-    assert [event["start"] for event in filters] == ["2026-11-17"]
+    # Never done: a month after it was made.
+    assert [event["start"] for event in filters] == []
 
 
 async def test_example_config_runs_for_a_week(

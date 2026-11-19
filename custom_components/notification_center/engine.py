@@ -213,6 +213,8 @@ class Card:
     attachments: list[dict[str, Any]] | None = None
     message: str | None = None
     info: str | None = None
+    # The step's custom data text (after the label), rendered.
+    data_text: str | None = None
     # A scheduled card closes as expired at this time.
     expires_at: datetime | None = None
 
@@ -259,6 +261,7 @@ class Card:
             "attachments": self.attachments,
             "message": self.message,
             "info": self.info,
+            "data_text": self.data_text,
             "expires_at": _iso(self.expires_at),
         }
 
@@ -287,8 +290,15 @@ class Card:
             attachments=data.get("attachments"),
             message=data.get("message"),
             info=data.get("info"),
+            data_text=data.get("data_text"),
             expires_at=_parse_time(data.get("expires_at")),
         )
+
+
+def _custom_data(step: Mapping[str, Any]) -> str | None:
+    """Return the custom data text of a step, if it has one."""
+    data = step.get("data") or {}
+    return data.get("text") if data.get("type") == "custom" else None
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -1446,7 +1456,10 @@ class Engine:
         info, info_error = render_text(
             self.hass, card.info_override or step.get("info"), variables, card.entity_id
         )
-        error = message_error or info_error
+        data_text, data_error = render_text(
+            self.hass, _custom_data(step), variables, card.entity_id
+        )
+        error = message_error or info_error or data_error
         key = (card.notification_id, card.step_id)
         if error != self.template_errors.get(key):
             if error is None:
@@ -1454,8 +1467,12 @@ class Engine:
             else:
                 self.template_errors[key] = error
             self.issues.refresh()
-        changed = (message, info) != (card.message, card.info)
-        card.message, card.info = message, info
+        changed = (message, info, data_text) != (
+            card.message,
+            card.info,
+            card.data_text,
+        )
+        card.message, card.info, card.data_text = message, info, data_text
         return changed
 
     def _start_text(self, card: Card) -> None:
@@ -1468,6 +1485,7 @@ class Engine:
             for text in (
                 card.message_override or step["message"],
                 card.info_override or step.get("info"),
+                _custom_data(step),
             )
             if text
         ]

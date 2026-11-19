@@ -34,6 +34,7 @@ from .model import (
     new_id,
     validate_item,
 )
+from .normalize import normalize_notification
 
 STORAGE_VERSION: Final = 1
 STORAGE_MINOR_VERSION: Final = 1
@@ -136,7 +137,10 @@ class ConfigManager:
 
     async def async_create(self, section: str, data: dict[str, Any]) -> dict[str, Any]:
         """Add an item to the end of a collection and return it."""
-        item = validate_item(section, {**data, "id": data.get("id") or new_id()})
+        data = {**data, "id": data.get("id") or new_id()}
+        if section == "notifications":
+            data = normalize_notification(self.hass, self._config, data)
+        item = validate_item(section, data)
         config = self._copy()
         config[section].append(item)
         if section == "modes":
@@ -152,7 +156,12 @@ class ConfigManager:
         """Replace an item of a collection, keeping its id and place."""
         config = self._copy()
         index = self._index(config, section, item_id)
-        config[section][index] = validate_item(section, {**data, "id": item_id})
+        data = {**data, "id": item_id}
+        if section == "notifications":
+            data = normalize_notification(
+                self.hass, config, data, config[section][index]
+            )
+        config[section][index] = validate_item(section, data)
         committed = await self._async_commit(config)
         return cast(dict[str, Any], committed[section][index])
 
@@ -297,6 +306,14 @@ class ConfigManager:
             raise ConfigValidationError(
                 "unknown sections: " + ", ".join(sorted(map(str, unknown)))
             )
+        notifications = data.get("notifications")
+        if isinstance(notifications, list):
+            data["notifications"] = [
+                normalize_notification(self.hass, data, item)
+                if isinstance(item, dict) and item.get("id")
+                else item
+                for item in notifications
+            ]
         validated = await async_validate_config(self.hass, data)
         await self._backup_store.async_save(
             {"saved_at": dt_util.utcnow().isoformat(), "config": self._config}

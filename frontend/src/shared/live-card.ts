@@ -7,9 +7,10 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 
 import { defineElement } from "./define";
-import { cssColor, formatTime } from "./format";
+import { cssColor } from "./format";
 import {
   SNOOZE_CHOICES,
+  cardData,
   errorText,
   liveButtons,
   pressButton,
@@ -30,7 +31,7 @@ export class NotificationCenterLiveCard extends LitElement {
   // The time relative times are written from.
   @property({ attribute: false }) public now = Date.now();
 
-  // The text after the label; the time since the card opened when unset.
+  // The text after the label; the step's Data when unset.
   @property({ attribute: false }) public data?: string;
 
   // An extra line below the texts (when an upcoming card comes).
@@ -80,7 +81,7 @@ export class NotificationCenterLiveCard extends LitElement {
           }));
     return {
       label: notification.name,
-      data: this.data ?? formatTime(hass, new Date(card.since), "relative", this.now),
+      data: this.data ?? cardData(hass, live, this.now),
       message: card.message ?? undefined,
       info: card.info ?? undefined,
       when: this.when,

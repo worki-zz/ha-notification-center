@@ -369,6 +369,23 @@ CATEGORY_SCHEMA = _with_id(
 # ---------------------------------------------------------------------------
 # Notifications and steps
 
+# A scheduled card expires after a duration, or on a later day at a time
+# (``day: 0`` is the day it appeared, ``day: 1`` the next one, and so on).
+EXPIRES_ON_DAY = vol.Schema(
+    {
+        vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(0, 366)),
+        vol.Required("at"): _time,
+    }
+)
+
+
+def EXPIRES(value: Any) -> dict[str, Any]:  # noqa: N802 - used like a schema
+    """Validate when a scheduled card expires."""
+    if isinstance(value, dict) and "day" in value:
+        return cast(dict[str, Any], EXPIRES_ON_DAY(value))
+    return DURATION(value)
+
+
 SCHEDULE_SCHEMA = vol.Any(
     vol.Schema(
         {
@@ -382,7 +399,7 @@ SCHEDULE_SCHEMA = vol.Any(
             vol.Optional("month"): vol.All(vol.Coerce(int), vol.Range(1, 12)),
             vol.Required("at"): _time,
             vol.Optional("starting"): _date,
-            vol.Optional("expires"): _optional(DURATION),
+            vol.Optional("expires"): _optional(EXPIRES),
         }
     ),
     vol.Schema(
@@ -391,7 +408,7 @@ SCHEDULE_SCHEMA = vol.Any(
             vol.Required("every"): _non_negative_or_entity,
             vol.Required("unit"): vol.In(INTERVAL_UNITS),
             vol.Optional("at"): _optional(_time),
-            vol.Optional("expires"): _optional(DURATION),
+            vol.Optional("expires"): _optional(EXPIRES),
         }
     ),
 )
@@ -497,19 +514,41 @@ ENTITY_SCHEMA = vol.Schema(
     }
 )
 
-ENTITY_GROUP_SCHEMA = _with_id(
+
+def _group_lists(value: Any) -> Any:
+    """Turn the earlier single ``area`` and ``label`` into lists."""
+    if not isinstance(value, dict):
+        return value
+    value = dict(value)
+    for old, new in (("area", "areas"), ("label", "labels")):
+        if old in value:
+            single = value.pop(old)
+            if single and new not in value:
+                value[new] = [single]
+    return value
+
+
+_IDS = vol.All(cv.ensure_list, [cv.string])
+
+_ENTITY_GROUP_FIELDS = _with_id(
     {
         vol.Required("domain"): cv.string,
         vol.Optional("device_class"): _optional(cv.string),
-        vol.Optional("area"): _optional(cv.string),
-        vol.Optional("label"): _optional(cv.string),
+        # An entity matches if it is in any of the areas, floors and labels
+        # given (each list that is not empty must match).
+        vol.Optional("areas", default=list): _IDS,
+        vol.Optional("floors", default=list): _IDS,
+        vol.Optional("labels", default=list): _IDS,
+        # Off: only the entities that matched when the group was saved.
         vol.Optional("add_new", default=True): cv.boolean,
+        vol.Optional("members"): _optional(vol.All(cv.ensure_list, [cv.entity_id])),
         vol.Optional("enabled", default=True): cv.boolean,
         # Entities of the group that are switched off.
         vol.Optional("excluded", default=list): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional("actions", default=dict): {_id: ACTIONS},
     }
 )
+ENTITY_GROUP_SCHEMA = vol.All(_group_lists, _ENTITY_GROUP_FIELDS)
 
 ATTACHMENT_SCHEMA = vol.Any(
     vol.Schema({vol.Required("camera"): cv.entity_domain("camera")}),
@@ -517,11 +556,38 @@ ATTACHMENT_SCHEMA = vol.Any(
     vol.Schema({vol.Required("video"): cv.string}),
 )
 
+DATA_TYPES: Final = (
+    "none",
+    "active_since",
+    "due",
+    "last_done",
+    "state",
+    "attribute",
+    "last_changed",
+    "custom",
+)
+DATA_FORMATS: Final = ("relative", "duration", "time", "date", "datetime")
+
+# The text after the label of a card.
+DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required("type"): vol.In(DATA_TYPES),
+        # State, attribute, last changed: the card's entity when not given.
+        vol.Optional("entity_id"): _optional(cv.entity_id),
+        vol.Optional("attribute"): _optional(cv.string),
+        # Custom: a template with the card's placeholders.
+        vol.Optional("text"): _optional(cv.string),
+        # Times: how they are written.
+        vol.Optional("format"): _optional(vol.In(DATA_FORMATS)),
+    }
+)
+
 STEP_SCHEMA = _with_id(
     {
         vol.Optional("enabled", default=True): cv.boolean,
         vol.Required("message"): cv.string,
         vol.Optional("info"): _optional(cv.string),
+        vol.Optional("data"): _optional(DATA_SCHEMA),
         vol.Optional("start", default={"type": "triggers"}): START_SCHEMA,
         vol.Optional("hide_while", default=list): CONDITIONS,
         vol.Optional("done_when", default=dict): DONE_WHEN_SCHEMA,

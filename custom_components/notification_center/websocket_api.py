@@ -8,6 +8,7 @@ change the configuration.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime, time
 from functools import wraps
 from typing import Any, Final
 
@@ -19,7 +20,15 @@ import voluptuous as vol
 
 from .const import CLOSED_DISMISSED, CLOSED_DONE, DOMAIN, SOURCE_BUTTON
 from .engine import async_get_engine
-from .model import COLLECTIONS, ConfigData, ConfigValidationError
+from .model import COLLECTIONS, SCHEDULE_SCHEMA, ConfigData, ConfigValidationError
+from .render import render_text
+from .schedule import (
+    SCHEDULE_CALENDAR,
+    add_units,
+    after_last_done_due,
+    calendar_after,
+    every,
+)
 from .store import ConfigManager, async_people_view
 
 ERR_INVALID: Final = "invalid_config"
@@ -92,6 +101,9 @@ def async_register(hass: HomeAssistant) -> None:
         ws_card_action,
         ws_card_press,
         ws_step_done_early,
+        ws_schedule_preview,
+        ws_step_set_next,
+        ws_text_preview,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -486,3 +498,155 @@ def ws_step_done_early(
         connection.send_error(msg["id"], ERR_INVALID, str(err))
         return
     connection.send_result(msg["id"])
+
+
+_PREVIEW_COUNT: Final = 3
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/schedule/preview",
+        vol.Required("schedule"): dict,
+        vol.Optional("notification_id"): str,
+        vol.Optional("step_id"): str,
+        vol.Optional("count", default=_PREVIEW_COUNT): vol.All(int, vol.Range(1, 10)),
+    }
+)
+@callback
+def ws_schedule_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the next times of a schedule being edited.
+
+    A calendar schedule gives its next occurrences. An after-last-done one
+    gives only the next, counted from the step's last done (or from now, for
+    a step that is not saved yet), and the last done itself.
+    """
+    try:
+        schedule = SCHEDULE_SCHEMA(msg["schedule"])
+    except vol.Invalid as err:
+        connection.send_error(msg["id"], ERR_INVALID, str(err))
+        return
+    now = dt_util.utcnow()
+    n = every(hass, schedule)
+    times: list[str] = []
+    last_done = None
+    if n > 0 and schedule["type"] == SCHEDULE_CALENDAR:
+        after = now
+        for _ in range(msg["count"]):
+            due = calendar_after(schedule, n, after)
+            if due is None:
+                break
+            times.append(due.isoformat())
+            after = due
+    elif n > 0:
+        engine = async_get_engine(hass)
+        if engine is not None and "notification_id" in msg and "step_id" in msg:
+            last_done = engine.last_reached(
+                msg["notification_id"], msg["step_id"], CLOSED_DONE
+            )
+        due = after_last_done_due(schedule, n, last_done or now, None, now)
+        times.append(due.isoformat())
+    connection.send_result(
+        msg["id"],
+        {
+            "next": times,
+            "every": n,
+            "last_done": last_done.isoformat() if last_done else None,
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/step/set_next",
+        vol.Required("notification_id"): str,
+        vol.Required("step_id"): str,
+        vol.Required("next"): str,
+    }
+)
+@websocket_api.require_admin
+@callback
+def ws_step_set_next(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Set when an after-last-done step is next due.
+
+    It is stored as its last done: the next time minus the interval. With
+    an At time only the date of the next time counts.
+    """
+    engine = async_get_engine(hass)
+    if engine is None:
+        connection.send_error(
+            msg["id"], "not_loaded", "Notification Center is not loaded"
+        )
+        return
+    notification = engine.notification_config(msg["notification_id"]) or {}
+    step = next(
+        (
+            item
+            for item in notification.get("steps", [])
+            if item["id"] == msg["step_id"]
+        ),
+        None,
+    )
+    start = (step or {}).get("start", {})
+    schedule = start.get("schedule") if start.get("type") == "schedule" else None
+    if step is None or schedule is None or schedule["type"] == SCHEDULE_CALENDAR:
+        connection.send_error(
+            msg["id"], ERR_INVALID, "the step does not repeat after it is done"
+        )
+        return
+    wanted = dt_util.parse_datetime(msg["next"])
+    if wanted is None:
+        wanted_date = dt_util.parse_date(msg["next"])
+        if wanted_date is None:
+            connection.send_error(msg["id"], ERR_INVALID, "not a date or time")
+            return
+        wanted = datetime.combine(
+            wanted_date, time(12), tzinfo=dt_util.get_default_time_zone()
+        )
+    local = dt_util.as_local(wanted)
+    n = max(every(hass, schedule), 1)
+    day = add_units(local.date(), -n, schedule["unit"])
+    at = dt_util.parse_time(schedule["at"]) if schedule.get("at") else local.timetz()
+    if at is None:
+        at = local.timetz()
+    last_done = datetime.combine(
+        day, at.replace(tzinfo=None), tzinfo=dt_util.get_default_time_zone()
+    )
+    engine.set_last_done(msg["notification_id"], msg["step_id"], last_done)
+    connection.send_result(msg["id"], {"last_done": last_done.isoformat()})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/text/preview",
+        vol.Required("texts"): [vol.Any(str, None)],
+        vol.Optional("entity_id"): vol.Any(str, None),
+        vol.Optional("notification_id"): vol.Any(str, None),
+    }
+)
+@callback
+def ws_text_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Render texts of a step being edited, for an entity of the list."""
+    entity_id = msg.get("entity_id")
+    variables = {
+        "entity": entity_id,
+        "trigger": {"entity_id": entity_id} if entity_id else {},
+        "data": {},
+        "notification": {"id": msg.get("notification_id")},
+    }
+    results = []
+    for text in msg["texts"]:
+        rendered, error = render_text(hass, text, variables, entity_id)
+        results.append({"text": rendered, "error": error})
+    connection.send_result(msg["id"], results)
