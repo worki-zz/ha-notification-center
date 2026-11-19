@@ -223,6 +223,15 @@ export function formatDay(hass: HomeAssistant, when: Date, now = Date.now()): st
   }
 }
 
+/** The full name of a day's weekday, such as "Saturday". */
+export function weekday(hass: HomeAssistant, when: Date): string {
+  try {
+    return new Intl.DateTimeFormat(language(hass), { weekday: "long" }).format(when);
+  } catch {
+    return when.toDateString();
+  }
+}
+
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 /** The first day of the week (0 = Sunday), from the user's profile or language. */

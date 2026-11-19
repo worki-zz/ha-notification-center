@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Schedule: a card under *Week* shows only its weekday, in full (such as *Saturday*).
+- On the Overview, Done sits at the left edge of the cards and Schedule at the right.
+- Done today: "Done 12:26" is on the line under the texts, as on Schedule, not after the label.
+
 ## 0.4.2
 
 ### Changed
