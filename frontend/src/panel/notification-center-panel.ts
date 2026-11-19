@@ -202,7 +202,7 @@ export class NotificationCenterPanel extends LitElement {
               <ha-icon icon="mdi:arrow-left"></ha-icon>
             </ha-icon-button>`}
         <div class="main-title">${title}</div>
-        ${page === "overview" && this._isAdmin
+        ${page !== "settings" && this._isAdmin
           ? html`<ha-icon-button .label=${"Settings"} @click=${() => this._go("settings")}>
               <ha-icon icon="mdi:cog"></ha-icon>
             </ha-icon-button>`
@@ -236,7 +236,12 @@ export class NotificationCenterPanel extends LitElement {
     `;
   }
 
-  private _renderLive(cards: LiveCard[], data?: (live: LiveCard) => string, interactive = true) {
+  private _renderLive(
+    cards: LiveCard[],
+    data?: (live: LiveCard) => string,
+    interactive = true,
+    muted = false,
+  ) {
     return repeat(
       cards,
       (live) => cardKey(live.card),
@@ -247,6 +252,7 @@ export class NotificationCenterPanel extends LitElement {
           .now=${this._now}
           .data=${data?.(live)}
           .interactive=${interactive}
+          .muted=${muted}
         ></notification-center-live-card>
       `,
     );
@@ -299,6 +305,7 @@ export class NotificationCenterPanel extends LitElement {
         .map((item) => ({ at: item.due.getTime(), key: item.key, item })),
     ].sort((a, b) => a.at - b.at);
     const done = this._cards(["done"]).length;
+    const later = this._upcoming().some((item) => item.due.getTime() >= end);
     return html`
       ${active.length
         ? this._renderLive(active)
@@ -317,16 +324,22 @@ export class NotificationCenterPanel extends LitElement {
                   : this._renderUpcoming([entry.item!]),
             )}`
         : nothing}
-      <div class="pages">
-        <ha-button @click=${() => this._go("later")}>
-          <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
-          Later
-        </ha-button>
-        <ha-button @click=${() => this._go("done")}>
-          <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
-          Done today${done ? ` · ${done}` : ""}
-        </ha-button>
-      </div>
+      ${later || done
+        ? html`<div class="pages">
+            ${later
+              ? html`<ha-button appearance="plain" @click=${() => this._go("later")}>
+                  <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
+                  Later
+                </ha-button>`
+              : nothing}
+            ${done
+              ? html`<ha-button appearance="plain" @click=${() => this._go("done")}>
+                  <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
+                  Done · ${done}
+                </ha-button>`
+              : nothing}
+          </div>`
+        : nothing}
     `;
   }
 
@@ -353,6 +366,7 @@ export class NotificationCenterPanel extends LitElement {
           ? `Done ${formatTime(hass, new Date(live.card.closed_at), "time", this._now)}`
           : "Done",
       false,
+      true,
     );
   }
 
@@ -642,7 +656,7 @@ export class NotificationCenterPanel extends LitElement {
     .content {
       max-width: 640px;
       margin: 0 auto;
-      padding: 24px 16px;
+      padding: 32px 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -670,7 +684,7 @@ export class NotificationCenterPanel extends LitElement {
       justify-content: center;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 8px;
+      margin-top: 24px;
     }
     .empty {
       padding: 32px 16px;

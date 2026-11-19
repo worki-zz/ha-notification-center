@@ -183,7 +183,7 @@ export class NotificationCenterListCard extends LitElement {
         )}
         ${more > 0
           ? html`<div class="more">
-              <ha-button @click=${this._openPanel}>
+              <ha-button appearance="plain" @click=${this._openPanel}>
                 ${more} more
               </ha-button>
             </div>`

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.10
+
+### Changed
+
+- Done today cards look like the Later cards: the border of a Home Assistant card.
+- Later and Done are plain buttons (a background only on hover), and show only when their page has something; Done today is "Done · N" on the Overview. The "N more" button of the Notification Center card is plain too.
+- More room under the header and above the Later and Done buttons.
+- The settings button is on the Later and Done today pages too.
+
 ## 0.3.9
 
 ### Changed
