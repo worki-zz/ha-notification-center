@@ -33,6 +33,9 @@ export class NotificationCenterLiveCard extends LitElement {
   // The text after the label; the time since the card opened when unset.
   @property({ attribute: false }) public data?: string;
 
+  // An extra line below the texts (when an upcoming card comes).
+  @property({ attribute: false }) public when?: string;
+
   // False for a card that only shows (Done today).
   @property({ type: Boolean }) public interactive = true;
 
@@ -80,6 +83,7 @@ export class NotificationCenterLiveCard extends LitElement {
       data: this.data ?? formatTime(hass, new Date(card.since), "relative", this.now),
       message: card.message ?? undefined,
       info: card.info ?? undefined,
+      when: this.when,
       icon,
       stateObj: icon || !live.entityId ? undefined : hass.states[live.entityId],
       color: this.color ?? cssColor(notification.card_color ?? category?.card_color),

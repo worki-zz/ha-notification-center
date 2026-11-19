@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.7
+
+### Changed
+
+- Overview and Later as in the plan: under the active cards, *Upcoming* lists the steps due today and the snoozed cards together, by time, in a neutral colour, with an extra line for when they come ("Snoozed until 15:00"). Later only lists the scheduled steps due after today. A card hidden by Hide while is not listed.
+
 ## 0.3.6
 
 ### Changed

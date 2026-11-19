@@ -172,8 +172,8 @@ export class NotificationCenterPanel extends LitElement {
           due,
           view: {
             label: notification.name,
-            data: this._when(due),
             message,
+            when: this._when(due),
             icon: notification.icon || category?.icon || "mdi:calendar-clock",
             color: MUTED,
             buttons: [{ key: "done_early", label: "Done", icon: "mdi:check" }],
@@ -246,6 +246,22 @@ export class NotificationCenterPanel extends LitElement {
     );
   }
 
+  // A snoozed card among the upcoming ones: neutral, with its snooze end.
+  private _renderSnoozed(live: LiveCard) {
+    const until = live.card.snoozed_until;
+    return html`
+      <notification-center-live-card
+        class="upcoming"
+        .hass=${this.hass}
+        .live=${live}
+        .now=${this._now}
+        .data=${""}
+        .when=${until ? `Snoozed until ${this._when(new Date(until))}` : "Snoozed"}
+        .color=${MUTED}
+      ></notification-center-live-card>
+    `;
+  }
+
   private _renderUpcoming(items: Upcoming[]) {
     return repeat(
       items,
@@ -261,11 +277,21 @@ export class NotificationCenterPanel extends LitElement {
     );
   }
 
+  // The active cards, then Upcoming: what is due today and the snoozed
+  // cards, by their time.
   private _renderOverview() {
     const active = this._cards(["active"]);
     const end = this._endOfToday();
-    const upcoming = this._upcoming();
-    const today = upcoming.filter((item) => item.due.getTime() < end);
+    const timed: { at: number; key: string; live?: LiveCard; item?: Upcoming }[] = [
+      ...this._cards(["snoozed"]).map((live) => ({
+        at: live.card.snoozed_until ? new Date(live.card.snoozed_until).getTime() : 0,
+        key: cardKey(live.card),
+        live,
+      })),
+      ...this._upcoming()
+        .filter((item) => item.due.getTime() < end)
+        .map((item) => ({ at: item.due.getTime(), key: item.key, item })),
+    ].sort((a, b) => a.at - b.at);
     const done = this._cards(["done"]).length;
     return html`
       ${active.length
@@ -274,9 +300,16 @@ export class NotificationCenterPanel extends LitElement {
             <ha-icon icon="mdi:message-bulleted"></ha-icon>
             <div>No active notifications</div>
           </div>`}
-      ${today.length
-        ? html`<h2>Today</h2>
-            ${this._renderUpcoming(today)}`
+      ${timed.length
+        ? html`<h2>Upcoming</h2>
+            ${repeat(
+              timed,
+              (entry) => entry.key,
+              (entry) =>
+                entry.live
+                  ? this._renderSnoozed(entry.live)
+                  : this._renderUpcoming([entry.item!]),
+            )}`
         : nothing}
       <div class="pages">
         <ha-button appearance="filled" variant="neutral" @click=${() => this._go("later")}>
@@ -291,39 +324,14 @@ export class NotificationCenterPanel extends LitElement {
     `;
   }
 
-  // Hidden for now first, then the snoozed cards and the scheduled steps
-  // by the time they come.
+  // The scheduled steps due after today, by their next time.
   private _renderLater() {
-    const hidden = this._cards(["hidden"]);
     const end = this._endOfToday();
-    const timed: { at: number; key: string; item: unknown }[] = [
-      ...this._cards(["snoozed"]).map((live) => ({
-        at: live.card.snoozed_until ? new Date(live.card.snoozed_until).getTime() : 0,
-        key: cardKey(live.card),
-        item: live,
-      })),
-      ...this._upcoming()
-        .filter((item) => item.due.getTime() >= end)
-        .map((item) => ({ at: item.due.getTime(), key: item.key, item })),
-    ].sort((a, b) => a.at - b.at);
-    if (!hidden.length && !timed.length) {
+    const later = this._upcoming().filter((item) => item.due.getTime() >= end);
+    if (!later.length) {
       return html`<div class="empty">Nothing later.</div>`;
     }
-    return html`
-      ${this._renderLive(hidden, () => "hidden for now")}
-      ${repeat(
-        timed,
-        (entry) => entry.key,
-        (entry) =>
-          "card" in (entry.item as object)
-            ? this._renderLive([entry.item as LiveCard], (live) =>
-                live.card.snoozed_until
-                  ? `until ${this._when(new Date(live.card.snoozed_until))}`
-                  : "",
-              )
-            : this._renderUpcoming([entry.item as Upcoming]),
-      )}
-    `;
+    return this._renderUpcoming(later);
   }
 
   private _renderDone() {
