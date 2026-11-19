@@ -29,6 +29,8 @@ export interface NotificationViewData {
   data?: string;
   message?: string;
   info?: string;
+  // An extra line: when an upcoming card comes (or its snooze ends).
+  when?: string;
   icon?: string;
   // Gives the icon when there is no own icon.
   stateObj?: HassEntity;
@@ -88,6 +90,7 @@ export class NotificationCenterView extends LitElement {
               : nothing}
             ${view.message ? html`<div class="message">${view.message}</div>` : nothing}
             ${view.info ? html`<div class="info">${view.info}</div>` : nothing}
+            ${view.when ? html`<div class="when">${view.when}</div>` : nothing}
           </div>
         </div>
         ${buttons.length
@@ -311,6 +314,12 @@ export class NotificationCenterView extends LitElement {
       line-height: var(--ha-line-height-condensed, 1.2);
       letter-spacing: 0.4px;
       overflow-wrap: anywhere;
+    }
+    .when {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
+      line-height: var(--ha-line-height-condensed, 1.2);
+      letter-spacing: 0.4px;
     }
     .buttons {
       position: relative;
