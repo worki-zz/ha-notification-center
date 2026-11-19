@@ -1,0 +1,49 @@
+# Backlog after 1.0
+
+Ideas and features that came up during the build and were deferred to after the 1.0 release. This is a living list: every new request or postponed item is added here, with a short description and where it came from. When an item is planned for a release, it moves into that release's plan and is removed from here.
+
+## Channels
+
+### Display channel
+Show notifications on smart displays (for example a Nest Hub) as a channel of its own, with its own settings like the other channels. Deferred as a whole; 1.0 has no display support. *(Scope cut, 2026-11-15)*
+
+### Large mode for displays
+A larger card layout for wall or kitchen displays such as the Nest Hub, readable from a distance. Belongs with the Display channel. *(Phase 3, 2026-11-18)*
+
+### TV channel
+Push notifications to the LG webOS TV (`notify.tv`) as a separate channel instead of a push device, since a TV needs other options than a phone (no buttons, short text, maybe only while it is on). *(Scope cut, 2026-11-15)*
+
+## Notification content
+
+### Alarm images and clips
+Attach a snapshot or a short clip to an alarm notification, shown on the card and in the push. No Frigate: the images come from an own automation that saves them at alarm time; the options for passing them to the notification still need a discussion. The `show_attachment` button action already exists in the data model but does nothing yet. *(Scope cut, 2026-11-15; phase 3)*
+
+### Notification details view
+A detail page per notification (like a more-info dialog of its own) with the full message, data, attachments and history. Once it exists, it is also offered as a button action ("Notification details") next to Entity action, More info, Action and Navigate. *(Phase 3 and phase 4, 2026-11-19)*
+
+## Buttons and interactions
+
+### Silence button
+A built-in button that stops the sound and light channels of a notification while the card stays active. Left out of the 1.0 editor to keep the button set simple. *(Phase 4, 2026-11-19)*
+
+### Confirmation for buttons
+Ask "Are you sure?" before a button runs its action, like the confirmation option of Home Assistant's tap actions. *(Phase 3, 2026-11-19)*
+
+### Skip next
+Skip the next occurrence of a scheduled or repeating notification without marking it done, for example when the garbage collection is moved or the family is away. *(Dev plan, 2026-11-15)*
+
+## Insight
+
+### History
+A history of each notification: when it became active, which step it was on, who marked it done, dismissed or snoozed it, and when. Can be built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*
+
+### Statistics
+Simple statistics per notification, such as how often it fired and how long it took until it was done. Also built on recorder data. *(Phase 4, 2026-11-19)*
+
+### Trace
+A trace view like the one for automations: why a notification became active or closed, which trigger and conditions matched, which channels were sent. Needs its own storage and its own view. *(Phase 4, 2026-11-19)*
+
+## Cards and panel
+
+### Scheduled preview card
+A dashboard card that shows the upcoming scheduled notifications (for example the next garbage collections), not only the active ones. *(Phase 3, 2026-11-18)*
