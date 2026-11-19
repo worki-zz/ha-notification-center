@@ -78,7 +78,6 @@ const KIND_OPTIONS: { value: DataKind; label: string }[] = [
 
 const NOTIFICATION_OPTIONS: { value: DataType; label: string }[] = [
   { value: "active_since", label: "Active since" },
-  { value: "due", label: "Due" },
   { value: "last_done", label: "Last done" },
 ];
 
@@ -89,12 +88,12 @@ const LAST_UPDATED = "__last_updated";
 // Attributes that are not worth showing on a card.
 const HIDDEN_ATTRIBUTES = ["friendly_name", "icon", "entity_picture", "supported_features", "attribution"];
 
-const TIME_TYPES: DataType[] = ["active_since", "due", "last_done", "last_changed", "last_updated"];
+const TIME_TYPES: DataType[] = ["active_since", "last_done", "last_changed", "last_updated"];
 
 function kindOf(type: DataType): DataKind | "" {
   if (type === "none") return "";
   if (type === "custom") return "custom";
-  if (["active_since", "due", "last_done"].includes(type)) return "notification";
+  if (["active_since", "last_done"].includes(type)) return "notification";
   return "entity";
 }
 

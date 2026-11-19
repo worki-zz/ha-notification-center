@@ -58,7 +58,6 @@ export interface StepData {
   type:
     | "none"
     | "active_since"
-    | "due"
     | "last_done"
     | "state"
     | "attribute"

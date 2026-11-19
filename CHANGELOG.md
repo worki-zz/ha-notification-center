@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Data has three choices, empty meaning nothing: *Notification* (Active since, Due or Last done), *Entity state* (an entity, empty for the card's own, and an attribute: empty for the state, any attribute, Last changed or Last updated) and *Custom* (a template). A time has its format beside it.
+- Data has three choices, empty meaning nothing: *Notification* (Active since or Last done; Due is merged into Active since, and a saved Due reads as Active since), *Entity state* (an entity, empty for the card's own, and an attribute: empty for the state, any attribute, Last changed or Last updated) and *Custom* (a template). A time has its format beside it.
 - The `{Floor}` parameter shows only when Home Assistant has floors.
 - The step's blocks sit on a different background from the steps card.
 - Blocks draw their content only while open, so the editor opens faster.

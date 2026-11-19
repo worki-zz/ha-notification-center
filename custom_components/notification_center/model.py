@@ -559,7 +559,6 @@ ATTACHMENT_SCHEMA = vol.Any(
 DATA_TYPES: Final = (
     "none",
     "active_since",
-    "due",
     "last_done",
     "state",
     "attribute",
@@ -569,10 +568,17 @@ DATA_TYPES: Final = (
 )
 DATA_FORMATS: Final = ("relative", "duration", "time", "date", "datetime")
 
+
+
+def _old_data_type(value: Any) -> Any:
+    """Read the data types of 0.4.1 and before: Due is now Active since."""
+    return "active_since" if value == "due" else value
+
+
 # The text after the label of a card.
 DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("type"): vol.In(DATA_TYPES),
+        vol.Required("type"): vol.All(_old_data_type, vol.In(DATA_TYPES)),
         # State, attribute, last changed, last updated: the card's entity when
         # not given.
         vol.Optional("entity_id"): _optional(cv.entity_id),
