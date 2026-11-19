@@ -102,7 +102,7 @@ async def test_diagnostics(
     await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     data = await async_get_config_entry_diagnostics(hass, config_entry)
-    assert data["version"] == "0.4.0"
+    assert data["version"] == "0.4.1"
     assert data["config"]["people"] == [
         {"person": "**REDACTED**", "notify": "**REDACTED**", "device_type": "other"}
     ]

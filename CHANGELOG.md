@@ -1,8 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 ### Changed
+
+- Settings: the Notifications and General tabs sit in the header, as on the Devices & services page. The category filter is a compact chip next to a compact search, and the list uses Home Assistant's list rows: drag handle on the left, the icon on the category colour, the whole row clickable.
+- Editor blocks are Home Assistant's expansion panels with an icon and a count. Step tabs are numbered, with Add step and the step menu on the right.
+- Settings block: the category shows its icon; Icon and Card color share a row and show the category's values when empty; no helper texts. Light color leaves the Settings block (it goes to the light channel settings in phase 6).
+- Entities: names as in Home Assistant's pickers with area and device, a pencil to edit or delete an entity, each entity category as its own list, always open, with its entities aligned under its name. Add entity opens Home Assistant's entity list under the button.
+- Message: Message and Info side by side, entity parameters as code chips, then *Data* with its options beside it. Entity state and Entity attribute are one choice, *Entity state*, with an Attribute field (State by default) and the card's entity by default. *Custom text* is now *Custom*.
+- Start: a compact Triggers / Schedule / Repeat switch; the schedule fields share rows.
 
 - The panel's Later page is now **Schedule** (calendar icon): its cards are grouped under *Week*, the current month, *Year* and *Next year*, only the groups with something in them, with room above each title; a card shows its day without the time.
 - On the Overview, Schedule sits at the left edge of the cards and Done at the right.

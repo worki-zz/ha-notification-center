@@ -318,3 +318,28 @@ export function startsWithListed(step: EditorStep): boolean {
     (step.start.triggers ?? []).some((item) => item.trigger === LISTED_ENTITIES)
   );
 }
+
+/**
+ * An entity's name as Home Assistant's pickers show it: the entity's own
+ * name (or its device's), and below it the area and the device.
+ */
+export function entityDisplay(
+  hass: HomeAssistant,
+  entityId: string,
+): { primary: string; secondary: string } {
+  const state = hass.states[entityId];
+  const entry = hass.entities?.[entityId];
+  const device = entry?.device_id ? hass.devices?.[entry.device_id] : undefined;
+  const deviceName = device ? device.name_by_user || device.name || "" : "";
+  const friendly = (state?.attributes.friendly_name as string | undefined) ?? "";
+  let name = entry ? (entry.name ?? "") : friendly;
+  if (entry && !entry.name && !deviceName) name = friendly;
+  // An entity named after its device plus a word: show only the word.
+  if (deviceName && name.startsWith(`${deviceName} `)) name = name.slice(deviceName.length + 1);
+  if (name === deviceName) name = "";
+  const areaId = entry?.area_id || device?.area_id;
+  const area = areaId ? hass.areas?.[areaId]?.name : undefined;
+  const primary = name || deviceName || friendly || entityId;
+  const secondary = [area, name ? deviceName : ""].filter(Boolean).join(" ▸ ");
+  return { primary, secondary };
+}

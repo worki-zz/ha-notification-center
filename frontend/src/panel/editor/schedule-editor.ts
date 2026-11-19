@@ -158,9 +158,7 @@ export class NcScheduleEditor extends LitElement {
           (value) => this._unitChanged(value as Unit),
           "unit",
         )}
-      </div>
-      ${calendar ? this._renderOn(schedule) : nothing}
-      <div class="row">
+        ${calendar ? this._renderOn(schedule) : nothing}
         ${this._selector(
           { time: {} },
           schedule.at ?? undefined,
@@ -273,14 +271,14 @@ export class NcScheduleEditor extends LitElement {
         }),
       "grow",
     );
-    if (schedule.unit === "months") return html`<div class="row">${day}</div>`;
+    if (schedule.unit === "months") return day;
     const months = Array.from({ length: 12 }, (_item, index) => ({
       value: String(index + 1),
       label: new Intl.DateTimeFormat(this.hass?.language, { month: "long" }).format(
         new Date(2024, index, 1),
       ),
     }));
-    return html`<div class="row">
+    return html`
       ${this._selector(
         { select: { mode: "dropdown", options: months } },
         schedule.month === undefined ? undefined : String(schedule.month),
@@ -289,7 +287,7 @@ export class NcScheduleEditor extends LitElement {
         "grow",
       )}
       ${day}
-    </div>`;
+    `;
   }
 
   private _renderExpires(schedule: Schedule) {
@@ -487,14 +485,20 @@ export class NcScheduleEditor extends LitElement {
       min-width: 0;
     }
     .grow {
-      flex: 1 1 180px;
+      flex: 1 1 150px;
     }
     .number {
-      flex: 0 1 120px;
+      flex: 0 0 96px;
     }
-    .unit,
+    .unit {
+      flex: 0 0 130px;
+    }
     .mode {
-      flex: 1 1 160px;
+      flex: 0 1 200px;
+    }
+    .field {
+      flex: 0 1 auto;
+      min-width: 0;
     }
     .field .label {
       font-size: var(--ha-font-size-s, 12px);

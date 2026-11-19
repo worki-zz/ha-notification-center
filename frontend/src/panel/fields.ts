@@ -1,7 +1,7 @@
 // A field of the settings pages: a Home Assistant selector, or for a plain
 // choice Home Assistant's select without a clear button.
 
-import { html } from "lit";
+import { html, nothing } from "lit";
 
 import type { HomeAssistant } from "../shared/types";
 
@@ -53,4 +53,54 @@ export function field(
       changed(ev.detail.value);
     }}
   ></ha-selector>`;
+}
+
+export interface IconOption {
+  value: string;
+  label: string;
+  icon?: string | null;
+}
+
+/**
+ * A choice whose options have icons, shown also in the field: Home
+ * Assistant's picker field and dropdown, as its select builds them.
+ */
+export function iconSelect(
+  value: string,
+  label: string,
+  options: IconOption[],
+  changed: (value: string) => void,
+  className = "",
+) {
+  const current = options.find((option) => option.value === value);
+  return html`<ha-dropdown
+    class="icon-select ${className}"
+    placement="bottom"
+    @wa-select=${(ev: CustomEvent<{ item: { value: string } }>) => {
+      ev.stopPropagation();
+      if (ev.detail.item.value !== value) changed(ev.detail.item.value);
+    }}
+    @wa-show=${(ev: Event) => {
+      const host = ev.currentTarget as HTMLElement;
+      const trigger = host.querySelector("ha-picker-field") as HTMLElement | null;
+      if (trigger) host.style.setProperty("--select-menu-width", `${trigger.offsetWidth}px`);
+    }}
+  >
+    <ha-picker-field
+      slot="trigger"
+      type="button"
+      compact
+      hide-clear-icon
+      .hideClearIcon=${true}
+      .label=${label}
+      .value=${current?.label ?? value}
+      .icon=${current?.icon ?? undefined}
+    ></ha-picker-field>
+    ${options.map(
+      (option) => html`<ha-dropdown-item .value=${option.value} .selected=${option.value === value}>
+        ${option.icon ? html`<ha-icon slot="icon" .icon=${option.icon}></ha-icon>` : nothing}
+        ${option.label}
+      </ha-dropdown-item>`,
+    )}
+  </ha-dropdown>`;
 }

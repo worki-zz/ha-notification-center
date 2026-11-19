@@ -1,94 +1,82 @@
-// A block of the editor that opens and closes, with the look of Home
-// Assistant's outlined expansion panel. The content is drawn only while
-// open and without a height animation, so editors that grow after they
-// load (triggers, selectors) always get their room.
+// A block of the editor that opens and closes: Home Assistant's outlined
+// expansion panel with an icon, the name and a count, as in the automation
+// editor.
 
-import { LitElement, css, html, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { css, html, nothing } from "lit";
 
-@customElement("nc-block")
-export class NcBlock extends LitElement {
-  @property({ reflect: true }) public header = "";
-
-  @property() public secondary = "";
-
-  @property({ type: Boolean, reflect: true }) public expanded = false;
-
-  private _toggle(ev: Event): void {
-    if (ev instanceof KeyboardEvent && ev.key !== "Enter" && ev.key !== " ") return;
-    ev.preventDefault();
-    this.dispatchEvent(new CustomEvent("toggled", { detail: { expanded: !this.expanded } }));
-  }
-
-  protected override render() {
-    return html`
-      <div
-        class="summary"
-        role="button"
-        tabindex="0"
-        aria-expanded=${this.expanded}
-        @click=${this._toggle}
-        @keydown=${this._toggle}
-      >
-        <div class="text">
-          <div class="header">${this.header}</div>
-          ${this.secondary ? html`<div class="secondary">${this.secondary}</div>` : nothing}
-        </div>
-        <ha-icon class="chevron" icon="mdi:chevron-down"></ha-icon>
-      </div>
-      ${this.expanded ? html`<div class="content"><slot></slot></div>` : nothing}
-    `;
-  }
-
-  static override styles = css`
-    :host {
-      display: block;
-      border: 1px solid var(--outline-color, var(--divider-color));
-      border-radius: var(--ha-card-border-radius, 12px);
-      background-color: var(--card-background-color);
-    }
-    .summary {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 48px;
-      padding: 8px 12px 8px 16px;
-      cursor: pointer;
-      border-radius: var(--ha-card-border-radius, 12px);
-      outline: none;
-    }
-    .summary:focus-visible {
-      background-color: rgb(from var(--primary-text-color) r g b / 0.06);
-    }
-    .text {
-      flex: 1;
-      min-width: 0;
-    }
-    .header {
-      font-weight: var(--ha-font-weight-medium, 500);
-    }
-    .secondary {
-      color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s, 12px);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .chevron {
-      color: var(--secondary-text-color);
-      transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    :host([expanded]) .chevron {
-      transform: rotate(180deg);
-    }
-    .content {
-      padding: 0 16px 8px;
-    }
-  `;
+export interface BlockOptions {
+  icon: string;
+  header: string;
+  // A number (or text such as 2/2) after the name.
+  count?: number | string;
+  expanded: boolean;
+  toggled: (expanded: boolean) => void;
+  content: unknown;
 }
 
-declare global {
-  interface HTMLElementTagNameMap {
-    "nc-block": NcBlock;
-  }
+export function block(options: BlockOptions) {
+  return html`<ha-expansion-panel
+    outlined
+    class="nc-block"
+    .expanded=${options.expanded}
+    @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
+      // Panels inside the block (triggers, conditions) tell their own.
+      if (ev.target !== ev.currentTarget) return;
+      ev.stopPropagation();
+      settle(ev.currentTarget as HTMLElement);
+      options.toggled(ev.detail.expanded);
+    }}
+  >
+    <ha-icon slot="leading-icon" .icon=${options.icon}></ha-icon>
+    <div slot="header" class="block-header">
+      ${options.header}
+      ${options.count === undefined || options.count === ""
+        ? nothing
+        : html`<span class="block-count">${options.count}</span>`}
+    </div>
+    <div class="block-content">${options.content}</div>
+  </ha-expansion-panel>`;
 }
+
+// The panel animates to the height its content had when it opened; editors
+// that load later (triggers, selectors) need it to follow them after that.
+function settle(panel: HTMLElement): void {
+  window.setTimeout(() => {
+    const container = panel.shadowRoot?.querySelector<HTMLElement>(".container");
+    if (container && panel.hasAttribute("expanded")) {
+      container.style.removeProperty("height");
+      container.style.overflow = "initial";
+    }
+  }, 400);
+}
+
+export const BLOCK_STYLES = css`
+  ha-expansion-panel.nc-block {
+    display: block;
+    background-color: var(--card-background-color);
+    --expansion-panel-summary-padding: 0 12px 0 16px;
+    --expansion-panel-content-padding: 0;
+  }
+  ha-expansion-panel.nc-block[expanded]::part(summary) {
+    border-bottom: 1px solid var(--divider-color);
+  }
+  ha-expansion-panel.nc-block > ha-icon[slot="leading-icon"] {
+    color: var(--secondary-text-color);
+    margin-inline-end: 12px;
+  }
+  .block-header {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    font-weight: var(--ha-font-weight-medium, 500);
+  }
+  .block-count {
+    color: var(--secondary-text-color);
+    font-weight: var(--ha-font-weight-normal, 400);
+    font-size: var(--ha-font-size-s, 12px);
+  }
+  .block-content {
+    padding: 16px;
+  }
+`;
