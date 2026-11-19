@@ -1,7 +1,7 @@
 notification_state:
   fields:
     notification: &notification
-      required: true
+      required: false
       selector:
         entity:
           filter:

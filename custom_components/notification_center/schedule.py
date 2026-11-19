@@ -73,13 +73,25 @@ def is_valid_every(hass: HomeAssistant, schedule: Mapping[str, Any]) -> bool:
     return True
 
 
-def expires(schedule: Mapping[str, Any]) -> timedelta | None:
-    """Return how long a card of the schedule stays open, if limited."""
+def expires_at(schedule: Mapping[str, Any], due: datetime) -> datetime | None:
+    """Return when a card of the schedule that was due at a time expires.
+
+    ``expires`` is a duration, or a day after the due day (0 is the same
+    day) at a time; a time on the same day that is not after the due time
+    means the next day.
+    """
     value = schedule.get("expires")
     if not value:
         return None
+    if "day" in value:
+        at = dt_util.parse_time(str(value["at"])) or time(0)
+        local = dt_util.as_local(due)
+        when = _local(local.date() + timedelta(days=int(value["day"])), at)
+        if when <= due:
+            when = _local(local.date() + timedelta(days=int(value["day"]) + 1), at)
+        return when
     period: timedelta = cv.positive_time_period_dict(value)
-    return period or None
+    return due + period if period else None
 
 
 def _at(schedule: Mapping[str, Any]) -> time | None:
