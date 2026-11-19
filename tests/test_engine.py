@@ -164,6 +164,62 @@ async def test_hide_while(center: Center) -> None:
     assert center.state("sensor.nc_windows") == "hidden"
 
 
+async def test_show_when_switches(center: Center) -> None:
+    """Start only: no card while not met. Hide only: the card starts hidden."""
+    away = {"condition": "state", "entity_id": "input_boolean.away", "state": "off"}
+    await center.set("input_boolean.away", "on")
+    for name, entity, start, hide in (
+        ("Start only", "input_boolean.one", True, False),
+        ("Hide only", "input_boolean.two", False, True),
+    ):
+        await center.add(
+            name,
+            step(
+                start={"type": "triggers", "triggers": [_state_trigger(entity)]},
+                show_when={"start": start, "hide": hide, "conditions": [away]},
+            ),
+        )
+    await center.set("input_boolean.one", "on")
+    await center.set("input_boolean.two", "on")
+    assert center.state("sensor.nc_start_only") == "idle"
+    assert center.state("sensor.nc_hide_only") == "hidden"
+
+    await center.set("input_boolean.away", "off")
+    assert center.state("sensor.nc_start_only") == "idle"
+    assert center.state("sensor.nc_hide_only") == "active"
+
+    await center.set("input_boolean.one", "off")
+    await center.set("input_boolean.one", "on")
+    assert center.state("sensor.nc_start_only") == "active"
+    # Start only: the card stays when the conditions stop being met.
+    await center.set("input_boolean.away", "on")
+    assert center.state("sensor.nc_start_only") == "active"
+    assert center.state("sensor.nc_hide_only") == "hidden"
+
+
+async def test_show_when_no_longer_met_closes(center: Center) -> None:
+    """Start condition no longer true closes the card when Show when fails."""
+    away = {"condition": "state", "entity_id": "input_boolean.away", "state": "off"}
+    await center.set("input_boolean.away", "off")
+    await center.add(
+        "Bell",
+        step(
+            start={
+                "type": "triggers",
+                "triggers": [_state_trigger("input_boolean.bell")],
+            },
+            show_when={"start": True, "hide": False, "conditions": [away]},
+            done_when={"start_no_longer_true": True},
+        ),
+    )
+    await center.set("input_boolean.bell", "on")
+    assert center.state("sensor.nc_bell") == "active"
+
+    await center.set("input_boolean.away", "on")
+    assert center.state("sensor.nc_bell") != "active"
+    assert center.kinds() == ["active", "done"]
+
+
 async def test_retrigger_keeps_the_card(
     hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
 ) -> None:

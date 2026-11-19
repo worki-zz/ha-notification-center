@@ -28,7 +28,7 @@ import "./schedule-editor";
 
 type StartKind = "triggers" | "schedule" | "repeat";
 
-const HELP: Record<StartKind | "conditions" | "hide" | "done", { title: string; text: string[] }> = {
+const HELP: Record<StartKind | "show" | "done", { title: string; text: string[] }> = {
   triggers: {
     title: "Triggers",
     text: [
@@ -53,21 +53,19 @@ const HELP: Record<StartKind | "conditions" | "hide" | "done", { title: string; 
       "Every can be a number or the value of an entity, such as an input number.",
     ],
   },
-  conditions: {
-    title: "Conditions",
-    text: ["The step starts only when all of its conditions are true at that moment."],
-  },
-  hide: {
-    title: "Hide while",
+  show: {
+    title: "Show when",
     text: [
-      "The card stays open but is hidden while any of these conditions is true, for example while nobody is home. Push and light come again when it shows.",
+      "One set of conditions, used as switched on above them.",
+      "Start while conditions are met: the step starts only when they are all true at that moment, for example the door card only while the alarm is armed. A scheduled card waits for them, hidden, until it expires.",
+      "Hide while conditions are not met: an open card is hidden while any of them is false, and shows again when they are all true, for example the window card only while the heating is on. Push and light come again when it shows.",
     ],
   },
   done: {
     title: "Done when",
     text: [
       "The card closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
-      "Start condition no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Start (the leak is dry again).",
+      "Start condition no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Start (the leak is dry again), and a card closes when the Show when conditions it started with are no longer met (with Start while conditions are met switched on).",
     ],
   },
 };
@@ -112,7 +110,7 @@ const FORMATS = [
   { value: "datetime", label: "Date and time" },
 ];
 
-export const STEP_BLOCKS = ["message", "start", "hide", "done"] as const;
+export const STEP_BLOCKS = ["message", "start", "show", "done"] as const;
 export type StepBlock = (typeof STEP_BLOCKS)[number];
 
 @customElement("nc-step-editor")
@@ -167,7 +165,7 @@ export class NcStepEditor extends LitElement {
     const kind = this._kind(step);
     const doneCount =
       step.done_when.triggers.length +
-      (step.done_when.start_no_longer_true && pinnedFilled(step) ? 1 : 0);
+      (step.done_when.start_no_longer_true && this._startCanEnd(step) ? 1 : 0);
     return html`
       ${this._panel("message", "mdi:message-text-outline", "Message", undefined, this._renderMessage(step))}
       ${this._panel(
@@ -177,7 +175,7 @@ export class NcStepEditor extends LitElement {
         kind === "triggers" ? this._startCount(step) : undefined,
         this._renderStart(step),
       )}
-      ${this._panel("hide", "mdi:eye-off-outline", "Hide while", step.hide_while.length, this._renderHide(step))}
+      ${this._panel("show", "mdi:eye-outline", "Show when", step.show_when.conditions.length, this._renderShow(step))}
       ${this._panel("done", "mdi:check-circle-outline", "Done when", doneCount, this._renderDone(step))}
       ${this._help ? this._renderHelp(this._help) : nothing}
     `;
@@ -424,17 +422,6 @@ export class NcStepEditor extends LitElement {
               this._change({ start: { ...step.start, schedule: ev.detail.value } });
             }}
           ></nc-schedule-editor>`}
-      <div class="divider"></div>
-      ${this._title("Conditions", "conditions")}
-      <ha-automation-condition
-        .hass=${this.hass}
-        .narrow=${this.narrow}
-        .conditions=${step.start.conditions}
-        @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
-          ev.stopPropagation();
-          this._change({ start: { ...step.start, conditions: ev.detail.value } });
-        }}
-      ></ha-automation-condition>
     </div>`;
   }
 
@@ -534,25 +521,55 @@ export class NcStepEditor extends LitElement {
     </div>`;
   }
 
-  // -- Hide while and Done when ------------------------------------------
+  // -- Show when and Done when ------------------------------------------
 
-  private _renderHide(step: EditorStep) {
+  private _renderShow(step: EditorStep) {
+    const show = step.show_when;
+    const toggle = (key: "start" | "hide") => (ev: Event) =>
+      this._change({ show_when: { ...show, [key]: (ev.target as HTMLInputElement).checked } });
     return html`<div class="block">
-      ${this._title("Conditions", "hide")}
+      <div class="show-switches">
+        <ha-card outlined class="own-row">
+          <ha-icon class="builtin" icon="mdi:play-circle-outline"></ha-icon>
+          <div class="own-text">
+            <div>Start while conditions are met</div>
+            <div class="secondary">The step starts only when they are true.</div>
+          </div>
+          <ha-switch .checked=${show.start} @change=${toggle("start")}></ha-switch>
+        </ha-card>
+        <ha-card outlined class="own-row">
+          <ha-icon class="builtin" icon="mdi:eye-off-outline"></ha-icon>
+          <div class="own-text">
+            <div>Hide while conditions are not met</div>
+            <div class="secondary">An open card shows only while they are true.</div>
+          </div>
+          <ha-switch .checked=${show.hide} @change=${toggle("hide")}></ha-switch>
+        </ha-card>
+      </div>
+      ${this._title("Conditions", "show")}
       <ha-automation-condition
         .hass=${this.hass}
         .narrow=${this.narrow}
-        .conditions=${step.hide_while}
+        .conditions=${show.conditions}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
-          this._change({ hide_while: ev.detail.value });
+          this._change({ show_when: { ...show, conditions: ev.detail.value } });
         }}
       ></ha-automation-condition>
     </div>`;
   }
 
+  // Start condition no longer true has something to watch: Notification
+  // entities, or Show when used at the start of a triggered step.
+  private _startCanEnd(step: EditorStep): boolean {
+    const show = step.show_when;
+    return (
+      pinnedFilled(step) || (step.start.type === "triggers" && show.start && show.conditions.length > 0)
+    );
+  }
+
   private _renderDone(step: EditorStep) {
-    const listed = pinnedFilled(step);
+    const listed = this._startCanEnd(step);
     return html`<div class="block">
       ${this._title("Triggers", "done")}
       ${listed
@@ -561,7 +578,8 @@ export class NcStepEditor extends LitElement {
             <div class="own-text">
               <div>Start condition no longer true</div>
               <div class="secondary">
-                An entity's card closes when that entity no longer matches Notification entities at the top of Start.
+                The card closes when what started it is no longer true: its entity no longer matches
+                Notification entities, or Show when is no longer met.
               </div>
             </div>
             <ha-switch
@@ -703,6 +721,12 @@ export class NcStepEditor extends LitElement {
     /* The built-in rows, which are not Home Assistant's triggers. */
     ha-icon.builtin {
       color: var(--amber-color, #ffc107);
+    }
+    /* Side by side where there is room. */
+    .show-switches {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 8px;
     }
     .own-row {
       display: flex;
