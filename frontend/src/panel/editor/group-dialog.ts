@@ -121,15 +121,19 @@ export class NcGroupDialog extends LitElement {
           "Device class",
           (value) => this._set({ device_class: (value as string) || null }),
         )}
-        ${this._selector({ floor: { multiple: true } }, group.floors, "Floors", (value) =>
-          this._set({ floors: (value as string[]) ?? [] }),
-        )}
+        ${Object.keys(hass.floors ?? {}).length || group.floors.length
+          ? this._selector({ floor: { multiple: true } }, group.floors, "Floors", (value) =>
+              this._set({ floors: (value as string[]) ?? [] }),
+            )
+          : nothing}
         ${this._selector({ area: { multiple: true } }, group.areas, "Areas", (value) =>
           this._set({ areas: (value as string[]) ?? [] }),
         )}
-        ${this._selector({ label: { multiple: true } }, group.labels, "Labels", (value) =>
+        ${this._selector({ label: { multiple: true } }, group.labels, "", (value) =>
           this._set({ labels: (value as string[]) ?? [] }),
         )}
+        <div class="count">${count} ${count === 1 ? "entity" : "entities"}</div>
+        <div class="divider"></div>
         <ha-settings-row>
           <span slot="heading">Add new matching entities</span>
           <span slot="description">
@@ -140,7 +144,6 @@ export class NcGroupDialog extends LitElement {
             @change=${(ev: Event) => this._set({ add_new: (ev.target as HTMLInputElement).checked })}
           ></ha-switch>
         </ha-settings-row>
-        <div class="count">${count} ${count === 1 ? "entity" : "entities"}</div>
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button slot="secondaryAction" appearance="plain" @click=${() => this._close()}>
@@ -184,6 +187,11 @@ export class NcGroupDialog extends LitElement {
     }
     .count {
       color: var(--secondary-text-color);
+    }
+    .divider {
+      height: 1px;
+      background-color: var(--divider-color);
+      margin: 0 -24px;
     }
   `;
 }

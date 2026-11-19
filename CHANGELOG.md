@@ -1,12 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.4.3
 
 ### Changed
+
+- Steps: the steps card has the card background and its blocks the page background.
+- Entity category dialog: Floors only when Home Assistant has floors; the entity count above the switch, with a line between; Labels without a title.
+- Data: *Custom* is a plain text field (templates still work). *Entity state*: the entity field has no title and shows *Active entity* when empty; Attribute lists *State* first and selects it by default (in YAML, no attribute still means the state).
 
 - Schedule: a card under *Week* shows only its weekday, in full (such as *Saturday*).
 - On the Overview, Done sits at the left edge of the cards and Schedule at the right.
 - Done today: "Done 12:26" is on the line under the texts, as on Schedule, not after the label.
+
+### Fixed
+
+- The Triggers / Schedule / Repeat switch showed nothing until another Home Assistant page had loaded its element; the editor now loads the elements it uses itself.
+- An open trigger was wider than its card (Home Assistant's trigger editor lacks the padding outside the automation editor's sidebar).
 
 ## 0.4.2
 

@@ -1199,8 +1199,9 @@ export class NcNotificationEditor extends LitElement {
     ha-tab-group-tab.off {
       opacity: 0.5;
     }
+    /* The step's blocks stand out on the steps card. */
     .step {
-      background-color: var(--secondary-background-color);
+      background-color: var(--card-background-color);
       padding: 16px;
       display: flex;
       flex-direction: column;
