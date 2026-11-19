@@ -205,3 +205,51 @@ export function formatWhen(hass: HomeAssistant, when: Date, now = Date.now()): s
     return when.toISOString();
   }
 }
+
+/** A day to come, without its time: the weekday this week, else the date. */
+export function formatDay(hass: HomeAssistant, when: Date, now = Date.now()): string {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const days = Math.floor((when.getTime() - start.getTime()) / 86_400_000);
+  const options: Intl.DateTimeFormatOptions =
+    days >= 0 && days < 7
+      ? { weekday: "short", month: "short", day: "numeric" }
+      : { month: "short", day: "numeric" };
+  if (when.getFullYear() > start.getFullYear() + 1) options.year = "numeric";
+  try {
+    return new Intl.DateTimeFormat(language(hass), options).format(when);
+  } catch {
+    return when.toDateString();
+  }
+}
+
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/** The first day of the week (0 = Sunday), from the user's profile or language. */
+export function firstWeekday(hass: HomeAssistant): number {
+  const setting = hass.locale?.first_weekday;
+  const index = setting ? WEEKDAYS.indexOf(setting) : -1;
+  if (index >= 0) return index;
+  try {
+    const locale = new Intl.Locale(language(hass)) as Intl.Locale & {
+      getWeekInfo?: () => { firstDay: number };
+      weekInfo?: { firstDay: number };
+    };
+    const info = locale.getWeekInfo?.() ?? locale.weekInfo;
+    // Intl counts Monday as 1 and Sunday as 7.
+    if (info) return info.firstDay % 7;
+  } catch {
+    // Fall through to Monday.
+  }
+  return 1;
+}
+
+/** The name of a month in the user's language, such as "November". */
+export function monthName(hass: HomeAssistant, when: Date): string {
+  try {
+    const name = new Intl.DateTimeFormat(language(hass), { month: "long" }).format(when);
+    return name.charAt(0).toLocaleUpperCase() + name.slice(1);
+  } catch {
+    return String(when.getMonth() + 1);
+  }
+}
