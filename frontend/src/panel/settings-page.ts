@@ -181,7 +181,7 @@ export class NcSettings extends LitElement {
         ${filtering
           ? nothing
           : html`<div slot="start" class="handle" title="Drag to reorder" @click=${stop}>
-              <ha-icon icon="mdi:drag"></ha-icon>
+              <ha-icon icon="mdi:drag-horizontal-variant"></ha-icon>
             </div>`}
         <div slot="start" class="icon" style=${`--icon-color: ${color}`}>
           <ha-icon .icon=${item.icon || category?.icon || "mdi:bell"}></ha-icon>
@@ -319,7 +319,8 @@ export class NcSettings extends LitElement {
     .content {
       max-width: 1040px;
       margin: 0 auto;
-      padding: 16px;
+      /* As much room under the header as on the overview. */
+      padding: 32px 16px 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;

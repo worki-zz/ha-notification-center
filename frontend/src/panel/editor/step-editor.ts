@@ -450,7 +450,8 @@ export class NcStepEditor extends LitElement {
   private _renderPinned(step: EditorStep) {
     const pinned = pinnedEntities(step);
     if (!pinned && !this.entities.length) return nothing;
-    const kind: EntitiesKind = pinned?.kind ?? "state";
+    // Left empty, Numeric state when every listed entity has a number.
+    const kind: EntitiesKind = pinned?.kind ?? (this._allNumeric() ? "numeric" : "state");
     const options = pinned?.options ?? {};
     return html`<ha-expansion-panel
       outlined
@@ -481,6 +482,20 @@ export class NcStepEditor extends LitElement {
         }}
       ></nc-entities-form>
     </ha-expansion-panel>`;
+  }
+
+  private _allNumeric(): boolean {
+    const states = this.entities.map((entityId) => this.hass?.states[entityId]);
+    return (
+      states.length > 0 &&
+      states.every(
+        (entity) =>
+          !!entity &&
+          (entity.attributes.unit_of_measurement !== undefined ||
+            entity.attributes.state_class !== undefined ||
+            (entity.state.trim() !== "" && !Number.isNaN(Number(entity.state)))),
+      )
+    );
   }
 
   private _pinnedChanged(step: EditorStep, kind: EntitiesKind, options: Obj): void {
@@ -673,7 +688,11 @@ export class NcStepEditor extends LitElement {
       display: block;
       background-color: var(--card-background-color);
       --expansion-panel-summary-padding: 0 8px 0 16px;
-      --expansion-panel-content-padding: 0 16px 16px;
+      /* The panel pads its content even while closed, so the form does. */
+      --expansion-panel-content-padding: 0;
+    }
+    ha-expansion-panel.pinned nc-entities-form {
+      padding: 8px 16px 16px;
     }
     ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {
       margin-inline-end: 12px;

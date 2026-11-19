@@ -73,9 +73,6 @@ const FOR = {
   },
 };
 
-// The attribute choice: the state itself (empty) first.
-const STATE = "__state";
-
 // Labels Home Assistant's translations lack in this version.
 const OWN_LABELS: Record<string, string> = {
   "nc.match_type.choices.is": "Is",
@@ -166,7 +163,7 @@ export class NcEntitiesForm extends LitElement {
 
   @property({ type: Boolean }) public disabled = false;
 
-  // Offer State or Numeric state under the attribute (the trigger at the
+  // Offer State or Numeric state before the attribute (the trigger at the
   // top of Start); the form then sends kind-changed.
   @property({ type: Boolean, attribute: "kind-switch" }) public kindSwitch = false;
 
@@ -191,23 +188,31 @@ export class NcEntitiesForm extends LitElement {
         ? stateSchema(entities, options.attribute as string | undefined)
         : numericSchema();
     return html`${this.withNotification ? this._form([NOTIFICATION], data) : nothing}
-      ${this._attribute(entities, options.attribute as string | undefined)}
-      ${this.kindSwitch
-        ? html`<ha-button-toggle-group
-            size="s"
-            .buttons=${[
-              { label: "State", value: "state" },
-              { label: "Numeric state", value: "numeric" },
-            ]}
-            .active=${this.kind}
-            @value-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
-              ev.stopPropagation();
-              if (ev.detail.value !== this.kind) {
-                this.dispatchEvent(new CustomEvent("kind-changed", { detail: { value: ev.detail.value } }));
-              }
-            }}
-          ></ha-button-toggle-group>`
-        : nothing}
+      <div class="head">
+        ${this.kindSwitch
+          ? field(
+              this.hass,
+              {
+                select: {
+                  mode: "dropdown",
+                  options: [
+                    { value: "state", label: "State" },
+                    { value: "numeric", label: "Numeric state" },
+                  ],
+                },
+              },
+              this.kind,
+              "Type",
+              (value) => {
+                if (value && value !== this.kind) {
+                  this.dispatchEvent(new CustomEvent("kind-changed", { detail: { value } }));
+                }
+              },
+              { className: "kind" },
+            )
+          : nothing}
+        ${this._attribute(entities, options.attribute as string | undefined)}
+      </div>
       ${this._form(base, data)}`;
   }
 
@@ -223,7 +228,7 @@ export class NcEntitiesForm extends LitElement {
     ></ha-form>`;
   }
 
-  // The attribute, as a choice with the state itself first.
+  // The attribute: left empty, the state itself.
   private _attribute(entities: string[], attribute: string | undefined) {
     const hass = this.hass!;
     const names = new Set<string>();
@@ -235,7 +240,6 @@ export class NcEntitiesForm extends LitElement {
     if (attribute) names.add(attribute);
     const first = entities.map((id) => hass.states[id]).find(Boolean);
     const options = [
-      { value: STATE, label: "State" },
       ...[...names].sort().map((name) => ({
         value: name,
         label: first && hass.formatEntityAttributeName ? hass.formatEntityAttributeName(first, name) : name,
@@ -244,15 +248,15 @@ export class NcEntitiesForm extends LitElement {
     return field(
       hass,
       { select: { mode: "dropdown", options } },
-      attribute || STATE,
+      attribute ?? "",
       this._label({ name: "attribute" }),
       (value) => {
         const next: Obj = { ...this.value };
-        if (value && value !== STATE) next.attribute = value;
+        if (value) next.attribute = value;
         else delete next.attribute;
         this.dispatchEvent(new CustomEvent("value-changed", { detail: { value: next } }));
       },
-      { className: "attribute" },
+      { className: "attribute", clearable: true },
     );
   }
 
@@ -312,8 +316,17 @@ export class NcEntitiesForm extends LitElement {
       flex-direction: column;
       gap: 12px;
     }
-    ha-button-toggle-group {
-      align-self: flex-start;
+    /* Type and attribute in one row, wrapping when narrow. */
+    .head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .head .kind {
+      flex: 1 1 160px;
+    }
+    .head .attribute {
+      flex: 3 1 240px;
     }
     /* Inside Home Assistant's trigger and condition rows. */
     :host([with-notification]) {

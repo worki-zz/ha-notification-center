@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.8
+
+### Changed
+
+- Editor, Notification entities: *Type* (State or Numeric state) is a dropdown in one row with Attribute, before it. Attribute left empty means the state itself, and a chosen attribute can be cleared. Left empty, the block starts on Numeric state when every listed entity has a number. The block's spacing is fixed, open and closed.
+- Editor, Entities: *Add entity* has a plus icon.
+- Editor: a disabled step's notice has an *Enable* button on the right.
+- Settings and the editor have as much room under the header as the overview.
+- Settings list: the drag handle is Home Assistant's own icon.
+
 ## 0.4.7
 
 ### Changed
