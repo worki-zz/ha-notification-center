@@ -1,12 +1,21 @@
 # Changelog
 
+## 0.3.6
+
+### Changed
+
+- Panel: the header stays in place and has no background of its own, like a dashboard's. More room below it and between the cards (twice a dashboard's gap).
+- Overview: Later and Done today are Home Assistant buttons again; Done today shows the count after a dot when it is not 0.
+- Later: no section titles; the cards hidden for now come first, then the snoozed cards and the scheduled steps by their time.
+- Notification Center card: the row is "1 more", without an icon.
+
 ## 0.3.5
 
 ### Changed
 
 - Button order: Snooze, the own buttons, Done, Dismiss (or Mute).
 - A scheduled step marked Done before its time is a normal done card: it shows in Done today, the notification is done today, and the Activity log names who did it. Its button is called Done.
-- Later and Done today on the Overview, and the "+N more" row of the Notification Center card, are Home Assistant list rows (with the count and an arrow).
+- Later and Done today on the Overview, and the "N more" row of the Notification Center card, are Home Assistant list rows (with the count and an arrow).
 
 ## 0.3.4
 

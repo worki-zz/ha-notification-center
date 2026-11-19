@@ -184,8 +184,7 @@ export class NotificationCenterListCard extends LitElement {
         ${more > 0
           ? html`<ha-card class="more">
               <ha-md-list-item type="button" @click=${this._openPanel}>
-                <ha-icon slot="start" icon=${PANEL_ICON}></ha-icon>
-                <span slot="headline">+${more} more</span>
+                <span slot="headline">${more} more</span>
                 <ha-icon-next slot="end"></ha-icon-next>
               </ha-md-list-item>
             </ha-card>`
@@ -218,9 +217,6 @@ export class NotificationCenterListCard extends LitElement {
     }
     .more {
       overflow: hidden;
-    }
-    .more ha-icon {
-      color: var(--secondary-text-color);
     }
   `;
 }
