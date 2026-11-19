@@ -273,6 +273,8 @@ export function cardData(hass: HomeAssistant, live: LiveCard, now = Date.now()):
       return live.lastDone ? formatTime(hass, new Date(live.lastDone), format, now) : "";
     case "last_changed":
       return stateObj ? formatTime(hass, new Date(stateObj.last_changed), format, now) : "";
+    case "last_updated":
+      return stateObj ? formatTime(hass, new Date(stateObj.last_updated), format, now) : "";
     case "state":
       return stateObj ? entityState(hass, stateObj) : "";
     case "attribute":

@@ -9,6 +9,8 @@ export interface FieldOptions {
   required?: boolean;
   helper?: string;
   className?: string;
+  // A choice that can be emptied with a clear button.
+  clearable?: boolean;
 }
 
 interface SelectSelector {
@@ -31,11 +33,14 @@ export function field(
       .helper=${options.helper ?? ""}
       .value=${value === undefined || value === null ? "" : String(value)}
       .options=${select.options ?? []}
+      .clearable=${options.clearable ?? false}
       @selected=${(ev: CustomEvent<{ value?: string }>) => {
         ev.stopPropagation();
-        if (ev.detail.value !== undefined && ev.detail.value !== String(value ?? "")) {
-          changed(ev.detail.value);
+        if (ev.detail.value === undefined) {
+          if (options.clearable && value) changed(undefined);
+          return;
         }
+        if (ev.detail.value !== String(value ?? "")) changed(ev.detail.value);
       }}
       @closed=${(ev: Event) => ev.stopPropagation()}
     ></ha-select>`;

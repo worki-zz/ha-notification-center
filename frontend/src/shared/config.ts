@@ -63,6 +63,7 @@ export interface StepData {
     | "state"
     | "attribute"
     | "last_changed"
+    | "last_updated"
     | "custom";
   entity_id?: string | null;
   attribute?: string | null;

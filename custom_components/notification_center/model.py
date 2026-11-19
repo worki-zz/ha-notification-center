@@ -564,6 +564,7 @@ DATA_TYPES: Final = (
     "state",
     "attribute",
     "last_changed",
+    "last_updated",
     "custom",
 )
 DATA_FORMATS: Final = ("relative", "duration", "time", "date", "datetime")
@@ -572,7 +573,8 @@ DATA_FORMATS: Final = ("relative", "duration", "time", "date", "datetime")
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required("type"): vol.In(DATA_TYPES),
-        # State, attribute, last changed: the card's entity when not given.
+        # State, attribute, last changed, last updated: the card's entity when
+        # not given.
         vol.Optional("entity_id"): _optional(cv.entity_id),
         vol.Optional("attribute"): _optional(cv.string),
         # Custom: a template with the card's placeholders.

@@ -14,7 +14,6 @@ import {
   type Obj,
   type Schedule,
   type StepData,
-  entityDisplay,
   startsWithListed,
 } from "./model";
 import { defaultSchedule } from "./schedule-editor";
@@ -67,20 +66,37 @@ const HELP: Record<StartKind | "conditions" | "hide" | "done", { title: string; 
   },
 };
 
-const DATA_OPTIONS: { value: DataType; label: string }[] = [
-  { value: "none", label: "Nothing" },
+// The Data field: empty is nothing; the time of the notification, an
+// entity's state (or attribute, last changed, last updated), or a template.
+type DataKind = "notification" | "entity" | "custom";
+
+const KIND_OPTIONS: { value: DataKind; label: string }[] = [
+  { value: "notification", label: "Notification" },
+  { value: "entity", label: "Entity state" },
+  { value: "custom", label: "Custom" },
+];
+
+const NOTIFICATION_OPTIONS: { value: DataType; label: string }[] = [
   { value: "active_since", label: "Active since" },
   { value: "due", label: "Due" },
   { value: "last_done", label: "Last done" },
-  { value: "state", label: "Entity state" },
-  { value: "last_changed", label: "Entity last changed" },
-  { value: "custom", label: "Custom" },
 ];
+
+// Attribute values for the times of the entity, apart from its attributes.
+const LAST_CHANGED = "__last_changed";
+const LAST_UPDATED = "__last_updated";
 
 // Attributes that are not worth showing on a card.
 const HIDDEN_ATTRIBUTES = ["friendly_name", "icon", "entity_picture", "supported_features", "attribution"];
 
-const TIME_TYPES: DataType[] = ["active_since", "due", "last_done", "last_changed"];
+const TIME_TYPES: DataType[] = ["active_since", "due", "last_done", "last_changed", "last_updated"];
+
+function kindOf(type: DataType): DataKind | "" {
+  if (type === "none") return "";
+  if (type === "custom") return "custom";
+  if (["active_since", "due", "last_done"].includes(type)) return "notification";
+  return "entity";
+}
 
 const FORMATS = [
   { value: "relative", label: "Relative (5 minutes ago)" },
@@ -113,8 +129,6 @@ export class NcStepEditor extends LitElement {
 
   @state() private _help?: keyof typeof HELP;
 
-  // "Other entity" was chosen for the data: show the entity picker.
-  @state() private _otherEntity = false;
 
   // The text field the entity parameters go into.
   private _field: "message" | "info" = "message";
@@ -170,8 +184,6 @@ export class NcStepEditor extends LitElement {
 
   private _renderMessage(step: EditorStep) {
     const data = step.data ?? { type: "none" };
-    // Entity state and attribute are one choice: the attribute is State by default.
-    const type: DataType = data.type === "attribute" ? "state" : data.type;
     return html`<div class="block">
       <div class="row">
         ${this._text("message", "Message", step.message, (value) => this._change({ message: value }))}
@@ -179,7 +191,9 @@ export class NcStepEditor extends LitElement {
       </div>
       <div class="chips">
         <span class="chips-label">Entity parameters</span>
-        ${PLACEHOLDERS.map(
+        ${PLACEHOLDERS.filter(
+          (name) => name !== "Floor" || Object.keys(this.hass?.floors ?? {}).length > 0,
+        ).map(
           (name) => html`<button
             class="param"
             type="button"
@@ -190,34 +204,67 @@ export class NcStepEditor extends LitElement {
           </button>`,
         )}
       </div>
-      <div class="row data">
-        ${this._selector(
-          { select: { mode: "dropdown", options: DATA_OPTIONS } },
-          type,
-          "Data",
-          (value) => this._dataChanged({ type: (value as DataType) || "none" }),
-          "data-type",
-        )}
-        ${TIME_TYPES.includes(type)
-          ? this._selector(
-              { select: { mode: "dropdown", options: FORMATS } },
-              data.format ?? "relative",
-              "Format",
-              (value) => this._dataChanged({ format: (value as StepData["format"]) ?? null }),
-            )
-          : nothing}
-        ${type === "state" || type === "last_changed" ? this._renderDataEntity(data) : nothing}
-        ${type === "state" ? this._renderAttribute(data) : nothing}
-        ${type === "custom"
-          ? this._selector(
-              { text: {} },
-              data.text ?? "",
-              "Custom",
-              (value) => this._dataChanged({ text: (value as string) || null }),
-            )
-          : nothing}
-      </div>
+      <div class="row data">${this._renderData(data)}</div>
     </div>`;
+  }
+
+  private _renderData(data: StepData) {
+    const kind = kindOf(data.type);
+    const format = TIME_TYPES.includes(data.type)
+      ? this._selector(
+          { select: { mode: "dropdown", options: FORMATS } },
+          data.format ?? "relative",
+          "Format",
+          (value) => this._dataChanged({ format: (value as StepData["format"]) ?? null }),
+        )
+      : nothing;
+    return html`
+      ${this._selector(
+        { select: { mode: "dropdown", options: KIND_OPTIONS } },
+        kind,
+        "Data",
+        (value) => {
+          const next = (value as DataKind | undefined) ?? "";
+          if (next === kind) return;
+          this._dataChanged({
+            type: next === "notification" ? "active_since" : next === "entity" ? "state" : next || "none",
+            entity_id: null,
+            attribute: null,
+          });
+        },
+        "data-type",
+        true,
+      )}
+      ${kind === "notification"
+        ? html`${this._selector(
+            { select: { mode: "dropdown", options: NOTIFICATION_OPTIONS } },
+            data.type,
+            "Time",
+            (value) => this._dataChanged({ type: (value as DataType) || "active_since" }),
+          )}${format}`
+        : nothing}
+      ${kind === "entity"
+        ? html`<ha-entity-picker
+              .hass=${this.hass}
+              .value=${data.entity_id ?? ""}
+              .label=${"Entity"}
+              .placeholder=${"The card's entity"}
+              @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+                ev.stopPropagation();
+                this._dataChanged({ entity_id: ev.detail.value || null });
+              }}
+            ></ha-entity-picker
+            >${this._renderAttribute(data)}${format}`
+        : nothing}
+      ${kind === "custom"
+        ? this._selector(
+            { template: {} },
+            data.text ?? "",
+            "Template",
+            (value) => this._dataChanged({ text: (value as string) || null }),
+          )
+        : nothing}
+    `;
   }
 
   private _text(name: "message" | "info", label: string, value: string, changed: (value: string) => void) {
@@ -236,47 +283,7 @@ export class NcStepEditor extends LitElement {
     ></ha-selector>`;
   }
 
-  // The entity of the data: the card's own (from the Entities block) unless
-  // another one is chosen.
-  private _renderDataEntity(data: StepData) {
-    const hass = this.hass!;
-    const listed = this.entities;
-    if (!listed.length && !data.entity_id) {
-      return this._selector(
-        { entity: {} },
-        undefined,
-        "Entity",
-        (value) => this._dataChanged({ entity_id: (value as string) || null }),
-      );
-    }
-    if (this._otherEntity || (data.entity_id && !listed.includes(data.entity_id))) {
-      return this._selector(
-        { entity: {} },
-        data.entity_id ?? undefined,
-        "Entity",
-        (value) => this._dataChanged({ entity_id: (value as string) || null, attribute: null }),
-      );
-    }
-    const options = [
-      { value: "card", label: "The card's entity" },
-      ...listed.map((entityId) => ({ value: entityId, label: entityDisplay(hass, entityId).primary })),
-      { value: "other", label: "Other entity…" },
-    ];
-    return this._selector(
-      { select: { mode: "dropdown", options } },
-      data.entity_id ?? "card",
-      "Entity",
-      (value) => {
-        if (value === "other") {
-          this._dataChanged({ entity_id: null, attribute: null });
-          this._otherEntity = true;
-          return;
-        }
-        this._dataChanged({ entity_id: value === "card" ? null : (value as string), attribute: null });
-      },
-    );
-  }
-
+  // Empty: the state. The entity is the card's own unless one is chosen.
   private _renderAttribute(data: StepData) {
     const hass = this.hass!;
     const entityId = data.entity_id ?? this.entities[0];
@@ -286,36 +293,46 @@ export class NcStepEditor extends LitElement {
       : [];
     if (data.attribute && !names.includes(data.attribute)) names.push(data.attribute);
     const options = [
-      { value: "state", label: "State" },
       ...names.map((name) => ({
         value: name,
-        label: stateObj && hass.formatEntityAttributeName
-          ? hass.formatEntityAttributeName(stateObj, name)
-          : name,
+        label:
+          stateObj && hass.formatEntityAttributeName
+            ? hass.formatEntityAttributeName(stateObj, name)
+            : name,
       })),
+      { value: LAST_CHANGED, label: "Last changed" },
+      { value: LAST_UPDATED, label: "Last updated" },
     ];
+    const value =
+      data.type === "last_changed"
+        ? LAST_CHANGED
+        : data.type === "last_updated"
+          ? LAST_UPDATED
+          : (data.attribute ?? "");
     return this._selector(
       { select: { mode: "dropdown", options } },
-      data.attribute ?? "state",
+      value,
       "Attribute",
-      (value) => this._dataChanged({ attribute: value === "state" ? null : (value as string) }),
+      (picked) => {
+        const name = (picked as string | undefined) ?? "";
+        if (name === LAST_CHANGED) this._dataChanged({ type: "last_changed", attribute: null });
+        else if (name === LAST_UPDATED) this._dataChanged({ type: "last_updated", attribute: null });
+        else if (name) this._dataChanged({ type: "attribute", attribute: name });
+        else this._dataChanged({ type: "state", attribute: null });
+      },
+      "",
+      true,
     );
   }
 
   private _dataChanged(changes: Partial<StepData>): void {
     const data: StepData = { ...(this.step!.data ?? { type: "none" }), ...changes };
-    if (data.type === "attribute") data.type = "state";
     const clean: StepData = { type: data.type };
     if (TIME_TYPES.includes(data.type) && data.format) clean.format = data.format;
-    if (["state", "last_changed"].includes(data.type) && data.entity_id) {
-      clean.entity_id = data.entity_id;
-    }
-    if (data.type === "state" && data.attribute) {
-      clean.type = "attribute";
-      clean.attribute = data.attribute;
-    }
+    if (kindOf(data.type) === "entity" && data.entity_id) clean.entity_id = data.entity_id;
+    if (data.type === "attribute" && data.attribute) clean.attribute = data.attribute;
+    if (data.type === "attribute" && !data.attribute) clean.type = "state";
     if (data.type === "custom" && data.text) clean.text = data.text;
-    this._otherEntity = false;
     this._change({ data: data.type === "none" ? null : clean });
   }
 
@@ -349,8 +366,9 @@ export class NcStepEditor extends LitElement {
     label: string,
     changed: (value: unknown) => void,
     className?: string,
+    clearable = false,
   ) {
-    return field(this.hass, selector, value, label, changed, { className });
+    return field(this.hass, selector, value, label, changed, { className, clearable });
   }
 
   // -- Start -----------------------------------------------------------------
@@ -518,6 +536,9 @@ export class NcStepEditor extends LitElement {
     }
     ha-button-toggle-group {
       align-self: flex-start;
+    }
+    .row.data {
+      align-items: flex-end;
     }
     .row > .data-type {
       flex: 0 1 220px;

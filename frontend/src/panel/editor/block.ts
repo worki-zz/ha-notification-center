@@ -19,12 +19,16 @@ export function block(options: BlockOptions) {
     outlined
     class="nc-block"
     .expanded=${options.expanded}
-    @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
+    @expanded-will-change=${(ev: CustomEvent<{ expanded: boolean }>) => {
       // Panels inside the block (triggers, conditions) tell their own.
       if (ev.target !== ev.currentTarget) return;
       ev.stopPropagation();
       settle(ev.currentTarget as HTMLElement);
+      // Before the panel measures its content, so the content is there.
       options.toggled(ev.detail.expanded);
+    }}
+    @expanded-changed=${(ev: Event) => {
+      if (ev.target === ev.currentTarget) ev.stopPropagation();
     }}
   >
     <ha-icon slot="leading-icon" .icon=${options.icon}></ha-icon>
@@ -34,12 +38,13 @@ export function block(options: BlockOptions) {
         ? nothing
         : html`<span class="block-count">${options.count}</span>`}
     </div>
-    <div class="block-content">${options.content}</div>
+    ${options.expanded ? html`<div class="block-content">${options.content}</div>` : nothing}
   </ha-expansion-panel>`;
 }
 
-// The panel animates to the height its content had when it opened; editors
-// that load later (triggers, selectors) need it to follow them after that.
+// The content is drawn only while the block is open. The panel animates to
+// the height its content had when it opened; editors that load later
+// (triggers, selectors) need it to follow them after that.
 function settle(panel: HTMLElement): void {
   window.setTimeout(() => {
     const container = panel.shadowRoot?.querySelector<HTMLElement>(".container");

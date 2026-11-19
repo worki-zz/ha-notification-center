@@ -30,6 +30,7 @@ export type DataType =
   | "state"
   | "attribute"
   | "last_changed"
+  | "last_updated"
   | "custom";
 
 export interface StepData {

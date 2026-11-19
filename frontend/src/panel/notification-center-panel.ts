@@ -114,6 +114,9 @@ export class NotificationCenterPanel extends LitElement {
       void loadSettingsElements().then((ready) => {
         this._haReady = ready;
       });
+      // The texts of the trigger and condition editors.
+      void (this.hass as { loadFragmentTranslation?: (fragment: string) => Promise<unknown> })
+        ?.loadFragmentTranslation?.("config");
     }
     if (changed.has("route")) {
       this._error = undefined;

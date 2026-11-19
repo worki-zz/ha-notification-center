@@ -1200,6 +1200,7 @@ export class NcNotificationEditor extends LitElement {
       opacity: 0.5;
     }
     .step {
+      background-color: var(--secondary-background-color);
       padding: 16px;
       display: flex;
       flex-direction: column;
