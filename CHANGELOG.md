@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+
+- The notification editor (phase 4.1). Settings now has two tabs: **Notifications**, the list of notifications (status chip, search, category filter, drag to reorder, Run now, Duplicate, Disable, Delete, Add notification), and **General** (the earlier settings page, with YAML import and export at the bottom).
+- The editor, in Home Assistant's automation editor layout: header with status, Undo and Redo, Enabled switch and menu (Information, Run now, Clear notifications, Duplicate, Disable, Delete); a live preview of the selected step's card; the Settings, Entities and step blocks (Message, Start, Hide while, Done when) with Home Assistant's own trigger and condition editors.
+- Schedule and Repeat starts show their next times; Repeat's next time can be set (stored as last done).
+- Entity categories take several floors, areas and labels; *Add new matching entities* off keeps the entities matched when saved.
+- Expires on a day: the same or a later day at a time, besides a duration.
+- A step's Data: the text after the card's label (active since, due, last done, an entity's state, attribute or last change, or a custom template).
+- Websocket commands `schedule/preview`, `step/set_next` and `text/preview`.
+
+### Changed
+
+- A card shows no data after its label unless its step's Data says so (it was the time since it opened).
+- A Repeat (after last done) step that was never done counts from when it got its schedule, so a new one is not due at once.
+- Inside a notification, the integration's triggers and conditions are also accepted in Home Assistant's automation form (`options`); the Notification state trigger without a notification means the notification itself, and a step number is stored as the step's id.
+- A step made in the editor has Snooze switched off.
+- An entity category's `area` and `label` are now the lists `areas` and `labels` (the earlier form is still read).
+
 ## 0.3.10
 
 ### Changed

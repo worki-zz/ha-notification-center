@@ -35,6 +35,7 @@ export interface HassEntityEntry {
   platform?: string;
   device_id?: string | null;
   area_id?: string | null;
+  labels?: string[];
 }
 
 export interface HassDevice {
@@ -42,6 +43,7 @@ export interface HassDevice {
   name?: string | null;
   name_by_user?: string | null;
   area_id?: string | null;
+  labels?: string[];
 }
 
 export interface HassArea {
@@ -72,6 +74,11 @@ export interface HomeAssistant {
   areas?: Record<string, HassArea>;
   floors?: Record<string, HassFloor>;
   callWS<T>(message: HassMessage): Promise<T>;
+  callService?(
+    domain: string,
+    service: string,
+    data?: Record<string, unknown>,
+  ): Promise<unknown>;
   formatEntityState?(stateObj: HassEntity, state?: string): string;
   formatEntityAttributeValue?(stateObj: HassEntity, attribute: string): string;
   formatEntityAttributeName?(stateObj: HassEntity, attribute: string): string;

@@ -53,11 +53,29 @@ export interface Button {
   confirm: boolean;
 }
 
+// The text after the label of a card.
+export interface StepData {
+  type:
+    | "none"
+    | "active_since"
+    | "due"
+    | "last_done"
+    | "state"
+    | "attribute"
+    | "last_changed"
+    | "custom";
+  entity_id?: string | null;
+  attribute?: string | null;
+  text?: string | null;
+  format?: "relative" | "duration" | "time" | "date" | "datetime" | null;
+}
+
 export interface Step {
   id: string;
   enabled: boolean;
   message: string;
   info?: string | null;
+  data?: StepData | null;
   start: { type: "triggers" | "schedule" };
   buttons: Button[];
   // Person entities who see the card; empty means everyone.
@@ -113,6 +131,8 @@ export interface CardState {
   closed_at?: string | null;
   message: string | null;
   info: string | null;
+  // The step's custom data text, rendered.
+  data_text?: string | null;
 }
 
 export interface NotificationState {
