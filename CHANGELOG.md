@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The panel's Later page is now **Schedule** (calendar icon): its cards are grouped under *Week*, the current month, *Year* and *Next year*, only the groups with something in them, with room above each title; a card shows its day without the time.
+- On the Overview, Schedule sits at the left edge of the cards and Done at the right.
+- An empty page shows one neutral card: *All done* on the Overview.
+- The Notification Center card's placeholder (dashboard edit mode) says *All done*, in normal text colour, with the tile card's neutral icon colour and the border of an inactive card.
+
+### Fixed
+
+- The panel header stays in place on every page (Overview, Schedule, Done today and Settings): the page under it scrolls, not the whole panel.
+
 ## 0.4.0
 
 ### Added

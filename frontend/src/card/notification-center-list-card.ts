@@ -153,15 +153,13 @@ export class NotificationCenterListCard extends LitElement {
     if (!cards?.length) {
       if (!this.preview) return nothing;
       return html`<notification-center-view
-        class="placeholder"
-        .hass=${this.hass}
+                .hass=${this.hass}
         .view=${{
           message: "Notification Center",
-          info: cards
-            ? "This card is hidden on the dashboard while nothing is active."
-            : "Loading…",
+          info: cards ? "All done" : "Loading…",
           icon: PANEL_ICON,
-          color: "var(--primary-color)",
+          color: "var(--state-inactive-color)",
+          muted: true,
         }}
       ></notification-center-view>`;
     }
@@ -206,9 +204,6 @@ export class NotificationCenterListCard extends LitElement {
       flex-direction: column;
       gap: var(--ha-section-grid-row-gap, 8px);
       height: 100%;
-    }
-    .placeholder {
-      opacity: 0.6;
     }
     .warning {
       padding: 16px;

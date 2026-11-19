@@ -60,6 +60,8 @@ export interface HassFloor {
 export interface HassLocale {
   language: string;
   time_format?: string;
+  // "language" or a weekday name such as "monday".
+  first_weekday?: string;
 }
 
 export interface HomeAssistant {

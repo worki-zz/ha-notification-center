@@ -3,7 +3,14 @@ import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import { loadDashboardElements } from "../card/elements";
-import { cssColor, formatTime, formatWhen } from "../shared/format";
+import {
+  cssColor,
+  firstWeekday,
+  formatDay,
+  formatTime,
+  formatWhen,
+  monthName,
+} from "../shared/format";
 import {
   cardKey,
   categoryOf,
@@ -26,11 +33,11 @@ import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";
 import "./settings-page";
 
-type Page = "overview" | "later" | "done" | "settings";
+type Page = "overview" | "schedule" | "done" | "settings";
 
 const TITLES: Record<Page, string> = {
   overview: "Notification Center",
-  later: "Later",
+  schedule: "Schedule",
   done: "Done today",
   settings: "Settings",
 };
@@ -47,7 +54,7 @@ interface Upcoming {
 }
 
 // The sidebar panel: the Overview of the active cards with what comes
-// today, Later and Done today behind their buttons, and the settings for
+// today, Schedule and Done today behind their buttons, and the settings for
 // administrators in the header.
 @customElement("notification-center-panel")
 export class NotificationCenterPanel extends LitElement {
@@ -80,6 +87,12 @@ export class NotificationCenterPanel extends LitElement {
 
   public override connectedCallback(): void {
     super.connectedCallback();
+    // Home Assistant's custom panel wrapper has no height of its own, so
+    // the page would grow and scroll as a whole, header and all. With the
+    // wrapper's height set, the header stays and the page under it scrolls.
+    if (this.parentElement?.localName === "ha-panel-custom") {
+      this.parentElement.style.height = "100%";
+    }
     loadDashboardElements();
     this._timer = window.setInterval(() => {
       this._now = Date.now();
@@ -126,7 +139,9 @@ export class NotificationCenterPanel extends LitElement {
 
   private get _page(): Page {
     const page = this._parts()[0];
-    if (page === "later" || page === "done") return page;
+    // "later" is the earlier name of the Schedule page.
+    if (page === "schedule" || page === "later") return "schedule";
+    if (page === "done") return page;
     if (page === "settings" && this._isAdmin) return "settings";
     return "overview";
   }
@@ -239,8 +254,8 @@ export class NotificationCenterPanel extends LitElement {
           ? this._store.error
             ? nothing
             : html`<div class="empty">Loading…</div>`
-          : page === "later"
-            ? this._renderLater()
+          : page === "schedule"
+            ? this._renderSchedule()
             : page === "done"
               ? this._renderDone()
               : this._renderOverview()}
@@ -319,12 +334,7 @@ export class NotificationCenterPanel extends LitElement {
     const done = this._cards(["done"]).length;
     const later = this._upcoming().some((item) => item.due.getTime() >= end);
     return html`
-      ${active.length
-        ? this._renderLive(active)
-        : html`<div class="all-clear">
-            <ha-icon icon="mdi:message-bulleted"></ha-icon>
-            <div>No active notifications</div>
-          </div>`}
+      ${active.length ? this._renderLive(active) : this._renderEmpty("All done")}
       ${timed.length
         ? html`<h2>Upcoming</h2>
             ${repeat(
@@ -339,13 +349,13 @@ export class NotificationCenterPanel extends LitElement {
       ${later || done
         ? html`<div class="pages">
             ${later
-              ? html`<ha-button appearance="plain" @click=${() => this._go("later")}>
-                  <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
-                  Later
+              ? html`<ha-button appearance="plain" @click=${() => this._go("schedule")}>
+                  <ha-icon slot="start" icon="mdi:calendar"></ha-icon>
+                  Schedule
                 </ha-button>`
               : nothing}
             ${done
-              ? html`<ha-button appearance="plain" @click=${() => this._go("done")}>
+              ? html`<ha-button class="done" appearance="plain" @click=${() => this._go("done")}>
                   <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
                   Done · ${done}
                 </ha-button>`
@@ -355,21 +365,63 @@ export class NotificationCenterPanel extends LitElement {
     `;
   }
 
-  // The scheduled steps due after today, by their next time.
-  private _renderLater() {
+  // A page with nothing on it: one neutral card with a short text.
+  private _renderEmpty(text: string) {
+    return html`<notification-center-view
+      .hass=${this.hass}
+      .view=${{
+        message: text,
+        icon: "mdi:message-bulleted",
+        color: "var(--state-inactive-color)",
+        muted: true,
+      }}
+    ></notification-center-view>`;
+  }
+
+  // The scheduled steps due after today, by their next day, under the
+  // week, this month, this year, next year (and later years by number).
+  private _renderSchedule() {
+    const hass = this.hass!;
     const end = this._endOfToday();
-    const later = this._upcoming().filter((item) => item.due.getTime() >= end);
-    if (!later.length) {
-      return html`<div class="empty">Nothing later.</div>`;
+    const items = this._upcoming().filter((item) => item.due.getTime() >= end);
+    if (!items.length) return this._renderEmpty("Nothing scheduled");
+    const today = new Date(this._now);
+    today.setHours(0, 0, 0, 0);
+    const week = new Date(today);
+    week.setDate(today.getDate() + (((firstWeekday(hass) - today.getDay() + 6) % 7) + 1));
+    const month = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const year = new Date(today.getFullYear() + 1, 0, 1);
+    const nextYear = new Date(today.getFullYear() + 2, 0, 1);
+    const title = (due: Date): string => {
+      if (due < week) return "Week";
+      if (due < month) return monthName(hass, today);
+      if (due < year) return "Year";
+      if (due < nextYear) return "Next year";
+      return String(due.getFullYear());
+    };
+    const sections: { title: string; items: Upcoming[] }[] = [];
+    for (const item of items) {
+      const name = title(item.due);
+      const last = sections[sections.length - 1];
+      if (last?.title === name) last.items.push(item);
+      else sections.push({ title: name, items: [item] });
     }
-    return this._renderUpcoming(later);
+    return sections.map(
+      (section) => html`
+        <h2 class="section">${section.title}</h2>
+        ${this._renderUpcoming(
+          section.items.map((item) => ({
+            ...item,
+            view: { ...item.view, when: formatDay(hass, item.due, this._now) },
+          })),
+        )}
+      `,
+    );
   }
 
   private _renderDone() {
     const done = this._cards(["done"]);
-    if (!done.length) {
-      return html`<div class="empty">Nothing done today yet.</div>`;
-    }
+    if (!done.length) return this._renderEmpty("Nothing done today yet");
     const hass = this.hass!;
     return this._renderLive(
       done,
@@ -495,24 +547,19 @@ export class NotificationCenterPanel extends LitElement {
       font-weight: var(--ha-font-weight-medium, 500);
       color: var(--secondary-text-color);
     }
-    .all-clear {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 32px 16px;
-      color: var(--secondary-text-color);
+    /* Room above every section title but the first. */
+    h2.section:not(:first-child) {
+      margin-top: 24px;
     }
-    .all-clear ha-icon {
-      --mdc-icon-size: 48px;
-      color: var(--disabled-text-color);
-    }
+    /* Schedule at the left edge of the cards, Done at the right. */
     .pages {
       display: flex;
-      justify-content: center;
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 24px;
+    }
+    .pages .done {
+      margin-inline-start: auto;
     }
     .empty {
       padding: 32px 16px;
