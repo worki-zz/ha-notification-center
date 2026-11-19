@@ -1,17 +1,7 @@
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 
-import type {
-  Button,
-  CardAction,
-  CardState,
-  Category,
-  Duration,
-  Notification,
-  NotificationState,
-  Snooze,
-  StateMessage,
-} from "../shared/config";
 import { DOMAIN } from "../shared/config";
 import { defineElement } from "../shared/define";
 import {
@@ -24,11 +14,9 @@ import {
   type ColorValue,
   type TimeFormat,
 } from "../shared/format";
-import {
-  type Highlight,
-  type NotificationViewData,
-  type ViewButton,
-} from "../shared/notification-view";
+import { cardKey, liveCards, type LiveCard } from "../shared/live";
+import "../shared/live-card";
+import { type Highlight, type NotificationViewData } from "../shared/notification-view";
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
 import { TemplateTexts } from "../shared/text";
@@ -75,12 +63,6 @@ const DEFAULT_TIME_FORMAT: TimeFormat = "relative";
 // How often relative times are written again.
 const TICK = 30_000;
 
-const SNOOZE_CHOICES: { key: string; text: string; label: string; hours?: number }[] = [
-  { key: "1h", text: "1 h", label: "Snooze for 1 hour", hours: 1 },
-  { key: "3h", text: "3 h", label: "Snooze for 3 hours", hours: 3 },
-  { key: "tomorrow", text: "Tomorrow", label: "Snooze until tomorrow" },
-];
-
 /** True when an entity is one notification's sensor of the Notification Center. */
 export function isNotificationEntity(hass: HomeAssistant, entityId?: string): boolean {
   return (
@@ -88,27 +70,6 @@ export function isNotificationEntity(hass: HomeAssistant, entityId?: string): bo
     entityId !== "sensor.notification_center" &&
     hass.entities?.[entityId]?.platform === DOMAIN
   );
-}
-
-function durationMs(duration: Duration): number {
-  return (
-    ((duration.days ?? 0) * 86400 +
-      (duration.hours ?? 0) * 3600 +
-      (duration.minutes ?? 0) * 60 +
-      (duration.seconds ?? 0)) *
-    1000
-  );
-}
-
-// A button of a Notification Center card, as the card shows it.
-interface NcButton {
-  key: string;
-  label: string;
-  icon: string;
-  action: CardAction;
-  // Snooze: a fixed time, or undefined to ask.
-  snoozeMs?: number;
-  ask?: boolean;
 }
 
 // The dashboard card for one notification.
@@ -132,11 +93,6 @@ export class NotificationCenterCard extends LitElement {
   @state() private _store: StoreData = {};
 
   @state() private _now = Date.now();
-
-  // The card (by key) whose snooze choices are open.
-  @state() private _asking?: string;
-
-  @state() private _error?: string;
 
   private _texts = new TemplateTexts(() => this.requestUpdate());
 
@@ -167,7 +123,6 @@ export class NotificationCenterCard extends LitElement {
       throw new Error("buttons must be a list");
     }
     this._config = config;
-    this._asking = undefined;
   }
 
   public getCardSize(): number {
@@ -255,206 +210,48 @@ export class NotificationCenterCard extends LitElement {
     this._store = {};
   }
 
-  private _ncEntry():
-    | { notification: Notification; category?: Category; state: NotificationState }
-    | undefined {
+  // The open cards of the notification, active ones only.
+  private _liveCards(): LiveCard[] | undefined {
     const { config, state } = this._store;
     const entityId = this._config?.entity;
     if (!config || !state || !entityId) return undefined;
-    const found = Object.entries((state as StateMessage).notifications).find(
-      ([, item]) => item.entity_id === entityId,
+    // A card placed for one notification shows to everyone.
+    return liveCards(config, state, { statuses: ["active"], ignoreAudience: true }).filter(
+      (live) => live.entityId === entityId,
     );
-    if (!found) return undefined;
-    const notification = config.notifications.find((item) => item.id === found[0]);
-    if (!notification) return undefined;
-    const category =
-      config.categories.find((item) => item.id === notification.category) ??
-      config.categories.find((item) => item.id === "general");
-    return { notification, category, state: found[1] };
-  }
-
-  private _activeCards(): CardState[] {
-    return this._ncEntry()?.state.cards.filter((card) => card.status === "active") ?? [];
   }
 
   private _shouldHide(): boolean {
     if (this.preview || !this._isNcMode()) return false;
     // Until the data is there, stay as it is: showing and hiding again
     // would make the dashboard lay out the card twice.
-    if (!this._store.config || !this._store.state) return this.hidden;
-    return this._activeCards().length === 0;
+    const cards = this._liveCards();
+    if (!cards) return this.hidden;
+    return cards.length === 0;
   }
 
-  private _snoozeOf(
-    button: Button,
-    notification: Notification,
-    category: Category | undefined,
-  ): Snooze {
-    if (button.snooze === "ask") return { type: "ask" };
-    if (button.snooze && typeof button.snooze === "object") {
-      return { type: "fixed", duration: button.snooze };
-    }
-    return notification.snooze ?? category?.snooze ?? { type: "ask" };
-  }
-
-  private _ncButtons(
-    card: CardState,
-    notification: Notification,
-    category: Category | undefined,
-  ): NcButton[] {
-    const step = notification.steps.find((item) => item.id === card.step_id);
-    const result: NcButton[] = [];
-    for (const button of step?.buttons ?? []) {
-      // Custom buttons, the card tap and the buttons' own actions come with
-      // the Notification Center card.
-      if (!button.enabled || button.type === "tap" || button.type === "custom") continue;
-      if (button.type === "done" && button.card === "done") {
-        result.push({
-          key: button.id,
-          label: button.label || "Done",
-          icon: button.icon || "mdi:check",
-          action: "done",
-        });
-      } else if (button.type === "dismiss" && button.card === "dismiss") {
-        result.push({
-          key: button.id,
-          label: button.label || "Dismiss",
-          icon: button.icon || "mdi:close",
-          action: "dismiss",
-        });
-      } else if (button.type === "dismiss" && button.card === "keep_silent") {
-        if (card.silenced) continue;
-        result.push({
-          key: button.id,
-          label: button.label || "Mute",
-          icon: button.icon || "mdi:volume-off",
-          action: "silence",
-        });
-      } else if (button.type === "snooze" && button.card === "snooze") {
-        const snooze = this._snoozeOf(button, notification, category);
-        if (snooze.type === "not_allowed") continue;
-        result.push({
-          key: button.id,
-          label: button.label || "Snooze",
-          icon: button.icon || "mdi:alarm-snooze",
-          action: "snooze",
-          snoozeMs: snooze.type === "fixed" ? durationMs(snooze.duration) : undefined,
-          ask: snooze.type === "ask",
-        });
-      }
-    }
-    // Always in this order, whatever the step's order: Snooze, Done, then
-    // Dismiss (or Mute).
-    const order: CardAction[] = ["snooze", "done", "dismiss", "silence"];
-    return result.sort((a, b) => order.indexOf(a.action) - order.indexOf(b.action));
-  }
-
-  private _cardKey(card: CardState): string {
-    return `${card.step_id}|${card.entity_id ?? ""}`;
-  }
-
-  private _ncViews(): { key: string; view: NotificationViewData; card?: CardState }[] {
-    const hass = this.hass!;
-    const entry = this._ncEntry();
-    const config = this._store.config;
-    if (!entry || !config) return [];
-    const { notification, category } = entry;
-    const color = cssColor(notification.card_color ?? category?.card_color);
+  // Shown in the editor while nothing is active.
+  private _placeholder(): NotificationViewData | undefined {
+    const { config, state } = this._store;
+    const entityId = this._config?.entity;
+    if (!config || !state || !entityId) return undefined;
+    const found = Object.entries(state.notifications).find(
+      ([, item]) => item.entity_id === entityId,
+    );
+    const notification = found && config.notifications.find((item) => item.id === found[0]);
+    if (!notification) return undefined;
+    const category =
+      config.categories.find((item) => item.id === notification.category) ??
+      config.categories.find((item) => item.id === "general");
     const icon = notification.icon || category?.icon || undefined;
-    const cards = entry.state.cards.filter((card) => card.status === "active");
-    if (!cards.length) {
-      return [
-        {
-          key: "placeholder",
-          view: {
-            label: notification.name,
-            message: "No active notification",
-            info: "This card is hidden on the dashboard while nothing is active.",
-            icon,
-            stateObj: icon ? undefined : hass.states[this._config!.entity!],
-            color,
-          },
-        },
-      ];
-    }
-    return cards.map((card) => {
-      const key = this._cardKey(card);
-      const buttons = this._ncButtons(card, notification, category);
-      const viewButtons: ViewButton[] =
-        this._asking === key
-          ? [
-              ...SNOOZE_CHOICES.map((choice) => ({
-                key: `choice:${choice.key}`,
-                label: choice.label,
-                text: choice.text,
-              })),
-              { key: "choice:cancel", label: "Back", icon: "mdi:arrow-u-left-top", plain: true },
-            ]
-          : buttons.map((button) => ({
-              key: button.key,
-              label: button.label,
-              icon: button.icon,
-              // Snooze is the quiet one: a background only on hover.
-              plain: button.action === "snooze",
-            }));
-      return {
-        key,
-        card,
-        view: {
-          label: notification.name,
-          data: formatTime(hass, new Date(card.since), "relative", this._now),
-          message: card.message ?? undefined,
-          info: card.info ?? undefined,
-          icon,
-          stateObj: icon ? undefined : hass.states[this._config!.entity!],
-          color,
-          compact: this._asking === key,
-          buttons: viewButtons,
-        },
-      };
-    });
-  }
-
-  private async _ncButton(card: CardState, key: string): Promise<void> {
-    const hass = this.hass;
-    const entry = this._ncEntry();
-    if (!hass || !entry) return;
-    const cardKey = this._cardKey(card);
-    let action: CardAction | undefined;
-    let until: Date | null = null;
-    if (key.startsWith("choice:")) {
-      const choice = SNOOZE_CHOICES.find((item) => `choice:${item.key}` === key);
-      this._asking = undefined;
-      if (!choice) return;
-      action = "snooze";
-      until = choice.hours ? new Date(Date.now() + choice.hours * 3600_000) : null;
-    } else {
-      const button = this._ncButtons(card, entry.notification, entry.category).find(
-        (item) => item.key === key,
-      );
-      if (!button) return;
-      if (button.ask) {
-        this._asking = cardKey;
-        return;
-      }
-      action = button.action;
-      if (button.snoozeMs) {
-        until = new Date(Date.now() + button.snoozeMs);
-      }
-    }
-    this._error = undefined;
-    try {
-      await hass.callWS({
-        type: `${DOMAIN}/card/action`,
-        notification_id: entry.notification.id,
-        step_id: card.step_id,
-        entity_id: card.entity_id,
-        action,
-        ...(until ? { until: until.toISOString() } : {}),
-      });
-    } catch (err: unknown) {
-      this._error = (err as { message?: string })?.message ?? String(err);
-    }
+    return {
+      label: notification.name,
+      message: "No active notification",
+      info: "This card is hidden on the dashboard while nothing is active.",
+      icon,
+      stateObj: icon ? undefined : this.hass!.states[entityId],
+      color: cssColor(notification.card_color ?? category?.card_color),
+    };
   }
 
   // -- On its own ---------------------------------------------------------
@@ -558,30 +355,33 @@ export class NotificationCenterCard extends LitElement {
       if (this._store.error) {
         return html`<ha-card class="warning">${this._store.error}</ha-card>`;
       }
-      const views = this._ncViews();
-      if (!views.length) {
-        return this.preview
-          ? html`<ha-card class="warning">
+      const cards = this._liveCards() ?? [];
+      if (!cards.length) {
+        if (!this.preview) return nothing;
+        const placeholder = this._placeholder();
+        return placeholder
+          ? html`<notification-center-view
+              class="placeholder"
+              .hass=${this.hass}
+              .view=${placeholder}
+            ></notification-center-view>`
+          : html`<ha-card class="warning">
               ${this._store.config ? "Notification not found" : "Loading…"}
-            </ha-card>`
-          : nothing;
+            </ha-card>`;
       }
       return html`
         <div class="stack">
-          ${views.map(
-            ({ key, view, card }) => html`
-              <notification-center-view
-                class=${card ? "" : "placeholder"}
+          ${repeat(
+            cards,
+            (live) => cardKey(live.card),
+            (live) => html`
+              <notification-center-live-card
                 .hass=${this.hass}
-                .view=${view}
-                @nc-button=${(ev: CustomEvent<{ key: string }>) => {
-                  if (card) void this._ncButton(card, ev.detail.key);
-                }}
-                data-key=${key}
-              ></notification-center-view>
+                .live=${live}
+                .now=${this._now}
+              ></notification-center-live-card>
             `,
           )}
-          ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
         </div>
       `;
     }
@@ -612,11 +412,6 @@ export class NotificationCenterCard extends LitElement {
     .warning {
       padding: 16px;
       color: var(--secondary-text-color);
-    }
-    .error {
-      color: var(--error-color);
-      font-size: var(--ha-font-size-s, 12px);
-      padding: 0 4px;
     }
   `;
 }

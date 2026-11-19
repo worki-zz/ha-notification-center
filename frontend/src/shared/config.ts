@@ -32,6 +32,14 @@ export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "custom";
 
 export type CardEffect = "done" | "snooze" | "dismiss" | "keep" | "keep_silent";
 
+export type ButtonAction =
+  | { type: "nothing" }
+  | { type: "ha_action"; actions: unknown[] }
+  | { type: "entity_action" }
+  | { type: "more_info"; entity_id?: string | null }
+  | { type: "navigate"; path: string }
+  | { type: "show_attachment" };
+
 export interface Button {
   id: string;
   type: ButtonType;
@@ -39,7 +47,7 @@ export interface Button {
   label?: string | null;
   icon?: string | null;
   card: CardEffect;
-  action: { type: string; [key: string]: unknown };
+  action: ButtonAction;
   // A button's own snooze: "ask" or a duration.
   snooze?: "ask" | Duration | null;
   confirm: boolean;
@@ -52,6 +60,8 @@ export interface Step {
   info?: string | null;
   start: { type: "triggers" | "schedule" };
   buttons: Button[];
+  // Person entities who see the card; empty means everyone.
+  audience?: string[];
 }
 
 export interface Notification {
@@ -100,6 +110,7 @@ export interface CardState {
   since: string;
   state_since: string;
   snoozed_until: string | null;
+  closed_at?: string | null;
   message: string | null;
   info: string | null;
 }
@@ -111,6 +122,8 @@ export interface NotificationState {
   cards: CardState[];
   last_done: string | null;
   next_due: string | null;
+  // When each scheduled step is next due.
+  upcoming?: { step_id: string; due: string }[];
 }
 
 export interface StateMessage {

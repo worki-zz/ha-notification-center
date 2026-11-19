@@ -15,6 +15,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
+    async_mock_service,
 )
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
@@ -860,3 +861,96 @@ async def test_old_event_entity_is_removed(
     )
     await load(hass, config_entry)
     assert registry.async_get(old.entity_id) is None
+
+
+async def test_button_press(
+    hass: HomeAssistant,
+    center: Center,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: Any,
+    hass_read_only_access_token: str,
+) -> None:
+    """A button changes the card, runs its action, and the log names the user."""
+    calls = async_mock_service(hass, "test", "ring")
+    await center.set("binary_sensor.front", "on", device_class="door")
+    nid = await center.add(
+        "Doors",
+        step(
+            buttons=[
+                {"type": "done", "action": {"type": "entity_action"}, "id": "done"},
+                {
+                    "type": "custom",
+                    "id": "ring",
+                    "label": "Ring",
+                    "action": {
+                        "type": "ha_action",
+                        "actions": [
+                            {
+                                "action": "test.ring",
+                                "data": {"who": "{{ notification.name }}"},
+                            }
+                        ],
+                    },
+                },
+                {"type": "snooze", "id": "snooze", "snooze": {"minutes": 20}},
+            ]
+        ),
+        entities=[
+            {
+                "entity_id": "binary_sensor.front",
+                "actions": {
+                    "done": [{"action": "test.ring", "data": {"who": "{{ entity }}"}}]
+                },
+            }
+        ],
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "trigger",
+        {"entity_id": "sensor.nc_doors", "entity": "binary_sensor.front"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    card = center.engine.cards_of(nid)[0]
+    ws = await hass_ws_client(hass, hass_read_only_access_token)
+
+    async def press(button_id: str, **extra: Any) -> dict[str, Any]:
+        await ws.send_json_auto_id(
+            {
+                "type": f"{DOMAIN}/card/press",
+                "notification_id": nid,
+                "step_id": card.step_id,
+                "entity_id": "binary_sensor.front",
+                "button_id": button_id,
+                **extra,
+            }
+        )
+        result: dict[str, Any] = await ws.receive_json()
+        await hass.async_block_till_done()
+        return result
+
+    # A custom button keeps the card and runs its action.
+    assert (await press("ring"))["success"]
+    assert center.state("sensor.nc_doors") == "active"
+    assert calls[-1].data == {"who": "Doors"}
+
+    # Snooze with the button's own time.
+    before = dt_util.utcnow()
+    assert (await press("snooze"))["success"]
+    assert center.state("sensor.nc_doors") == "snoozed"
+    until = card.snoozed_until
+    assert until is not None
+    assert timedelta(minutes=19) < until - before <= timedelta(minutes=21)
+
+    # Done runs the entity's own action; the state carries the user.
+    assert (await press("done"))["success"]
+    assert center.state("sensor.nc_doors") == "done"
+    assert calls[-1].data == {"who": "binary_sensor.front"}
+    assert calls[-1].context.user_id == hass_read_only_user.id
+    state = hass.states.get("sensor.nc_doors")
+    assert state is not None
+    assert state.context.user_id == hass_read_only_user.id
+
+    result = await press("done")
+    assert not result["success"]
+    assert result["error"]["code"] == "not_found"

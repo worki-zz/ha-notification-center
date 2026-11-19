@@ -10,8 +10,32 @@ interface ConfigurableCard {
   getConfigElement?: () => Promise<HTMLElement>;
 }
 
+interface PanelResolver extends HTMLElement {
+  hass: unknown;
+  _updateRoutes(): void;
+  routerOptions: { routes: Record<string, { load: () => Promise<unknown> }> };
+}
+
+// The card helpers come with the dashboards. A page outside them (the
+// Notification Center panel opened first) loads the dashboard code the way
+// Home Assistant's own panel resolver does.
+async function cardHelpers() {
+  if (!window.loadCardHelpers) {
+    try {
+      await customElements.whenDefined("partial-panel-resolver");
+      const resolver = document.createElement("partial-panel-resolver") as PanelResolver;
+      resolver.hass = { panels: [{ url_path: "tmp", component_name: "lovelace" }] };
+      resolver._updateRoutes();
+      await resolver.routerOptions.routes.tmp.load();
+    } catch {
+      // Without them the card draws with what is there.
+    }
+  }
+  return window.loadCardHelpers?.();
+}
+
 async function tileCard(): Promise<ConfigurableCard | undefined> {
-  const helpers = await window.loadCardHelpers?.();
+  const helpers = await cardHelpers();
   if (!helpers) return undefined;
   // A tile card with a feature: this loads the tile card and its control
   // buttons. The element itself is never shown.

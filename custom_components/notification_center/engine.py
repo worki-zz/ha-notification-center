@@ -44,6 +44,7 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_change,
 )
+from homeassistant.helpers.script import Script, async_validate_actions_config
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.trigger import (
@@ -53,6 +54,7 @@ from homeassistant.helpers.trigger import (
 )
 from homeassistant.util import dt as dt_util
 from homeassistant.util.hass_dict import HassKey
+import voluptuous as vol
 
 from .const import (
     CLOSED_DISMISSED,
@@ -65,6 +67,7 @@ from .const import (
     EVENT_EXPIRED,
     EVENT_SNOOZED,
     SOURCE_ACTION,
+    SOURCE_BUTTON,
     SOURCE_DONE_WHEN,
     SOURCE_ENTITY,
     SOURCE_SCHEDULE,
@@ -89,7 +92,7 @@ from .model import (
 from .modes import ModeTracker
 from .render import TextTracker, render_text
 from .schedule import calendar_between
-from .scheduler import StepSchedule
+from .scheduler import HISTORY_SKIPPED, StepSchedule
 from .store import RUNTIME_KEY, ConfigManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -1326,7 +1329,12 @@ class Engine:
             # a snooze) has none, the sensor just changes by itself. Either
             # way the summary sensor and the event are caused by the sensor,
             # so they are written after it.
-            cause = Context(parent_id=context.id) if context else Context()
+            # The user stays on it, so the Activity log names who did it.
+            cause = (
+                Context(user_id=context.user_id, parent_id=context.id)
+                if context
+                else Context()
+            )
             self.contexts[card.notification_id] = cause
             self.summary_context = Context(parent_id=cause.id)
             self._state_reached(card, old, new)
@@ -1661,6 +1669,20 @@ class Engine:
         ]
         return min(times) if times else None
 
+    def upcoming(self, notification_id: str) -> list[dict[str, str]]:
+        """Return when each scheduled step of a notification is next due."""
+        runner = self.runners.get(notification_id)
+        if runner is None:
+            return []
+        return [
+            {
+                "step_id": step.step_id,
+                "due": dt_util.as_utc(step.schedule.next).isoformat(),
+            }
+            for step in runner.steps.values()
+            if step.schedule is not None and step.schedule.next is not None
+        ]
+
     def _visible_cards(self, notification_id: str) -> list[Card]:
         """Return the open cards and the ones done today, in step order."""
         notification = self.notification_config(notification_id) or {"steps": []}
@@ -1775,6 +1797,7 @@ class Engine:
                         self.last_reached(notification["id"], None, CLOSED_DONE)
                     ),
                     "next_due": _iso(self.next_due(notification["id"])),
+                    "upcoming": self.upcoming(notification["id"]),
                 }
                 for notification in self._config["notifications"]
             },
@@ -1891,3 +1914,141 @@ class Engine:
         """Snooze several cards; without a time, until "Tomorrow"."""
         for card in list(cards):
             self.snooze(card, until or self.snooze_tomorrow(card), source, context)
+
+    # -- Buttons ------------------------------------------------------------
+
+    def button_of(self, card: Card, button_id: str) -> dict[str, Any] | None:
+        """Return a switched on button of a card's step."""
+        step = self._step_config(card.notification_id, card.step_id) or {}
+        return next(
+            (
+                button
+                for button in step.get("buttons", [])
+                if button["id"] == button_id and button.get("enabled", True)
+            ),
+            None,
+        )
+
+    def snooze_until(self, card: Card, button: Mapping[str, Any]) -> datetime:
+        """Return until when a button snoozes a card it does not ask about.
+
+        The button's own time comes first, then the notification's and the
+        category's; when they ask, the card comes back "Tomorrow".
+        """
+        own = button.get("snooze")
+        if isinstance(own, Mapping):
+            return dt_util.utcnow() + timedelta(**own)
+        if own != "ask":
+            notification = self.notification_config(card.notification_id) or {}
+            snooze = notification.get("snooze") or next(
+                (
+                    item.get("snooze")
+                    for item in self._config["categories"]
+                    if item["id"] == notification.get("category")
+                ),
+                None,
+            )
+            if snooze and snooze.get("type") == "not_allowed":
+                raise ServiceValidationError("This notification cannot be snoozed")
+            if snooze and snooze.get("type") == "fixed":
+                return dt_util.utcnow() + timedelta(**snooze["duration"])
+        return self.snooze_tomorrow(card)
+
+    def entity_actions(self, card: Card, button_id: str) -> list[dict[str, Any]]:
+        """Return the entity action of a card's entity for a button."""
+        if card.entity_id is None:
+            return []
+        notification = self.notification_config(card.notification_id) or {}
+        for entity in notification.get("entities", []):
+            if entity["entity_id"] == card.entity_id:
+                actions = entity.get("actions", {}).get(button_id)
+                if actions:
+                    return list(actions)
+        runner = self.runners.get(card.notification_id)
+        if runner is not None:
+            for group in runner.entities.groups_of(card.entity_id):
+                actions = group.get("actions", {}).get(button_id)
+                if actions:
+                    return list(actions)
+        return []
+
+    async def async_press(
+        self,
+        card: Card,
+        button_id: str,
+        until: datetime | None,
+        context: Context | None = None,
+    ) -> None:
+        """Press a button of a card: change the card, then run its action.
+
+        More info and Navigate happen where the button was pressed; the
+        Home Assistant action and the entity action run here.
+        """
+        button = self.button_of(card, button_id)
+        if button is None:
+            raise ServiceValidationError("The button is not there")
+        action = button.get("action") or {"type": "nothing"}
+        actions: list[dict[str, Any]] = []
+        if action["type"] == "ha_action":
+            actions = list(action["actions"])
+        elif action["type"] == "entity_action":
+            actions = self.entity_actions(card, button_id)
+        variables = self.variables(card)
+        effect = button.get("card", "keep")
+        if effect == CLOSED_DONE:
+            self.close(card, CLOSED_DONE, SOURCE_BUTTON, context)
+        elif effect == CLOSED_DISMISSED:
+            self.close(card, CLOSED_DISMISSED, SOURCE_BUTTON, context)
+        elif effect == "snooze":
+            self.snooze(
+                card, until or self.snooze_until(card, button), SOURCE_BUTTON, context
+            )
+        elif effect == "keep_silent":
+            self.silence_cards([card], SOURCE_BUTTON, context)
+        if actions:
+            await self._async_run_actions(card, button, actions, variables, context)
+
+    async def _async_run_actions(
+        self,
+        card: Card,
+        button: Mapping[str, Any],
+        actions: list[dict[str, Any]],
+        variables: dict[str, Any],
+        context: Context | None,
+    ) -> None:
+        notification = self.notification_config(card.notification_id) or {}
+        label = button.get("label") or button["type"]
+        name = f"{notification.get('name', card.notification_id)}: {label}"
+        try:
+            sequence = await async_validate_actions_config(
+                self.hass, cv.SCRIPT_SCHEMA(actions)
+            )
+        except (vol.Invalid, HomeAssistantError) as err:
+            raise ServiceValidationError(f"{name}: {err}") from err
+        script = Script(self.hass, sequence, name, DOMAIN, script_mode="parallel")
+        self.hass.async_create_background_task(
+            script.async_run(variables, context),
+            f"{DOMAIN} button {name}",
+        )
+
+    @callback
+    def done_early(
+        self, notification_id: str, step_id: str, context: Context | None = None
+    ) -> None:
+        """Mark a scheduled step done before it is due.
+
+        An after-last-done step counts from now; a calendar step skips its
+        next occurrence.
+        """
+        runner = self.runners.get(notification_id)
+        step = runner.steps.get(step_id) if runner else None
+        if step is None or step.schedule is None:
+            raise ServiceValidationError("The step has no schedule")
+        if self.select(notification_id, step_id, None):
+            raise ServiceValidationError("The step has an open card")
+        schedule = step.schedule
+        if schedule.is_calendar and schedule.next is not None:
+            self._record(notification_id, step_id, HISTORY_SKIPPED, schedule.next)
+        self.set_last_done(notification_id, step_id, dt_util.utcnow())
+        if schedule.is_calendar:
+            schedule.reschedule()

@@ -9,6 +9,7 @@ import zoneinfo
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import (
@@ -420,3 +421,49 @@ async def test_example_config_runs_for_a_week(
         if record.levelname in ("ERROR", "CRITICAL")
         and record.name.startswith("custom_components")
     ]
+
+
+async def test_done_early(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """Done early skips a calendar occurrence and restarts an interval."""
+    center = await load(hass, config_entry)
+    waste = await center.add("Mixed waste", _scheduled(WEEKLY_WASTE))
+    watering = await center.add(
+        "Watering",
+        _scheduled(
+            {"type": "after_last_done", "every": 3, "unit": "days", "at": "22:00"}
+        ),
+    )
+    step_id = center.engine.step_id_of(waste, 1)
+    snapshot = center.engine.snapshot()["notifications"][waste]
+    assert [_fmt(item["due"]) for item in snapshot["upcoming"]] == [
+        "2026-11-18 Wed 19:00"
+    ]
+
+    center.engine.done_early(waste, step_id)
+    await hass.async_block_till_done()
+    assert _fmt(center.attrs("sensor.nc_mixed_waste")["next_due"]) == (
+        "2026-11-25 Wed 19:00"
+    )
+    assert center.attrs("sensor.nc_mixed_waste")["last_done"] is not None
+    await _move(hass, freezer, "2026-11-18 19:00")
+    assert center.state("sensor.nc_mixed_waste") != "active"
+    await _move(hass, freezer, "2026-11-25 19:00")
+    assert center.state("sensor.nc_mixed_waste") == "active"
+
+    # After last done: counted from the early done.
+    freezer.move_to(_local("2026-11-26 09:00"))
+    watering_step = center.engine.step_id_of(watering, 1)
+    with pytest.raises(ServiceValidationError):
+        # Its card from last night is still open.
+        center.engine.done_early(watering, watering_step)
+    await center.call("done", "sensor.nc_watering")
+    center.engine.done_early(watering, watering_step)
+    await hass.async_block_till_done()
+    assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == (
+        "2026-11-29 Sun 22:00"
+    )

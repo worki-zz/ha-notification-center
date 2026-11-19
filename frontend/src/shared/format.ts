@@ -182,3 +182,26 @@ export function entityAttribute(
 export function isTimestamp(stateObj: HassEntity): boolean {
   return stateObj.attributes.device_class === "timestamp";
 }
+
+/** A time to come, short: the time today, the weekday this week, else the date. */
+export function formatWhen(hass: HomeAssistant, when: Date, now = Date.now()): string {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const days = Math.floor((when.getTime() - start.getTime()) / 86_400_000);
+  const options: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: hour12(hass),
+  };
+  if (days >= 1 && days < 7) {
+    options.weekday = "short";
+  } else if (days >= 7 || days < 0) {
+    options.month = "short";
+    options.day = "numeric";
+  }
+  try {
+    return new Intl.DateTimeFormat(language(hass), options).format(when);
+  } catch {
+    return when.toISOString();
+  }
+}
