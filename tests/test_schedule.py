@@ -438,7 +438,7 @@ async def test_done_early(
             {"type": "after_last_done", "every": 3, "unit": "days", "at": "22:00"}
         ),
     )
-    step_id = center.engine.notification_config(waste)["steps"][0]["id"]
+    step_id = center.engine.step_id_of(waste, 1)
     snapshot = center.engine.snapshot()["notifications"][waste]
     assert [_fmt(item["due"]) for item in snapshot["upcoming"]] == [
         "2026-11-18 Wed 19:00"
@@ -457,7 +457,7 @@ async def test_done_early(
 
     # After last done: counted from the early done.
     freezer.move_to(_local("2026-11-26 09:00"))
-    watering_step = center.engine.notification_config(watering)["steps"][0]["id"]
+    watering_step = center.engine.step_id_of(watering, 1)
     with pytest.raises(ServiceValidationError):
         # Its card from last night is still open.
         center.engine.done_early(watering, watering_step)
