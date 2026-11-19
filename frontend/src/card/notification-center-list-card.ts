@@ -182,12 +182,11 @@ export class NotificationCenterListCard extends LitElement {
           `,
         )}
         ${more > 0
-          ? html`<ha-card class="more">
-              <ha-md-list-item type="button" @click=${this._openPanel}>
-                <span slot="headline">${more} more</span>
-                <ha-icon-next slot="end"></ha-icon-next>
-              </ha-md-list-item>
-            </ha-card>`
+          ? html`<div class="more">
+              <ha-button appearance="filled" variant="neutral" @click=${this._openPanel}>
+                ${more} more
+              </ha-button>
+            </div>`
           : nothing}
       </div>
     `;
@@ -216,7 +215,8 @@ export class NotificationCenterListCard extends LitElement {
       color: var(--secondary-text-color);
     }
     .more {
-      overflow: hidden;
+      display: flex;
+      justify-content: center;
     }
   `;
 }

@@ -39,8 +39,8 @@ export class NotificationCenterLiveCard extends LitElement {
   // False for a card that only shows (Done today).
   @property({ type: Boolean }) public interactive = true;
 
-  // The colour when not the category's (a muted card).
-  @property({ attribute: false }) public color?: string;
+  // Not active yet: grey border and buttons.
+  @property({ type: Boolean }) public muted = false;
 
   @state() private _asking = false;
 
@@ -86,7 +86,8 @@ export class NotificationCenterLiveCard extends LitElement {
       when: this.when,
       icon,
       stateObj: icon || !live.entityId ? undefined : hass.states[live.entityId],
-      color: this.color ?? cssColor(notification.card_color ?? category?.card_color),
+      color: cssColor(notification.card_color ?? category?.card_color),
+      muted: this.muted,
       clickable: this.interactive && !!tapButton(live),
       compact: this._asking,
       buttons,

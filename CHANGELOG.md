@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.8
+
+### Added
+
+- Icon and logo (in the integration's `brand` folder, light and dark): the sidebar icon in white on a deep purple rounded square, with the name beside it in the logo.
+
+### Changed
+
+- Upcoming and Later cards keep their colour on the icon and the label; only the border and the buttons are grey, and the texts have their normal colour.
+- Notification Center card: "N more" is a Home Assistant button.
+- Done today: the time reads "Done 12:26".
+
 ## 0.3.7
 
 ### Changed

@@ -4,7 +4,7 @@ import { repeat } from "lit/directives/repeat.js";
 
 import { loadDashboardElements } from "../card/elements";
 import { DOMAIN, type NotificationCenterConfig } from "../shared/config";
-import { formatTime, formatWhen } from "../shared/format";
+import { cssColor, formatTime, formatWhen } from "../shared/format";
 import {
   cardKey,
   categoryOf,
@@ -33,9 +33,6 @@ const TITLES: Record<Page, string> = {
   done: "Done today",
   settings: "Settings",
 };
-
-// The neutral colour of what is not active yet.
-const MUTED = "var(--secondary-text-color)";
 
 // How often relative times are written again.
 const TICK = 30_000;
@@ -175,7 +172,8 @@ export class NotificationCenterPanel extends LitElement {
             message,
             when: this._when(due),
             icon: notification.icon || category?.icon || "mdi:calendar-clock",
-            color: MUTED,
+            color: cssColor(notification.card_color ?? category?.card_color),
+            muted: true,
             buttons: [{ key: "done_early", label: "Done", icon: "mdi:check" }],
           },
         });
@@ -257,7 +255,7 @@ export class NotificationCenterPanel extends LitElement {
         .now=${this._now}
         .data=${""}
         .when=${until ? `Snoozed until ${this._when(new Date(until))}` : "Snoozed"}
-        .color=${MUTED}
+        .muted=${true}
       ></notification-center-live-card>
     `;
   }
@@ -344,8 +342,8 @@ export class NotificationCenterPanel extends LitElement {
       done,
       (live) =>
         live.card.closed_at
-          ? `done ${formatTime(hass, new Date(live.card.closed_at), "time", this._now)}`
-          : "done",
+          ? `Done ${formatTime(hass, new Date(live.card.closed_at), "time", this._now)}`
+          : "Done",
       false,
     );
   }
@@ -625,9 +623,6 @@ export class NotificationCenterPanel extends LitElement {
       font-size: var(--ha-font-size-m, 14px);
       font-weight: var(--ha-font-weight-medium, 500);
       color: var(--secondary-text-color);
-    }
-    .upcoming {
-      opacity: 0.8;
     }
     .all-clear {
       display: flex;
