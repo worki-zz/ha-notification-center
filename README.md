@@ -55,7 +55,7 @@ Open cards, snoozes and last done times are kept in `.storage/notification_cente
 
 ## The panel
 
-The **Overview** shows the active cards meant for you, with their buttons, and below them, in a neutral colour, the scheduled steps still to come today. **Later** lists the snoozed cards, the cards hidden for now, and the scheduled steps after today; **Done today** the cards done today. A scheduled step that is not due yet can be marked *Done early*: a calendar step then skips its next occurrence, an "after last done" step counts from now. Administrators find the settings behind the gear in the header (for now the YAML import and export and the stored configuration).
+The **Overview** shows the active cards meant for you, with their buttons, and below them, in a neutral colour, the scheduled steps still to come today. **Later** lists the snoozed cards, the cards hidden for now, and the scheduled steps after today; **Done today** the cards done today. A scheduled step is meant for its day; its time only says when it reaches you. So a step that is not due yet can be marked *Done* already: it shows in Done today like any done card, a calendar step skips its next occurrence, and an "after last done" step counts from now. Administrators find the settings behind the gear in the header (for now the YAML import and export and the stored configuration).
 
 ## Buttons
 

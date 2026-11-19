@@ -176,7 +176,7 @@ export class NotificationCenterPanel extends LitElement {
             message,
             icon: notification.icon || category?.icon || "mdi:calendar-clock",
             color: MUTED,
-            buttons: [{ key: "done_early", label: "Done early", icon: "mdi:check" }],
+            buttons: [{ key: "done_early", label: "Done", icon: "mdi:check" }],
           },
         });
       }
