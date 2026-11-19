@@ -81,6 +81,9 @@ export class NcNotificationEditor extends LitElement {
 
   @state() private _group?: { index: number; group: EntityGroup };
 
+  // Add entity shows the picker in place of the button, open.
+  @state() private _addingEntity = false;
+
   @state() private _entity?: { index: number; entityId: string };
 
   // The draft as it was loaded or saved, to tell whether it changed.
@@ -580,23 +583,28 @@ export class NcNotificationEditor extends LitElement {
         : nothing}
       ${draft.entity_groups.map((group, index) => this._renderGroup(draft, group, index))}
       <div class="buttons">
-        <ha-entity-picker
-          .hass=${hass}
-          .value=${""}
-          .excludeEntities=${draft.entities.map((item) => item.entity_id)}
-          add-button
-          add-button-label="Add entity"
-          @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-            ev.stopPropagation();
-            const entityId = ev.detail.value;
-            if (entityId) {
-              this._change({
-                entities: [...draft.entities, { entity_id: entityId, enabled: true, actions: {} }],
-              });
-            }
-            (ev.target as HTMLElement & { value?: string }).value = "";
-          }}
-        ></ha-entity-picker>
+        ${this._addingEntity
+          ? html`<ha-entity-picker
+              class="add-entity"
+              .hass=${hass}
+              .value=${""}
+              .excludeEntities=${draft.entities.map((item) => item.entity_id)}
+              @picker-closed=${() => (this._addingEntity = false)}
+              @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+                ev.stopPropagation();
+                const entityId = ev.detail.value;
+                if (entityId) {
+                  this._change({
+                    entities: [...draft.entities, { entity_id: entityId, enabled: true, actions: {} }],
+                  });
+                }
+                this._addingEntity = false;
+              }}
+            ></ha-entity-picker>`
+          : html`<ha-button appearance="filled" size="s" @click=${this._addEntity}>
+              <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+              Add entity
+            </ha-button>`}
         <ha-button
           appearance="filled"
           size="s"
@@ -607,6 +615,17 @@ export class NcNotificationEditor extends LitElement {
         </ha-button>
       </div>
     </div>`;
+  }
+
+  private async _addEntity(): Promise<void> {
+    this._addingEntity = true;
+    await this.updateComplete;
+    // After the click is over, or the picker takes it as a click outside.
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+    const picker = this.shadowRoot?.querySelector("ha-entity-picker.add-entity") as
+      | (HTMLElement & { open?: () => Promise<void> })
+      | null;
+    await picker?.open?.();
   }
 
   private _renderGroup(draft: EditorNotification, group: EntityGroup, index: number) {
@@ -829,7 +848,12 @@ export class NcNotificationEditor extends LitElement {
       <div class="step">
         ${step.enabled
           ? nothing
-          : html`<ha-alert alert-type="info">This step is disabled.</ha-alert>`}
+          : html`<ha-alert alert-type="info">
+              This step is disabled.
+              <ha-button slot="action" appearance="plain" size="s" @click=${() => this._stepMenu("toggle")}>
+                Enable
+              </ha-button>
+            </ha-alert>`}
         <nc-step-editor
           .hass=${this.hass}
           .narrow=${this.narrow}
@@ -1097,7 +1121,8 @@ export class NcNotificationEditor extends LitElement {
     .content {
       max-width: 1040px;
       margin: 0 auto;
-      padding: 16px 16px 96px;
+      /* As much room under the header as on the overview. */
+      padding: 32px 16px 96px;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -1106,7 +1131,7 @@ export class NcNotificationEditor extends LitElement {
     .preview {
       max-width: 520px;
       width: 100%;
-      margin: 8px auto;
+      margin: 0 auto 8px;
       pointer-events: none;
     }
     .block {
