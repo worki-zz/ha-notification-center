@@ -572,7 +572,7 @@ export class NotificationCenterPanel extends LitElement {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 24px;
+      margin-top: 8px;
     }
     .pages .schedule {
       margin-inline-start: auto;

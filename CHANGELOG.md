@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Overview: less room above the Done and Schedule buttons (24 px from the last card instead of 40 px).
+
 ## 0.4.4
 
 ### Changed
