@@ -207,7 +207,7 @@ export class NotificationCenterPanel extends LitElement {
             </ha-icon-button>`
           : nothing}
       </div>
-      <div class="content">
+      <div class="scroller"><div class="content">
         ${this._store.error
           ? html`<ha-alert alert-type="error">${this._store.error}</ha-alert>`
           : nothing}
@@ -226,7 +226,7 @@ export class NotificationCenterPanel extends LitElement {
               : page === "settings"
                 ? this._renderSettings()
                 : this._renderOverview()}
-      </div>
+      </div></div>
     `;
   }
 
@@ -266,8 +266,6 @@ export class NotificationCenterPanel extends LitElement {
     const end = this._endOfToday();
     const upcoming = this._upcoming();
     const today = upcoming.filter((item) => item.due.getTime() < end);
-    const later =
-      this._cards(["snoozed", "hidden"]).length + upcoming.length - today.length;
     const done = this._cards(["done"]).length;
     return html`
       ${active.length
@@ -280,46 +278,51 @@ export class NotificationCenterPanel extends LitElement {
         ? html`<h2>Today</h2>
             ${this._renderUpcoming(today)}`
         : nothing}
-      <ha-card class="pages">
-        <ha-md-list-item type="button" @click=${() => this._go("later")}>
+      <div class="pages">
+        <ha-button appearance="filled" variant="neutral" @click=${() => this._go("later")}>
           <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
-          <span slot="headline">Later</span>
-          <span slot="supporting-text">${countText(later)}</span>
-          <ha-icon-next slot="end"></ha-icon-next>
-        </ha-md-list-item>
-        <ha-md-list-item type="button" @click=${() => this._go("done")}>
+          Later
+        </ha-button>
+        <ha-button appearance="filled" variant="neutral" @click=${() => this._go("done")}>
           <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
-          <span slot="headline">Done today</span>
-          <span slot="supporting-text">${countText(done)}</span>
-          <ha-icon-next slot="end"></ha-icon-next>
-        </ha-md-list-item>
-      </ha-card>
+          Done today${done ? ` · ${done}` : ""}
+        </ha-button>
+      </div>
     `;
   }
 
+  // Hidden for now first, then the snoozed cards and the scheduled steps
+  // by the time they come.
   private _renderLater() {
-    const snoozed = this._cards(["snoozed"]);
     const hidden = this._cards(["hidden"]);
     const end = this._endOfToday();
-    const upcoming = this._upcoming().filter((item) => item.due.getTime() >= end);
-    if (!snoozed.length && !hidden.length && !upcoming.length) {
+    const timed: { at: number; key: string; item: unknown }[] = [
+      ...this._cards(["snoozed"]).map((live) => ({
+        at: live.card.snoozed_until ? new Date(live.card.snoozed_until).getTime() : 0,
+        key: cardKey(live.card),
+        item: live,
+      })),
+      ...this._upcoming()
+        .filter((item) => item.due.getTime() >= end)
+        .map((item) => ({ at: item.due.getTime(), key: item.key, item })),
+    ].sort((a, b) => a.at - b.at);
+    if (!hidden.length && !timed.length) {
       return html`<div class="empty">Nothing later.</div>`;
     }
     return html`
-      ${snoozed.length
-        ? html`<h2>Snoozed</h2>
-            ${this._renderLive(snoozed, (live) =>
-              live.card.snoozed_until ? `until ${this._when(new Date(live.card.snoozed_until))}` : "",
-            )}`
-        : nothing}
-      ${hidden.length
-        ? html`<h2>Hidden for now</h2>
-            ${this._renderLive(hidden)}`
-        : nothing}
-      ${upcoming.length
-        ? html`<h2>Upcoming</h2>
-            ${this._renderUpcoming(upcoming)}`
-        : nothing}
+      ${this._renderLive(hidden, () => "hidden for now")}
+      ${repeat(
+        timed,
+        (entry) => entry.key,
+        (entry) =>
+          "card" in (entry.item as object)
+            ? this._renderLive([entry.item as LiveCard], (live) =>
+                live.card.snoozed_until
+                  ? `until ${this._when(new Date(live.card.snoozed_until))}`
+                  : "",
+              )
+            : this._renderUpcoming([entry.item as Upcoming]),
+      )}
     `;
   }
 
@@ -570,21 +573,28 @@ export class NotificationCenterPanel extends LitElement {
 
   static override styles = css`
     :host {
-      display: block;
-      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
       background-color: var(--primary-background-color);
       color: var(--primary-text-color);
     }
+    /* Fixed, and without a background of its own, like a dashboard's. */
     .toolbar {
+      flex: none;
       display: flex;
       align-items: center;
       height: var(--header-height, 56px);
       padding: 0 4px;
       box-sizing: border-box;
       font-size: var(--ha-font-size-xl, 20px);
-      background-color: var(--app-header-background-color);
-      color: var(--app-header-text-color, var(--primary-text-color));
-      border-bottom: var(--app-header-border-bottom, none);
+      background-color: var(--primary-background-color);
+      color: var(--primary-text-color);
+    }
+    .scroller {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
     }
     .main-title {
       margin-inline-start: 12px;
@@ -593,16 +603,17 @@ export class NotificationCenterPanel extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* Twice a dashboard's gap between the cards. */
     .content {
       max-width: 640px;
       margin: 0 auto;
-      padding: 16px;
+      padding: 24px 16px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 16px;
     }
     h2 {
-      margin: 16px 4px 0;
+      margin: 8px 4px -8px;
       font-size: var(--ha-font-size-m, 14px);
       font-weight: var(--ha-font-weight-medium, 500);
       color: var(--secondary-text-color);
@@ -622,12 +633,12 @@ export class NotificationCenterPanel extends LitElement {
       --mdc-icon-size: 48px;
       color: var(--disabled-text-color);
     }
-    ha-card.pages {
-      margin-top: 16px;
-      overflow: hidden;
-    }
-    .pages ha-icon {
-      color: var(--secondary-text-color);
+    .pages {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
     }
     .empty {
       padding: 32px 16px;
@@ -693,11 +704,6 @@ export class NotificationCenterPanel extends LitElement {
       color: var(--disabled-text-color);
     }
   `;
-}
-
-function countText(count: number): string {
-  if (!count) return "Nothing";
-  return count === 1 ? "1 notification" : `${count} notifications`;
 }
 
 function formatShort(value: string): string {

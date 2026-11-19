@@ -73,7 +73,7 @@ Every active card of the Notification Center on a dashboard, in list order, with
 | Option | Description |
 | --- | --- |
 | `categories` | Only these categories (their ids). Default: all. |
-| `max_cards` | At most this many cards; a "+N more" row opens the Notification Center. Default: all. |
+| `max_cards` | At most this many cards; an "N more" row opens the Notification Center. Default: all. |
 | `ignore_audience` | Also show the cards meant for other people. Default: `false`, only the cards whose audience includes the logged in user's person (or is empty). |
 
 ```yaml
