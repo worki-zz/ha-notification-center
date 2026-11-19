@@ -37,8 +37,8 @@ export interface NotificationViewData {
   // A CSS colour.
   color: string;
   highlight?: Highlight;
-  // Not active yet (upcoming, later): the border and the buttons are grey,
-  // the icon and the label keep the colour.
+  // Not active yet (upcoming, later): the border is a system card's and the
+  // buttons are grey; the icon and the label keep the colour.
   muted?: boolean;
   clickable?: boolean;
   // Only the icon and the buttons: the texts give their room to a choice.
@@ -67,6 +67,8 @@ export class NotificationCenterView extends LitElement {
         class="highlight-${highlight}"
         style="--nc-color: ${view.color}; --nc-frame-color: ${view.muted
           ? "var(--secondary-text-color)"
+          : view.color}; --nc-border-color: ${view.muted
+          ? "var(--ha-card-border-color, var(--divider-color, #e0e0e0))"
           : view.color}; --nc-border-width: ${this._borderWidth()}"
       >
         <div
@@ -195,7 +197,7 @@ export class NotificationCenterView extends LitElement {
       padding-right: 10px;
       border-style: solid;
       border-width: var(--nc-border-width, 1px);
-      border-color: var(--nc-frame-color, var(--nc-color));
+      border-color: var(--nc-border-color, var(--nc-color));
       --tile-color: var(--nc-color);
       --ha-ripple-color: var(--nc-color);
       --ha-ripple-hover-opacity: 0.04;

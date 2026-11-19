@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.9
+
+### Changed
+
+- Upcoming and Later cards have the border of a Home Assistant card.
+- Later, Done today and the "N more" button of the Notification Center card look like the Export and Import buttons.
+
 ## 0.3.8
 
 ### Added

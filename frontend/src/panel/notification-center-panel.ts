@@ -310,11 +310,11 @@ export class NotificationCenterPanel extends LitElement {
             )}`
         : nothing}
       <div class="pages">
-        <ha-button appearance="filled" variant="neutral" @click=${() => this._go("later")}>
+        <ha-button @click=${() => this._go("later")}>
           <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
           Later
         </ha-button>
-        <ha-button appearance="filled" variant="neutral" @click=${() => this._go("done")}>
+        <ha-button @click=${() => this._go("done")}>
           <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
           Done today${done ? ` · ${done}` : ""}
         </ha-button>
