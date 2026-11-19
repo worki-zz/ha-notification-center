@@ -267,12 +267,13 @@ export function cardData(hass: HomeAssistant, live: LiveCard, now = Date.now()):
   const stateObj = target ? hass.states[target] : undefined;
   switch (data.type) {
     case "active_since":
-    case "due":
       return formatTime(hass, new Date(live.card.since), format, now);
     case "last_done":
       return live.lastDone ? formatTime(hass, new Date(live.lastDone), format, now) : "";
     case "last_changed":
       return stateObj ? formatTime(hass, new Date(stateObj.last_changed), format, now) : "";
+    case "last_updated":
+      return stateObj ? formatTime(hass, new Date(stateObj.last_updated), format, now) : "";
     case "state":
       return stateObj ? entityState(hass, stateObj) : "";
     case "attribute":

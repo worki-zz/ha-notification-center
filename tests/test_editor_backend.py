@@ -21,7 +21,7 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 from custom_components.notification_center import schedule as sched
 from custom_components.notification_center.const import DOMAIN
 from custom_components.notification_center.listed import EntityList
-from custom_components.notification_center.model import validate_item
+from custom_components.notification_center.model import DATA_SCHEMA, validate_item
 
 from .common import load
 
@@ -248,3 +248,11 @@ async def test_text_preview_and_custom_data(
     card = center.engine.cards_of(center.manager.config["notifications"][0]["id"])[0]
     assert card.data_text == "6 min"
     assert card.as_dict()["data_text"] == "6 min"
+
+
+def test_due_data_reads_as_active_since() -> None:
+    """A step saved with Data Due (0.4.1) reads as Active since."""
+    assert DATA_SCHEMA({"type": "due", "format": "time"}) == {
+        "type": "active_since",
+        "format": "time",
+    }

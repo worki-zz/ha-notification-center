@@ -25,11 +25,11 @@ export interface Schedule {
 export type DataType =
   | "none"
   | "active_since"
-  | "due"
   | "last_done"
   | "state"
   | "attribute"
   | "last_changed"
+  | "last_updated"
   | "custom";
 
 export interface StepData {
