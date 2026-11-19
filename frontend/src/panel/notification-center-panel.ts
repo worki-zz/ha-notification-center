@@ -280,16 +280,20 @@ export class NotificationCenterPanel extends LitElement {
         ? html`<h2>Today</h2>
             ${this._renderUpcoming(today)}`
         : nothing}
-      <div class="pages">
-        <ha-button appearance="plain" @click=${() => this._go("later")}>
+      <ha-card class="pages">
+        <ha-md-list-item type="button" @click=${() => this._go("later")}>
           <ha-icon slot="start" icon="mdi:clock-outline"></ha-icon>
-          Later${later ? ` (${later})` : ""}
-        </ha-button>
-        <ha-button appearance="plain" @click=${() => this._go("done")}>
+          <span slot="headline">Later</span>
+          <span slot="supporting-text">${countText(later)}</span>
+          <ha-icon-next slot="end"></ha-icon-next>
+        </ha-md-list-item>
+        <ha-md-list-item type="button" @click=${() => this._go("done")}>
           <ha-icon slot="start" icon="mdi:check-all"></ha-icon>
-          Done today${done ? ` (${done})` : ""}
-        </ha-button>
-      </div>
+          <span slot="headline">Done today</span>
+          <span slot="supporting-text">${countText(done)}</span>
+          <ha-icon-next slot="end"></ha-icon-next>
+        </ha-md-list-item>
+      </ha-card>
     `;
   }
 
@@ -618,12 +622,12 @@ export class NotificationCenterPanel extends LitElement {
       --mdc-icon-size: 48px;
       color: var(--disabled-text-color);
     }
-    .pages {
-      display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 8px;
+    ha-card.pages {
       margin-top: 16px;
+      overflow: hidden;
+    }
+    .pages ha-icon {
+      color: var(--secondary-text-color);
     }
     .empty {
       padding: 32px 16px;
@@ -689,6 +693,11 @@ export class NotificationCenterPanel extends LitElement {
       color: var(--disabled-text-color);
     }
   `;
+}
+
+function countText(count: number): string {
+  if (!count) return "Nothing";
+  return count === 1 ? "1 notification" : `${count} notifications`;
 }
 
 function formatShort(value: string): string {

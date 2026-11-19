@@ -64,7 +64,7 @@ A card's buttons work the same in the panel and on both cards. A button first ch
 - **Home Assistant action** and **Entity action** (the listed entity's own action for that button) run in Home Assistant, as the user who pressed the button.
 - **More info** opens the entity's dialog (the button's entity, else the card's entity, else the notification's sensor); **Navigate** opens a page.
 
-The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: own buttons, Snooze, Done, Dismiss (or Mute). A step's audience decides who sees the card: empty means everyone. The Activity log names the user who changed a notification's state.
+The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: Snooze, own buttons, Done, Dismiss (or Mute). A step's audience decides who sees the card: empty means everyone. The Activity log names the user who changed a notification's state.
 
 ## The Notification Center card
 
