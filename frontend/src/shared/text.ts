@@ -1,5 +1,5 @@
 // Texts of a card: plain text, a Home Assistant template, and the
-// placeholders {Floor}, {Area}, {Device}, {Entity} and {State}.
+// placeholders {Floor}, {Area}, {Device}, {Entity}, {Device class} and {State}.
 //
 // The same rules as the backend (render.py): the template is rendered
 // first, then the placeholders are replaced in its result, so they never
@@ -8,7 +8,15 @@
 import { entityState } from "./format";
 import type { HomeAssistant } from "./types";
 
-export const PLACEHOLDERS = ["Floor", "Area", "Device", "Entity", "State"] as const;
+export const PLACEHOLDERS = ["Floor", "Area", "Device", "Entity", "Device class", "State"] as const;
+
+/** The name Home Assistant shows for a device class ("Moisture"). */
+export function deviceClassName(hass: HomeAssistant | undefined, domain: string, deviceClass: string): string {
+  const name =
+    hass?.localize?.(`ui.dialogs.entity_registry.editor.device_classes.${domain}.${deviceClass}`) ||
+    hass?.localize?.(`component.${domain}.entity_component.${deviceClass}.name`);
+  return name || deviceClass.replace(/_/g, " ").replace(/^./, (first) => first.toUpperCase());
+}
 
 /** True when a text holds a template, as Home Assistant decides it. */
 export function isTemplate(text: string | undefined | null): boolean {
@@ -28,6 +36,10 @@ export function placeholderValues(
   const values: Record<string, string> = {
     Entity: entityName,
     State: stateObj ? entityState(hass, stateObj) : "",
+    "Device class":
+      typeof stateObj?.attributes.device_class === "string"
+        ? deviceClassName(hass, entityId.split(".")[0], stateObj.attributes.device_class)
+        : "",
     Device: entityName,
     Area: "",
     Floor: "",

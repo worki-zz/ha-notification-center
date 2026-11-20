@@ -3,6 +3,8 @@
 import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import { dialogsSettled } from "./dialog-back";
+
 export interface ConfirmOptions {
   title: string;
   text?: string;
@@ -56,8 +58,10 @@ export class NcConfirmDialog extends LitElement {
 
   private _closed(ev: Event): void {
     ev.stopPropagation();
-    this.resolve?.(this._answer);
     this.remove();
+    // After Back has taken the dialog's history entry away: the answer may
+    // open another page.
+    void dialogsSettled().then(() => this.resolve?.(this._answer));
   }
 }
 

@@ -40,7 +40,8 @@ export const STATUS_STYLES = `
     align-items: center;
     height: 24px;
     padding: 0 10px;
-    border-radius: 12px;
+    /* As Home Assistant's entity badges. */
+    border-radius: var(--ha-badge-border-radius, 9999px);
     font-size: var(--ha-font-size-s, 12px);
     font-weight: var(--ha-font-weight-medium, 500);
     white-space: nowrap;

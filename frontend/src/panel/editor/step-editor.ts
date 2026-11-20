@@ -79,7 +79,7 @@ const HELP: Record<StartKind | "show" | "done" | "interactions", { title: string
     ],
   },
   done: {
-    title: "Done when",
+    title: "Done",
     text: [
       "The card closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
       "Done when activation conditions no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a card closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
@@ -127,7 +127,7 @@ const FORMATS = [
   { value: "datetime", label: "Date and time" },
 ];
 
-export const STEP_BLOCKS = ["message", "start", "show", "done", "interactions", "audience"] as const;
+export const STEP_BLOCKS = ["message", "interactions", "start", "show", "done", "audience"] as const;
 export type StepBlock = (typeof STEP_BLOCKS)[number];
 
 @customElement("nc-step-editor")
@@ -192,6 +192,14 @@ export class NcStepEditor extends LitElement {
     return html`
       ${this._panel("message", "mdi:message-text-outline", "Message", undefined, this._renderMessage(step))}
       ${this._panel(
+        "interactions",
+        "mdi:gesture-tap-button",
+        "Interactions",
+        step.buttons.filter((button) => button.enabled).length,
+        this._renderInteractions(step),
+      )}
+      <div class="group-gap"></div>
+      ${this._panel(
         "start",
         "mdi:play-circle-outline",
         "Activation",
@@ -199,14 +207,8 @@ export class NcStepEditor extends LitElement {
         this._renderStart(step),
       )}
       ${this._panel("show", "mdi:eye-outline", "Conditions", step.conditions.conditions.length, this._renderShow(step))}
-      ${this._panel("done", "mdi:check-circle-outline", "Done when", doneCount, this._renderDone(step))}
-      ${this._panel(
-        "interactions",
-        "mdi:gesture-tap-button",
-        "Interactions",
-        step.buttons.filter((button) => button.enabled).length,
-        this._renderInteractions(step),
-      )}
+      ${this._panel("done", "mdi:check-circle-outline", "Done", doneCount, this._renderDone(step))}
+      <div class="group-gap"></div>
       ${this._panel("audience", "mdi:account-multiple", "Audience", this._audienceCount(step), this._renderAudience(step))}
       ${this._help ? this._renderHelp(this._help) : nothing}
       ${this._interaction ? this._renderInteractionDialog(step) : nothing}
@@ -244,8 +246,13 @@ export class NcStepEditor extends LitElement {
           </button>`,
         )}
       </div>
-      ${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
-      <div class="row data">${this._renderData(data)}</div>
+      ${data.type === "none"
+        ? html`<div class="row data">
+            ${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
+            ${this._renderData(data)}
+          </div>`
+        : html`${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
+            <div class="row data">${this._renderData(data)}</div>`}
     </div>`;
   }
 
@@ -429,9 +436,10 @@ export class NcStepEditor extends LitElement {
           this._kindChanged(ev.detail.value);
         }}
       ></ha-button-toggle-group>
+      ${kind === "triggers" ? this._renderPinned(step) : nothing}
       ${this._title(HELP[kind].title, kind)}
       ${kind === "triggers"
-        ? html`${this._renderPinned(step)}<ha-automation-trigger
+        ? html`<ha-automation-trigger
             .hass=${this.hass}
             .narrow=${this.narrow}
             .triggers=${this._listTriggers(step)}
@@ -561,17 +569,17 @@ export class NcStepEditor extends LitElement {
     return html`<div class="block">
       <div class="show-switches">
         <ha-card outlined class="own-row">
-          <ha-icon class="builtin" icon="mdi:play-circle-outline"></ha-icon>
-          <div class="own-text">Activate only while conditions are met</div>
           <ha-switch
             .checked=${show.activate_only_while_met}
             @change=${toggle("activate_only_while_met")}
           ></ha-switch>
+          <ha-icon class="builtin" icon="mdi:play-circle-outline"></ha-icon>
+          <div class="own-text">Activate only while conditions are met</div>
         </ha-card>
         <ha-card outlined class="own-row">
+          <ha-switch .checked=${show.hide_while_not_met} @change=${toggle("hide_while_not_met")}></ha-switch>
           <ha-icon class="builtin" icon="mdi:eye-off-outline"></ha-icon>
           <div class="own-text">Hide active notification while conditions are not met</div>
-          <ha-switch .checked=${show.hide_while_not_met} @change=${toggle("hide_while_not_met")}></ha-switch>
         </ha-card>
       </div>
       ${this._title("Conditions", "show")}
@@ -601,11 +609,8 @@ export class NcStepEditor extends LitElement {
   private _renderDone(step: EditorStep) {
     const listed = this._startCanEnd(step);
     return html`<div class="block">
-      ${this._title("Triggers", "done")}
       ${listed
         ? html`<ha-card outlined class="own-row">
-            <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
-            <div class="own-text">Done when activation conditions no longer true</div>
             <ha-switch
               .checked=${step.done_when.activation_conditions_no_longer_true}
               @change=${(ev: Event) =>
@@ -616,8 +621,11 @@ export class NcStepEditor extends LitElement {
                   },
                 })}
             ></ha-switch>
+            <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
+            <div class="own-text">Done when activation conditions no longer true</div>
           </ha-card>`
         : nothing}
+      ${this._title("Triggers", "done")}
       <ha-automation-trigger
         .hass=${this.hass}
         .narrow=${this.narrow}
@@ -683,14 +691,14 @@ export class NcStepEditor extends LitElement {
         ${people.map((person) => {
           const on = everyone || audience.includes(person.id);
           return html`<div class="own-row">
-            ${person.picture
-              ? html`<img class="avatar" src=${person.picture} alt="" />`
-              : html`<span class="avatar">${initials(person.name)}</span>`}
-            <div class="own-text">${person.name}</div>
             <ha-switch
               .checked=${on}
               @change=${(ev: Event) => set(person.id, (ev.target as HTMLInputElement).checked)}
             ></ha-switch>
+            ${person.picture
+              ? html`<img class="avatar" src=${person.picture} alt="" />`
+              : html`<span class="avatar">${initials(person.name)}</span>`}
+            <div class="own-text">${person.name}</div>
           </div>`;
         })}
       </ha-card>
@@ -713,8 +721,7 @@ export class NcStepEditor extends LitElement {
       ${tap.length ? card(tap) : nothing}
       ${this._title("Buttons", "interactions")}
       ${card(builtin)}
-      ${custom.length ? html`<div class="title"><span>Custom buttons</span></div>
-            ${card(custom)}` : nothing}
+      ${custom.length ? card(custom) : nothing}
       <div>
         <ha-button appearance="filled" size="s" @click=${this._addButton}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -744,14 +751,6 @@ export class NcStepEditor extends LitElement {
         if (ev.key === "Enter") open();
       }}
     >
-      <ha-icon
-        class=${button.type === "custom" ? "" : "builtin"}
-        .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}
-      ></ha-icon>
-      <div class="own-text">
-        <div>${label}</div>
-        <div class="secondary">${parts.join(" · ")}</div>
-      </div>
       <ha-switch
         .checked=${button.enabled}
         @click=${(ev: Event) => ev.stopPropagation()}
@@ -761,6 +760,17 @@ export class NcStepEditor extends LitElement {
           this._change({ buttons });
         }}
       ></ha-switch>
+      <ha-icon
+        class=${button.type === "custom" ? "" : "builtin"}
+        .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}
+      ></ha-icon>
+      <div class="own-text">
+        <div>${label}</div>
+        <div class="secondary">${parts.join(" · ")}</div>
+      </div>
+      <ha-icon-button .label=${"Edit"}>
+        <ha-icon icon="mdi:pencil"></ha-icon>
+      </ha-icon-button>
     </div>`;
   }
 
@@ -832,7 +842,11 @@ export class NcStepEditor extends LitElement {
     :host {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 16px;
+    }
+    /* More room before Activation and after Done. */
+    .group-gap {
+      height: 0;
     }
     .block {
       display: flex;
@@ -843,7 +857,7 @@ export class NcStepEditor extends LitElement {
       align-self: flex-start;
     }
     .row.data {
-      align-items: flex-end;
+      align-items: flex-start;
     }
     .row > .data-type {
       flex: 0 1 220px;
@@ -877,7 +891,9 @@ export class NcStepEditor extends LitElement {
       flex: 1 1 200px;
       min-width: 0;
     }
+    /* Close to the message they go in, more room before Info. */
     .chips {
+      margin: -6px 0 6px;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -909,13 +925,15 @@ export class NcStepEditor extends LitElement {
     /* Like a trigger row of Home Assistant's list. */
     ha-expansion-panel.pinned {
       display: block;
-      background-color: var(--card-background-color);
+      /* As the other built-in rows, which are cards. */
+      background: var(--ha-card-background, var(--card-background-color, white));
+      border-radius: var(--ha-card-border-radius, 12px);
       --expansion-panel-summary-padding: 0 8px 0 16px;
       /* The panel pads its content even while closed, so the form does. */
       --expansion-panel-content-padding: 0;
     }
     ha-expansion-panel.pinned nc-entities-form {
-      padding: 8px 16px 16px;
+      padding: 16px;
     }
     ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {
       margin-inline-end: 12px;
@@ -975,7 +993,7 @@ export class NcStepEditor extends LitElement {
       flex: none;
       width: 40px;
       height: 40px;
-      border-radius: 50%;
+      border-radius: var(--ha-border-radius-circle, 50%);
       object-fit: cover;
       display: inline-flex;
       align-items: center;

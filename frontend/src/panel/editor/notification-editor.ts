@@ -650,9 +650,14 @@ export class NcNotificationEditor extends LitElement {
       ${draft.entities.length
         ? html`<ha-card outlined class="list">
             ${draft.entities.map(
-              (item, index) => html`<div class="item">
+              (item, index) => {
+                const edit = () =>
+                  (this._entity = { index, entityId: item.entity_id, actions: { ...(item.actions ?? {}) } });
+                return html`<div class="item clickable" role="button" tabindex="0" @click=${edit}
+                  @keydown=${(ev: KeyboardEvent) => ev.key === "Enter" && ev.target === ev.currentTarget && edit()}>
                 <ha-switch
                   .checked=${item.enabled}
+                  @click=${(ev: Event) => ev.stopPropagation()}
                   @change=${(ev: Event) => {
                     const entities = [...draft.entities];
                     entities[index] = { ...item, enabled: (ev.target as HTMLInputElement).checked };
@@ -661,11 +666,11 @@ export class NcNotificationEditor extends LitElement {
                 ></ha-switch>
                 <ha-state-icon .hass=${hass} .stateObj=${hass.states[item.entity_id]}></ha-state-icon>
                 ${this._renderEntityText(item.entity_id)}
-                <ha-icon-button .label=${"Edit"} @click=${() =>
-                    (this._entity = { index, entityId: item.entity_id, actions: { ...(item.actions ?? {}) } })}>
+                <ha-icon-button .label=${"Edit"}>
                   <ha-icon icon="mdi:pencil"></ha-icon>
                 </ha-icon-button>
-              </div>`,
+              </div>`;
+              },
             )}
           </ha-card>`
         : nothing}
@@ -725,10 +730,18 @@ export class NcNotificationEditor extends LitElement {
       groups[index] = { ...group, ...changes };
       this._change({ entity_groups: groups });
     };
+    const edit = () => (this._group = { index, group });
     return html`<ha-card outlined class="list">
-      <div class="item group">
+      <div
+        class="item group clickable"
+        role="button"
+        tabindex="0"
+        @click=${edit}
+        @keydown=${(ev: KeyboardEvent) => ev.key === "Enter" && ev.target === ev.currentTarget && edit()}
+      >
         <ha-switch
           .checked=${group.enabled}
+          @click=${(ev: Event) => ev.stopPropagation()}
           @change=${(ev: Event) => setGroup({ enabled: (ev.target as HTMLInputElement).checked })}
         ></ha-switch>
         <ha-icon icon="mdi:shape-outline"></ha-icon>
@@ -737,7 +750,7 @@ export class NcNotificationEditor extends LitElement {
           ${group.add_new ? nothing : html`<div class="secondary">Fixed list</div>`}
         </div>
         <span class="count">${active}</span>
-        <ha-icon-button .label=${"Edit"} @click=${() => (this._group = { index, group })}>
+        <ha-icon-button .label=${"Edit"}>
           <ha-icon icon="mdi:pencil"></ha-icon>
         </ha-icon-button>
       </div>
@@ -755,6 +768,7 @@ export class NcNotificationEditor extends LitElement {
                   });
                 }}
               ></ha-switch>
+              <ha-state-icon .hass=${hass} .stateObj=${hass.states[entityId]}></ha-state-icon>
               ${this._renderEntityText(entityId)}
             </div>`,
           )
@@ -768,10 +782,11 @@ export class NcNotificationEditor extends LitElement {
     const edit = this._entity!;
     const draft = this._draft!;
     const close = () => (this._entity = undefined);
+    const name = this.hass ? entityDisplay(this.hass, edit.entityId).primary : edit.entityId;
     return html`<ha-dialog
       open
       width="medium"
-      header-title="Entity"
+      header-title=${name}
       @closed=${(ev: Event) => {
         ev.stopPropagation();
         close();
@@ -787,18 +802,6 @@ export class NcNotificationEditor extends LitElement {
       >
         <ha-icon icon="mdi:delete"></ha-icon>
       </ha-icon-button>
-      <ha-entity-picker
-        .hass=${this.hass}
-        .value=${edit.entityId}
-        .label=${"Entity"}
-        .excludeEntities=${draft.entities
-          .filter((_item, i) => i !== edit.index)
-          .map((item) => item.entity_id)}
-        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-          ev.stopPropagation();
-          this._entity = { ...edit, entityId: ev.detail.value ?? "" };
-        }}
-      ></ha-entity-picker>
       <div class="dialog-slots">
         ${renderActionSlots(this.hass, this.narrow, entityActionSlots(draft), edit.actions, (actions) => {
           this._entity = { ...this._entity!, actions };
@@ -808,14 +811,9 @@ export class NcNotificationEditor extends LitElement {
         <ha-button slot="secondaryAction" appearance="plain" @click=${close}>Cancel</ha-button>
         <ha-button
           slot="primaryAction"
-          .disabled=${!edit.entityId}
           @click=${() => {
             const entities = [...draft.entities];
-            entities[edit.index] = {
-              ...entities[edit.index],
-              entity_id: edit.entityId,
-              actions: edit.actions,
-            };
+            entities[edit.index] = { ...entities[edit.index], actions: edit.actions };
             this._change({ entities });
             close();
           }}
@@ -1267,9 +1265,6 @@ export class NcNotificationEditor extends LitElement {
     .list {
       overflow: hidden;
     }
-    .list {
-      overflow: hidden;
-    }
     .item {
       display: flex;
       align-items: center;
@@ -1292,13 +1287,16 @@ export class NcNotificationEditor extends LitElement {
       background-color: rgb(from var(--primary-text-color) r g b / 0.03);
       font-weight: var(--ha-font-weight-medium, 500);
     }
-    /* Members line up their texts with the group's name. */
     .item.member {
-      padding-inline-start: calc(16px + 24px + 12px);
       font-weight: normal;
     }
-    .item.member.secondary {
-      padding-inline-start: 16px;
+    .item.clickable {
+      cursor: pointer;
+    }
+    .item.clickable:hover,
+    .item.clickable:focus-visible {
+      background-color: var(--secondary-background-color);
+      outline: none;
     }
     .count {
       color: var(--secondary-text-color);
@@ -1392,7 +1390,7 @@ export class NcNotificationEditor extends LitElement {
     ${unsafeCSS(STATUS_STYLES)}
     ${BLOCK_STYLES}
       .dialog-slots {
-      margin-top: 16px;
+      margin-top: 0;
     }
   `,
   ];

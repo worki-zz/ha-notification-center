@@ -351,23 +351,26 @@ export class NcSettings extends LitElement {
     ha-list-item-button:first-child {
       border-top: none;
     }
+    /* As much room after the handle as after the icon. */
     .handle {
       cursor: grab;
       display: flex;
       color: var(--secondary-text-color);
       padding: 4px 0;
+      margin-inline-end: 12px;
     }
+    /* As the tile card's icon. */
     .icon {
       --icon-color: var(--primary-color);
       width: 36px;
       height: 36px;
-      border-radius: 50%;
+      border-radius: var(--ha-tile-icon-border-radius, var(--ha-border-radius-pill, 9999px));
       display: flex;
       align-items: center;
       justify-content: center;
       color: var(--icon-color);
       background-color: color-mix(in srgb, var(--icon-color) 20%, transparent);
-      --mdc-icon-size: 20px;
+      --mdc-icon-size: 24px;
     }
     ha-list-item-button.disabled .icon,
     ha-list-item-button.disabled [slot="headline"] {

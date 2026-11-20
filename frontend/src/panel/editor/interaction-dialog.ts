@@ -252,20 +252,18 @@ export class NcInteractionDialog extends LitElement {
               >Set the action for each entity in the Entities block.</ha-alert
             >`;
       case "more_info":
-        return field(
-          hass,
-          { entity: {} },
-          action.entity_id ?? "",
-          "Entity",
-          (value) =>
+        // As the Data's entity: empty is the card's own entity.
+        return html`<ha-entity-picker
+          .hass=${hass}
+          .value=${action.entity_id ?? ""}
+          .placeholder=${"Active entity"}
+          @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+            ev.stopPropagation();
             this._set({
-              action: {
-                type: "more_info",
-                entity_id: (value as string) || null,
-              },
-            }),
-          { helper: "Empty: the card's entity, or the notification's sensor." },
-        );
+              action: { type: "more_info", entity_id: ev.detail.value || null },
+            });
+          }}
+        ></ha-entity-picker>`;
       case "navigate":
         return field(hass, { navigation: {} }, action.path, "Path", (value) =>
           this._set({

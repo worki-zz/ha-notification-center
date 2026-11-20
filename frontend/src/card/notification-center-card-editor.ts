@@ -47,7 +47,7 @@ const LABELS: Record<string, string> = {
 
 const HELPERS: Record<string, string> = {
   label: "Leave empty for the device or entity name.",
-  message: "Text, a template, or {Floor}, {Area}, {Device}, {Entity}, {State}.",
+  message: "Text, a template, or {Floor}, {Area}, {Device}, {Entity}, {Device class}, {State}.",
   info: "Second line, optional. Text, a template, or placeholders.",
   data_custom: "Text, a template, or placeholders.",
 };
