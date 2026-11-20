@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Overview and Schedule: as much room under a section title as between two cards.
+
 ## 0.4.13
 
 ### Added

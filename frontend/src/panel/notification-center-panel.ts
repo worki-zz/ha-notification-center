@@ -558,7 +558,7 @@ export class NotificationCenterPanel extends LitElement {
       gap: 16px;
     }
     h2 {
-      margin: 8px 4px -8px;
+      margin: 8px 4px 0;
       font-size: var(--ha-font-size-m, 14px);
       font-weight: var(--ha-font-weight-medium, 500);
       color: var(--secondary-text-color);
