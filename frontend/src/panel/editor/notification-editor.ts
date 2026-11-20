@@ -939,6 +939,12 @@ export class NcNotificationEditor extends LitElement {
       [...this._expanded].filter((key) => key.startsWith("step:")).map((key) => key.slice(5)),
     );
     const count = draft.steps.length;
+    // The steps with an active card now: their number is green.
+    const live = new Set(
+      (this.state?.notifications[draft.id ?? ""]?.cards ?? [])
+        .filter((card) => card.status === "active")
+        .map((card) => card.step_id),
+    );
     // The tabs sit on the page, without a card around the step, like Home
     // Assistant's tabbed pages.
     return html`<div class="steps">
@@ -954,7 +960,7 @@ export class NcNotificationEditor extends LitElement {
               slot="nav"
               panel=${String(i)}
               .active=${i === index}
-              class=${item.enabled ? "" : "off"}
+              class="${item.enabled ? "" : "off"} ${item.id && live.has(item.id) ? "live" : ""}"
             >
               ${count > 1 ? html`<span class="step-number">${i + 1}</span>` : nothing}
               ${this._stepLabel(item, i)}
@@ -1419,6 +1425,10 @@ export class NcNotificationEditor extends LitElement {
     }
     ha-tab-group-tab[active] .step-number {
       background-color: var(--primary-color);
+    }
+    /* A step with an active card, like the Active status chip. */
+    ha-tab-group-tab.live .step-number {
+      background-color: var(--green-color, #4caf50);
     }
     .steps {
       display: block;

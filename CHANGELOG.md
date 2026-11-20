@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Overview with nothing active: *All done* under a large icon in the text colour, centred, with more room above and below.
+- Editor: the number of a step with an active card is green.
+
 ## 0.4.16
 
 ### Added

@@ -343,7 +343,12 @@ export class NotificationCenterPanel extends LitElement {
     const done = this._cards(["done"]).length;
     const later = this._upcoming().some((item) => item.due.getTime() >= end);
     return html`
-      ${active.length ? this._renderLive(active) : this._renderEmpty("All done")}
+      ${active.length
+        ? this._renderLive(active)
+        : html`<ha-card outlined class="all-done">
+            <ha-icon icon="mdi:message-bulleted"></ha-icon>
+            <div>All done</div>
+          </ha-card>`}
       ${timed.length
         ? html`<h2>Upcoming</h2>
             ${repeat(
@@ -568,6 +573,21 @@ export class NotificationCenterPanel extends LitElement {
       margin-top: 24px;
     }
     /* Done and Schedule side by side in the middle. */
+    /* The Overview with nothing active: a big icon over the text, centred. */
+    .all-done {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 40px 16px;
+      color: var(--primary-text-color);
+      font-size: var(--ha-font-size-l, 16px);
+      font-weight: var(--ha-font-weight-medium, 500);
+    }
+    .all-done ha-icon {
+      --mdc-icon-size: 48px;
+      color: var(--primary-text-color);
+    }
     .pages {
       display: flex;
       justify-content: center;
