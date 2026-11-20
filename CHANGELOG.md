@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.15
+
+### Changed
+
+- Button and entity group dialogs: the switches (*Show button in the push notification*, *Also when the push notification is tapped*, *Add new matching entities*) are at the start of a compact row; a line above the Snooze times, none above *Add new matching entities*.
+
+### Fixed
+
+- The Snooze times showed no names in some Home Assistant versions.
+
 ## 0.4.14
 
 ### Added

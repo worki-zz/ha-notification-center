@@ -210,19 +210,21 @@ export class NcInteractionDialog extends LitElement {
           ),
         });
     };
-    return html`<div class="snooze">
+    return html`<div class="divider"></div>
+      <div class="snooze">
       <div class="title">Times</div>
       <div class="times">
         ${SNOOZE_CHOICES.map(
           (choice) =>
-            html`<ha-formfield .label=${choice.label}>
+            html`<label class="time">
               <ha-checkbox
                 .checked=${chosen.includes(choice.key)}
                 .disabled=${chosen.length === 1 && chosen.includes(choice.key)}
                 @change=${(ev: Event) =>
                   toggle(choice.key, (ev.target as HTMLInputElement).checked)}
               ></ha-checkbox>
-            </ha-formfield>`,
+              <span>${choice.label}</span>
+            </label>`,
         )}
       </div>
     </div>`;
@@ -280,17 +282,7 @@ export class NcInteractionDialog extends LitElement {
       : (button.show_in_push ?? button.type !== "custom");
     const total = this.otherPushButtons + (on ? 1 : 0);
     const times = button.type === "snooze" ? snoozeChoices(button) : [];
-    return html`<ha-settings-row>
-        <span slot="heading">
-          ${tap
-            ? "Also when the push notification is tapped"
-            : "Show button in the push notification"}
-        </span>
-        ${on && times.length > 1
-          ? html`<span slot="description">
-              The push snoozes for ${times[0].label.toLowerCase()}.
-            </span>`
-          : nothing}
+    return html`<label class="switch-row">
         <ha-switch
           .checked=${on}
           @change=${(ev: Event) => {
@@ -298,7 +290,17 @@ export class NcInteractionDialog extends LitElement {
             this._set(tap ? { push_tap: checked } : { show_in_push: checked });
           }}
         ></ha-switch>
-      </ha-settings-row>
+        <span>
+          ${tap
+            ? "Also when the push notification is tapped"
+            : "Show button in the push notification"}
+          ${on && times.length > 1
+            ? html`<div class="secondary">
+                The push snoozes for ${times[0].label.toLowerCase()}.
+              </div>`
+            : nothing}
+        </span>
+      </label>
       ${!tap && on && total > 3
         ? html`<ha-alert alert-type="warning">
             ${total} buttons are shown in the push: Android shows only the first
@@ -339,16 +341,27 @@ export class NcInteractionDialog extends LitElement {
     .title {
       font-weight: var(--ha-font-weight-medium, 500);
     }
-    /* Not as tall as in a settings page. */
-    ha-settings-row {
-      padding: 0;
-      margin: -8px 0;
-      min-height: 0;
+    /* A switch at the start of its row, as in the editor's lists. */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+    }
+    .switch-row .secondary {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
     }
     .times {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      margin: 0 -8px;
+      margin-top: 4px;
+    }
+    .time {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
     }
     .divider {
       height: 1px;

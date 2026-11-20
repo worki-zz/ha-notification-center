@@ -31,6 +31,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## Low priority
 
+### Entity actions per member of an entity group
+*Area: Notification editor.* An entity of an entity group can get its own entity actions instead of the group's (today every member runs the group's actions). *(Kristóf, 2026-11-20; phase 4)*
+
 ### Display channel
 *Area: Channels.* Show notifications on smart displays (for example a Nest Hub) as a channel of its own, with its own settings like the other channels. Deferred as a whole; 1.0 has no display support. *(Scope cut, 2026-11-15)*
 
