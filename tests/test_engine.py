@@ -1158,3 +1158,44 @@ async def test_switched_on_again_entities_match(
     await center.manager.async_set_enabled(nid, True)
     await hass.async_block_till_done()
     assert center.state("sensor.nc_doors") == "active"
+
+
+async def test_group_member_custom_action(center: Center) -> None:
+    """A member's custom action replaces the group's; the others run the group's."""
+    await center.set("binary_sensor.front", "on", device_class="door")
+    await center.set("binary_sensor.back", "on", device_class="door")
+    group_action = [{"action": "test.mute", "target": {"entity_id": "switch.a"}}]
+    custom_action = [{"action": "test.mute", "target": {"entity_id": "switch.b"}}]
+    entity_action = {"type": "entity_action"}
+    nid = await center.add(
+        "Doors",
+        step(
+            activation={
+                "type": "triggers",
+                "triggers": [
+                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                ],
+            },
+            buttons=[
+                {"type": "dismiss", "id": "dismiss", "action": entity_action},
+                {"type": "done", "id": "done", "action": entity_action},
+            ],
+        ),
+        entity_groups=[
+            {
+                **DOOR_GROUP,
+                "actions": {"dismiss": group_action, "done": group_action},
+                "member_actions": {
+                    "binary_sensor.back": {"dismiss": custom_action, "done": []}
+                },
+            }
+        ],
+    )
+    cards = {card.entity_id: card for card in center.engine.cards_of(nid)}
+    front, back = cards["binary_sensor.front"], cards["binary_sensor.back"]
+    engine = center.engine
+    assert engine.entity_actions(front, "dismiss") == group_action
+    assert engine.entity_actions(back, "dismiss") == custom_action
+    # An empty custom action does nothing, instead of the group's.
+    assert engine.entity_actions(back, "done") == []
+    assert engine.entity_actions(front, "done") == group_action

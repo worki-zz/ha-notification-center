@@ -2018,7 +2018,11 @@ class Engine:
         return self.snooze_choice(card, choice)
 
     def entity_actions(self, card: Card, button_id: str) -> list[dict[str, Any]]:
-        """Return the entity action of a card's entity for a button."""
+        """Return the entity action of a card's entity for a button.
+
+        The entity's own action, else its custom action in a group, else
+        the group's action.
+        """
         if card.entity_id is None:
             return []
         notification = self.notification_config(card.notification_id) or {}
@@ -2030,6 +2034,11 @@ class Engine:
         runner = self.runners.get(card.notification_id)
         if runner is not None:
             for group in runner.entities.groups_of(card.entity_id):
+                # A member's custom action replaces the group's, even when
+                # it is empty.
+                custom = group.get("member_actions", {}).get(card.entity_id, {})
+                if button_id in custom:
+                    return list(custom[button_id])
                 actions = group.get("actions", {}).get(button_id)
                 if actions:
                     return list(actions)

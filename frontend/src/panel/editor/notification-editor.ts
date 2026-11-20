@@ -26,7 +26,7 @@ import { STATUS_STYLES, renderStatus, statusOf } from "../status";
 import { domainName, groupName, newGroup } from "./group-dialog";
 import { BLOCK_STYLES, block } from "./block";
 import "./group-dialog";
-import { ACTION_SLOT_STYLES, renderActionSlots } from "./action-slots";
+import { ACTION_SLOT_STYLES, renderActionSlots, renderMemberSlots } from "./action-slots";
 import {
   type EditorNotification,
   type EditorStep,
@@ -95,6 +95,9 @@ export class NcNotificationEditor extends LitElement {
   @state() private _addingEntity = false;
 
   @state() private _entity?: { index: number; entityId: string; actions: Obj };
+
+  // A member of an entity group whose custom actions are being edited.
+  @state() private _member?: { groupIndex: number; entityId: string; custom: Obj };
 
   // The draft as it was loaded or saved, to tell whether it changed.
   private _original = "";
@@ -383,6 +386,7 @@ export class NcNotificationEditor extends LitElement {
           ></nc-group-dialog>`
         : nothing}
       ${this._entity ? this._renderEntityDialog() : nothing}
+      ${this._member ? this._renderMemberDialog() : nothing}
     `;
   }
 
@@ -756,9 +760,17 @@ export class NcNotificationEditor extends LitElement {
       </div>
       ${members.length
         ? members.map(
-            (entityId) => html`<div class="item member">
+            (entityId) => html`<div
+              class="item member clickable"
+              role="button"
+              tabindex="0"
+              @click=${() => this._openMember(group, index, entityId)}
+              @keydown=${(ev: KeyboardEvent) =>
+                ev.key === "Enter" && ev.target === ev.currentTarget && this._openMember(group, index, entityId)}
+            >
               <ha-switch
                 .checked=${!group.excluded.includes(entityId)}
+                @click=${(ev: Event) => ev.stopPropagation()}
                 @change=${(ev: Event) => {
                   const on = (ev.target as HTMLInputElement).checked;
                   setGroup({
@@ -770,12 +782,66 @@ export class NcNotificationEditor extends LitElement {
               ></ha-switch>
               <ha-state-icon .hass=${hass} .stateObj=${hass.states[entityId]}></ha-state-icon>
               ${this._renderEntityText(entityId)}
+              <ha-icon-button .label=${"Edit"}>
+                <ha-icon icon="mdi:pencil"></ha-icon>
+              </ha-icon-button>
             </div>`,
           )
         : html`<div class="item member secondary">
             No ${domainName(group.domain).toLowerCase()} entities match yet.
           </div>`}
     </ha-card>`;
+  }
+
+  private _openMember(group: EntityGroup, groupIndex: number, entityId: string): void {
+    this._member = {
+      groupIndex,
+      entityId,
+      custom: structuredClone(group.member_actions?.[entityId] ?? {}),
+    };
+  }
+
+  // A member of an entity group: its entity actions, each the group's or
+  // its own (Custom action).
+  private _renderMemberDialog() {
+    const edit = this._member!;
+    const draft = this._draft!;
+    const group = draft.entity_groups[edit.groupIndex];
+    const close = () => (this._member = undefined);
+    if (!group) return nothing;
+    const name = this.hass ? entityDisplay(this.hass, edit.entityId).primary : edit.entityId;
+    return html`<ha-dialog
+      open
+      width="medium"
+      header-title=${name}
+      @closed=${(ev: Event) => {
+        ev.stopPropagation();
+        close();
+      }}
+    >
+      <div class="dialog-slots">
+        ${renderMemberSlots(this.hass, this.narrow, entityActionSlots(draft), group.actions, edit.custom, (custom) => {
+          this._member = { ...this._member!, custom };
+        })}
+      </div>
+      <ha-dialog-footer slot="footer">
+        <ha-button slot="secondaryAction" appearance="plain" @click=${close}>Cancel</ha-button>
+        <ha-button
+          slot="primaryAction"
+          @click=${() => {
+            const groups = [...draft.entity_groups];
+            const memberActions = { ...(group.member_actions ?? {}) };
+            if (Object.keys(edit.custom).length) memberActions[edit.entityId] = edit.custom;
+            else delete memberActions[edit.entityId];
+            groups[edit.groupIndex] = { ...group, member_actions: memberActions };
+            this._change({ entity_groups: groups });
+            close();
+          }}
+        >
+          Save
+        </ha-button>
+      </ha-dialog-footer>
+    </ha-dialog>`;
   }
 
   private _renderEntityDialog() {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.16
+
+### Added
+
+- Entity groups: every member's row opens its dialog, where each entity action can be switched to a **Custom action** for that member (it starts as a copy of the group's, so usually only the entity changes). Stored as `member_actions` in the group; the order is the entity's own action, the member's custom action, then the group's.
+
 ## 0.4.15
 
 ### Changed
