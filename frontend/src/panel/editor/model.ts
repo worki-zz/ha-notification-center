@@ -47,10 +47,10 @@ export interface Start {
   schedule?: Schedule;
 }
 
-/** Show when: conditions used at the start and to hide an open card. */
-export interface ShowWhen {
-  start: boolean;
-  hide: boolean;
+/** Conditions: used at the activation and to hide an active card. */
+export interface StepConditions {
+  activate_only_while_met: boolean;
+  hide_while_not_met: boolean;
   conditions: Obj[];
 }
 
@@ -60,9 +60,9 @@ export interface EditorStep {
   message: string;
   info?: string | null;
   data?: StepData | null;
-  start: Start;
-  show_when: ShowWhen;
-  done_when: { triggers: Obj[]; start_no_longer_true: boolean };
+  activation: Start;
+  conditions: StepConditions;
+  done_when: { triggers: Obj[]; activation_conditions_no_longer_true: boolean };
   buttons: Button[];
   audience?: string[];
   [key: string]: unknown;
@@ -125,9 +125,9 @@ export function newStep(): EditorStep {
   return {
     enabled: true,
     message: "",
-    start: { type: "triggers", triggers: [] },
-    show_when: { start: true, hide: true, conditions: [] },
-    done_when: { triggers: [], start_no_longer_true: false },
+    activation: { type: "triggers", triggers: [] },
+    conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
+    done_when: { triggers: [], activation_conditions_no_longer_true: false },
     buttons: [
       builtin("tap", false, { type: "more_info" }),
       builtin("done", true),
@@ -266,11 +266,11 @@ export function toEditor(
     (items ?? []).map((item) => toEditorItem(item, "condition", draft.id, numbers, state));
   const selfSensor = sensorOf(state, draft.id);
   for (const step of draft.steps) {
-    if (step.start.type === "triggers") {
-      step.start.triggers = triggers(step.start.triggers);
+    if (step.activation.type === "triggers") {
+      step.activation.triggers = triggers(step.activation.triggers);
       // The first trigger on this notification's own entities is the one
       // at the top of Start, which has no notification field.
-      const first = step.start.triggers[0];
+      const first = step.activation.triggers[0];
       const options = first?.options as Obj | undefined;
       if (
         first &&
@@ -282,14 +282,14 @@ export function toEditor(
         first[PINNED] = true;
       }
     }
-    step.show_when = {
-      start: step.show_when?.start ?? true,
-      hide: step.show_when?.hide ?? true,
-      conditions: conditions(step.show_when?.conditions),
+    step.conditions = {
+      activate_only_while_met: step.conditions?.activate_only_while_met ?? true,
+      hide_while_not_met: step.conditions?.hide_while_not_met ?? true,
+      conditions: conditions(step.conditions?.conditions),
     };
     step.done_when = {
       triggers: triggers(step.done_when?.triggers),
-      start_no_longer_true: step.done_when?.start_no_longer_true ?? false,
+      activation_conditions_no_longer_true: step.done_when?.activation_conditions_no_longer_true ?? false,
     };
     // Every button has an id, so an entity action can point to it.
     for (const button of step.buttons) button.id ||= newId();
@@ -308,7 +308,7 @@ export function toSaved(draft: EditorNotification): EditorNotification {
   const saved = clone(draft);
   delete saved.id;
   for (const step of saved.steps) {
-    const start = step.start;
+    const start = step.activation;
     // The trigger at the top of Start is saved only when it tests something.
     const pinned = pinnedEntities(step);
     const triggers = (start.triggers ?? [])
@@ -324,7 +324,7 @@ export function toSaved(draft: EditorNotification): EditorNotification {
         );
         return { ...rest, options };
       });
-    step.start =
+    step.activation =
       start.type === "schedule"
         ? { type: "schedule", schedule: start.schedule! }
         : { type: "triggers", triggers };
@@ -422,8 +422,8 @@ export interface PinnedEntities {
  * notification's own entities (it has no notification field).
  */
 export function pinnedEntities(step: EditorStep): PinnedEntities | undefined {
-  if (step.start.type !== "triggers") return undefined;
-  const item = step.start.triggers?.[0];
+  if (step.activation.type !== "triggers") return undefined;
+  const item = step.activation.triggers?.[0];
   if (!item?.[PINNED]) return undefined;
   const options = (item.options as Obj | undefined) ?? {};
   return { item, kind: item.trigger === ENTITIES_NUMERIC ? "numeric" : "state", options };
@@ -448,16 +448,16 @@ export function prefillPinned(hass: HomeAssistant, draft: EditorNotification): E
   if (
     !listed.length ||
     !step ||
-    step.start.type !== "triggers" ||
-    (step.start.triggers ?? []).length ||
+    step.activation.type !== "triggers" ||
+    (step.activation.triggers ?? []).length ||
     !listed.every((entityId) => ON_OFF_DOMAINS.includes(entityId.split(".")[0]))
   ) {
     return draft;
   }
   const first: EditorStep = {
     ...step,
-    start: {
-      ...step.start,
+    activation: {
+      ...step.activation,
       triggers: [{ trigger: ENTITIES_STATE, options: { to: ["on"] }, [PINNED]: true }],
     },
   };

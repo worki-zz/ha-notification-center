@@ -161,7 +161,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {id: mute, type: dismiss, enabled: true, label: Mute, icon: mdi:volume-off, card: keep_silent, action: {type: entity_action}}
           - {type: done, enabled: false}
@@ -182,7 +182,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {id: mute, type: dismiss, enabled: true, label: Mute, icon: mdi:volume-off, card: keep_silent, action: {type: entity_action}}
           - {type: done, enabled: false}
@@ -200,7 +200,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: dismiss, enabled: true, label: Mute, icon: mdi:volume-off, card: keep_silent}
           - {type: done, enabled: false}
@@ -252,7 +252,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: [unavailable, unknown], for: {minutes: 30}}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: tap, enabled: true, action: {type: more_info}}
           - {type: dismiss, enabled: true}
@@ -268,7 +268,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, below: 15, for: {hours: 1}}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: tap, enabled: true, action: {type: more_info}}
           - {type: dismiss, enabled: true}
@@ -315,7 +315,7 @@ notifications:
           conditions:
             - {condition: numeric_state, entity_id: sensor.rain_tank_level, below: 20}
             - {condition: notification_center.notification_state, notification: garden_watering, state: active}
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: done, enabled: false}
           - {type: snooze, enabled: false}
@@ -357,7 +357,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: "on", for: {minutes: 5}}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: done, enabled: false}
           - {type: snooze, enabled: false}
@@ -399,7 +399,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: done, enabled: false}
           - {type: snooze, enabled: false}
@@ -414,7 +414,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: Sports club}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: done, enabled: false}
           - {type: snooze, enabled: false}
@@ -504,7 +504,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: snooze, enabled: false}
   - id: dishwasher_salt
@@ -649,7 +649,7 @@ notifications:
         start:
           type: triggers
           triggers: [{trigger: notification_center.listed_entities, to: [armed_away, armed_night, armed_home]}]
-        done_when: {start_no_longer_true: true}
+        done_when: {activation_conditions_no_longer_true: true}
         buttons:
           - {type: done, enabled: false}
           - {type: snooze, enabled: false}

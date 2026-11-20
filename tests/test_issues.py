@@ -28,7 +28,7 @@ async def test_missing_entity_issue(hass: HomeAssistant, center: Center) -> None
     await center.add(
         "Bell",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "state", "entity_id": "binary_sensor.bell", "to": "on"}
@@ -60,7 +60,7 @@ async def test_template_and_every_issues(hass: HomeAssistant, center: Center) ->
     await center.add(
         "Filter",
         step(
-            start={
+            activation={
                 "type": "schedule",
                 "schedule": {
                     "type": "after_last_done",
@@ -102,7 +102,7 @@ async def test_diagnostics(
     await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     data = await async_get_config_entry_diagnostics(hass, config_entry)
-    assert data["version"] == "0.4.11"
+    assert data["version"] == "0.4.12"
     assert data["config"]["people"] == [
         {"person": "**REDACTED**", "notify": "**REDACTED**", "device_type": "other"}
     ]

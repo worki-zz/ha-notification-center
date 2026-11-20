@@ -4,7 +4,7 @@ Every step of a notification has cards. A step has one card, or, with the
 Listed entities trigger, one card per entity. A card is:
 
 - **open**: it shows (state ``active``), or it is hidden while the step's
-  Show when is not met (state ``hidden``);
+  Conditions are not met (state ``hidden``);
 - **snoozed** until a time;
 - **closed**: done, dismissed or expired. A done card stays until the end of
   the day, so it can be shown as done today.
@@ -139,7 +139,7 @@ def async_add_state_watch(hass: HomeAssistant, watch: StateWatch) -> CALLBACK_TY
     return remove
 
 
-# Conditions that change with time, not with an entity: a Show when that
+# Conditions that change with time, not with an entity: a Conditions block that
 # holds one of them is checked again every minute.
 _TIMED_CONDITIONS: Final = frozenset({"time", "sun", "template", "trigger"})
 
@@ -462,7 +462,7 @@ class StepRunner:
         self._trackers: list[ListedTracker] = []
         self._watches: list[StateWatch] = []
         self._start_trackers: list[ListedTracker] = []
-        # Show when: its conditions, used at the start and to hide open cards.
+        # Conditions: its conditions, used at the start and to hide open cards.
         self.show_when: _Conditions | None = None
         self.start_conditions: _Conditions | None = None
         self._hides = False
@@ -486,28 +486,28 @@ class StepRunner:
 
     async def async_start(self) -> None:
         """Set up the triggers and conditions of the step."""
-        start = self.step["start"]
-        show_when = self.step.get("show_when") or {}
+        start = self.step["activation"]
+        show_when = self.step.get("conditions") or {}
         self.show_when, entities, timed = await _async_conditions(
             self.engine,
             self.notification,
             show_when.get("conditions", []),
-            f"{self.name} show when",
+            f"{self.name} conditions",
         )
         self.referenced |= entities
         if start["type"] == "schedule":
             self.schedule = StepSchedule(self, start["schedule"])
-        if show_when.get("start", True):
+        if show_when.get("activate_only_while_met", True):
             self.start_conditions = self.show_when
         # Hidden while they are not met; a scheduled card that needs them to
         # start waits for them, hidden, until it expires.
-        self._hides = bool(show_when.get("hide", True)) or (
+        self._hides = bool(show_when.get("hide_while_not_met", True)) or (
             self.schedule is not None and self.start_conditions is not None
         )
-        # Start condition no longer true also closes a started card when the
-        # Show when conditions it started with are no longer met.
+        # Done when activation conditions no longer true also closes an
+        # active card when the Conditions it was activated with are not met.
         self._closes = (
-            bool(self.step["done_when"].get("start_no_longer_true"))
+            bool(self.step["done_when"].get("activation_conditions_no_longer_true"))
             and self.start_conditions is not None
             and not self.start_conditions.empty
             and self.schedule is None
@@ -625,7 +625,7 @@ class StepRunner:
             tracker.async_start()
         if self.schedule is not None:
             self.schedule.async_start()
-        if self.step["done_when"].get("start_no_longer_true"):
+        if self.step["done_when"].get("activation_conditions_no_longer_true"):
             for card in self.engine.cards_of(self.notification.id, self.step_id):
                 if (
                     card.entity_id is not None
@@ -703,7 +703,9 @@ class StepRunner:
             # A done card stays until midnight; the entity may open a new one.
             self.engine.forget_block(card)
             return
-        if card.is_open and self.step["done_when"].get("start_no_longer_true"):
+        if card.is_open and self.step["done_when"].get(
+            "activation_conditions_no_longer_true"
+        ):
             self.engine.close(
                 card, CLOSED_DONE, SOURCE_ENTITY, context=context, transient=True
             )
@@ -736,7 +738,7 @@ class StepRunner:
         """Return whether an entity matches a Listed entities start trigger."""
         return any(tracker.is_matching(entity_id) for tracker in self._start_trackers)
 
-    # -- Show when ---------------------------------------------------------
+    # -- Conditions ---------------------------------------------------------
 
     @callback
     def _hide_changed(self, *_: Any) -> None:
@@ -744,10 +746,11 @@ class StepRunner:
 
     @callback
     def refresh_hidden(self) -> None:
-        """Check Show when again for the open cards of the step.
+        """Check Conditions again for the open cards of the step.
 
-        With Start condition no longer true, a card whose start conditions
-        are no longer met closes as done; otherwise it may be hidden.
+        With Done when activation conditions no longer true, a card whose
+        activation conditions are no longer met closes as done; otherwise it
+        may be hidden.
         """
         start = self.start_conditions if self._closes else None
         for card in self.engine.cards_of(self.notification.id, self.step_id):
@@ -759,7 +762,7 @@ class StepRunner:
             self.engine.set_hidden(card, self.is_hidden(card))
 
     def is_hidden(self, card: Card) -> bool:
-        """Return whether a card is hidden: Show when is not met for it."""
+        """Return whether a card is hidden: the Conditions are not met for it."""
         if not self._hides or self.show_when is None or self.show_when.empty:
             return False
         return not self.show_when.check(self.engine.variables(card))
@@ -769,7 +772,7 @@ class StepRunner:
         """Return whether a Notification entities trigger starts the step."""
         return any(
             trigger.get("trigger", trigger.get("platform")) in ENTITIES_KINDS
-            for trigger in self.step["start"].get("triggers", [])
+            for trigger in self.step["activation"].get("triggers", [])
         )
 
 
@@ -1313,7 +1316,7 @@ class Engine:
         else:
             day = now.date() + timedelta(days=days.get(choice, 1))
         step = self._step_config(card.notification_id, card.step_id) or {}
-        if step.get("start", {}).get("type") == "schedule":
+        if step.get("activation", {}).get("type") == "schedule":
             at = dt_util.as_local(card.since).time()
         else:
             at = dt_util.parse_time(
@@ -1626,7 +1629,7 @@ class Engine:
 
     @callback
     def _minute(self, _now: datetime) -> None:
-        """Check the time-dependent Show when again."""
+        """Check the time-dependent Conditions again."""
         for runner in self.runners.values():
             for step in runner.steps.values():
                 if step.hide_timed:

@@ -541,8 +541,8 @@ export class NcNotificationEditor extends LitElement {
     copy.enabled ??= true;
     for (const step of copy.steps) {
       step.buttons ??= [];
-      step.start ??= { type: "triggers", triggers: [] };
-      step.start.triggers ??= [];
+      step.activation ??= { type: "triggers", triggers: [] };
+      step.activation.triggers ??= [];
     }
     this._set(
       toEditor(
@@ -869,8 +869,8 @@ export class NcNotificationEditor extends LitElement {
     const stored = this._storedItem()?.steps.find((item) => item.id === step.id);
     const savedStep =
       !!stored &&
-      JSON.stringify((stored as unknown as EditorStep).start?.schedule ?? null) ===
-        JSON.stringify(step.start.type === "schedule" ? step.start.schedule : null);
+      JSON.stringify((stored as unknown as EditorStep).activation?.schedule ?? null) ===
+        JSON.stringify(step.activation.type === "schedule" ? step.activation.schedule : null);
     const expanded = new Set(
       [...this._expanded].filter((key) => key.startsWith("step:")).map((key) => key.slice(5)),
     );

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.12
+
+### Changed
+
+- New names in the editor and in YAML: **Start** is **Activation** (`activation`), **Show when** is **Conditions** (`conditions`), with *Activate only while conditions are met* (`activate_only_while_met`) and *Hide active notification while conditions are not met* (`hide_while_not_met`); *Start condition no longer true* is *Done when activation conditions no longer true* (`activation_conditions_no_longer_true`). Saved notifications and imported YAML with the earlier names are turned into the new ones by themselves.
+- Editor, Activation: the title shows *Schedule* or *Repeat* instead of a number when the step is not started by triggers.
+- Editor, Interactions: *Tap on the card* is on its own above *Buttons*; own buttons are in their own list, *Custom buttons*.
+- Editor: no explanations under the Conditions switches, Done when's built-in item and Audience, and no *Entity parameters* label before the parameters.
+
+### Fixed
+
+- Back (browser or phone) closes an open dialog instead of leaving the editor.
+
 ## 0.4.11
 
 ### Added

@@ -340,7 +340,7 @@ async def test_entity_rename_is_followed(
             "steps": [
                 {
                     "message": "Door open",
-                    "start": {
+                    "activation": {
                         "type": "triggers",
                         "triggers": [
                             {
@@ -360,7 +360,7 @@ async def test_entity_rename_is_followed(
     await hass.async_block_till_done()
     notification = (await client.config())["notifications"][0]
     assert notification["entities"][0]["entity_id"] == "binary_sensor.entrance_door"
-    trigger = notification["steps"][0]["start"]["triggers"][0]
+    trigger = notification["steps"][0]["activation"]["triggers"][0]
     assert trigger["entity_id"] == "binary_sensor.entrance_door"
 
 

@@ -223,7 +223,7 @@ class ConfigManager:
         # own steps now point to the copy.
         for step in copied["steps"]:
             for items in (
-                step["start"].get("triggers", []),
+                step["activation"].get("triggers", []),
                 step["done_when"]["triggers"],
             ):
                 for trigger in items:

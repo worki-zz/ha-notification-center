@@ -602,7 +602,7 @@ def ws_step_set_next(
         ),
         None,
     )
-    start = (step or {}).get("start", {})
+    start = (step or {}).get("activation", {})
     schedule = start.get("schedule") if start.get("type") == "schedule" else None
     if step is None or schedule is None or schedule["type"] == SCHEDULE_CALENDAR:
         connection.send_error(

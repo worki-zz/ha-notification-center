@@ -76,7 +76,7 @@ export interface Step {
   message: string;
   info?: string | null;
   data?: StepData | null;
-  start: { type: "triggers" | "schedule" };
+  activation: { type: "triggers" | "schedule" };
   buttons: Button[];
   // Person entities who see the card; empty means everyone.
   audience?: string[];

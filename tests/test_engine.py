@@ -75,7 +75,7 @@ async def test_trigger_done_when_and_last_done(
         "Dishwasher",
         step(
             "Empty the dishwasher",
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [_state_trigger("input_boolean.dishwasher")],
             },
@@ -138,7 +138,7 @@ async def test_hide_while(center: Center) -> None:
     await center.add(
         "Windows",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [_state_trigger("input_boolean.hot")],
             },
@@ -175,8 +175,12 @@ async def test_show_when_switches(center: Center) -> None:
         await center.add(
             name,
             step(
-                start={"type": "triggers", "triggers": [_state_trigger(entity)]},
-                show_when={"start": start, "hide": hide, "conditions": [away]},
+                activation={"type": "triggers", "triggers": [_state_trigger(entity)]},
+                conditions={
+                    "activate_only_while_met": start,
+                    "hide_while_not_met": hide,
+                    "conditions": [away],
+                },
             ),
         )
     await center.set("input_boolean.one", "on")
@@ -204,12 +208,16 @@ async def test_show_when_no_longer_met_closes(center: Center) -> None:
     await center.add(
         "Bell",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [_state_trigger("input_boolean.bell")],
             },
-            show_when={"start": True, "hide": False, "conditions": [away]},
-            done_when={"start_no_longer_true": True},
+            conditions={
+                "activate_only_while_met": True,
+                "hide_while_not_met": False,
+                "conditions": [away],
+            },
+            done_when={"activation_conditions_no_longer_true": True},
         ),
     )
     await center.set("input_boolean.bell", "on")
@@ -227,7 +235,7 @@ async def test_retrigger_keeps_the_card(
     await center.add(
         "Bell",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [{"trigger": "event", "event_type": "bell"}],
             }
@@ -353,13 +361,13 @@ async def test_listed_entities(center: Center) -> None:
         "Doors",
         step(
             "{Entity} is open",
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
                 ],
             },
-            done_when={"start_no_longer_true": True},
+            done_when={"activation_conditions_no_longer_true": True},
         ),
         entity_groups=[DOOR_GROUP],
     )
@@ -386,7 +394,7 @@ async def test_listed_entities_dismiss_waits(center: Center) -> None:
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
@@ -416,7 +424,7 @@ async def test_listed_entities_for(
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {
@@ -443,7 +451,7 @@ async def test_entities_numeric_state(center: Center) -> None:
     await center.add(
         "Tank",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {
@@ -474,7 +482,7 @@ async def test_entities_of_another_notification(center: Center) -> None:
         "Main valve",
         step(
             "Close the main valve",
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {
@@ -498,7 +506,7 @@ async def test_entities_for_template(
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {
@@ -525,7 +533,7 @@ async def test_notification_state_trigger_and_condition(center: Center) -> None:
         "Waste check",
         step(
             "Bring the bin back",
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {
@@ -739,7 +747,7 @@ async def test_done_when_closes_only_its_entity(center: Center) -> None:
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
@@ -772,13 +780,13 @@ async def test_listed_card_closes_after_restart(
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
                 ],
             },
-            done_when={"start_no_longer_true": True},
+            done_when={"activation_conditions_no_longer_true": True},
         ),
         entity_groups=[DOOR_GROUP],
     )
@@ -827,7 +835,7 @@ async def test_listed_done_stays_done_today(center: Center) -> None:
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
@@ -851,7 +859,7 @@ async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) 
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
@@ -911,13 +919,13 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
                 ],
             },
-            done_when={"start_no_longer_true": True},
+            done_when={"activation_conditions_no_longer_true": True},
         ),
         entities=[{"entity_id": "binary_sensor.front"}],
     )
@@ -969,7 +977,7 @@ async def test_entity_already_matching_has_no_cause(
     await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.listed_entities", "to": "on"}
@@ -1134,7 +1142,7 @@ async def test_switched_on_again_entities_match(
     nid = await center.add(
         "Doors",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [
                     {"trigger": "notification_center.entities_state", "to": "on"}

@@ -438,7 +438,7 @@ SCHEDULE_SCHEMA = vol.Any(
     ),
 )
 
-START_SCHEMA = vol.Any(
+ACTIVATION_SCHEMA = vol.Any(
     vol.Schema(
         {
             vol.Required("type"): "triggers",
@@ -454,13 +454,13 @@ START_SCHEMA = vol.Any(
     ),
 )
 
-# Show when: one set of conditions, used at the start (a card starts only
-# while they are met; a scheduled card waits for them) and while a card is
-# open (it is hidden while they are not met), as switched on.
-SHOW_WHEN_SCHEMA = vol.Schema(
+# Conditions: one set of conditions, used at the activation (a card is
+# activated only while they are met; a scheduled card waits for them) and
+# while a card is active (it is hidden while they are not met), as switched on.
+STEP_CONDITIONS_SCHEMA = vol.Schema(
     {
-        vol.Optional("start", default=True): cv.boolean,
-        vol.Optional("hide", default=True): cv.boolean,
+        vol.Optional("activate_only_while_met", default=True): cv.boolean,
+        vol.Optional("hide_while_not_met", default=True): cv.boolean,
         vol.Optional("conditions", default=list): CONDITIONS,
     }
 )
@@ -468,10 +468,10 @@ SHOW_WHEN_SCHEMA = vol.Schema(
 DONE_WHEN_SCHEMA = vol.Schema(
     {
         vol.Optional("triggers", default=list): TRIGGERS,
-        # Close a card when what started it is no longer true: its entity
-        # no longer matches Notification entities, or the Show when
-        # conditions (with Start switched on) are no longer met.
-        vol.Optional("start_no_longer_true", default=False): cv.boolean,
+        # Close a card when what activated it is no longer true: its entity
+        # no longer matches Notification entities, or the Conditions (with
+        # Activate only while conditions are met) are no longer met.
+        vol.Optional("activation_conditions_no_longer_true", default=False): cv.boolean,
     }
 )
 
@@ -640,8 +640,8 @@ STEP_SCHEMA = _with_id(
         vol.Required("message"): cv.string,
         vol.Optional("info"): _optional(cv.string),
         vol.Optional("data"): _optional(DATA_SCHEMA),
-        vol.Optional("start", default={"type": "triggers"}): START_SCHEMA,
-        vol.Optional("show_when", default=dict): SHOW_WHEN_SCHEMA,
+        vol.Optional("activation", default={"type": "triggers"}): ACTIVATION_SCHEMA,
+        vol.Optional("conditions", default=dict): STEP_CONDITIONS_SCHEMA,
         vol.Optional("done_when", default=dict): DONE_WHEN_SCHEMA,
         vol.Optional("buttons", default=list): _buttons,
         # People who see the card and get the push; empty means everyone.
@@ -890,14 +890,17 @@ def upgrade_listed(notification: dict[str, Any]) -> None:
     for step in notification.get("steps") or []:
         if not isinstance(step, dict):
             continue
-        start = step.get("start") or {}
+        start = step.get("activation") or step.get("start") or {}
         done_when = step.get("done_when") or {}
+        conditions = step.get("conditions")
+        conditions = conditions if isinstance(conditions, dict) else {}
         for items, key in (
             (start.get("triggers"), "trigger"),
             (done_when.get("triggers"), "trigger"),
             (start.get("conditions"), "condition"),
             (step.get("hide_while"), "condition"),
             ((step.get("show_when") or {}).get("conditions"), "condition"),
+            (conditions.get("conditions"), "condition"),
         ):
             for item in items if isinstance(items, list) else []:
                 if isinstance(item, dict) and item.get(key) == TRIGGER_LISTED_ENTITIES:
@@ -1009,6 +1012,33 @@ def upgrade_show_when(notification: dict[str, Any]) -> None:
         }
 
 
+def upgrade_terms(notification: dict[str, Any]) -> None:
+    """Rename the step fields of earlier versions (0.4.11 and before).
+
+    start -> activation; show_when -> conditions, with start ->
+    activate_only_while_met and hide -> hide_while_not_met; Done when's
+    start_no_longer_true -> activation_conditions_no_longer_true.
+    """
+    for step in notification.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        if "start" in step and "activation" not in step:
+            step["activation"] = step.pop("start")
+        show_when = step.pop("show_when", None)
+        if isinstance(show_when, dict) and not isinstance(step.get("conditions"), dict):
+            step["conditions"] = {
+                "activate_only_while_met": show_when.get("start", True),
+                "hide_while_not_met": show_when.get("hide", True),
+                "conditions": show_when.get("conditions") or [],
+            }
+        done_when = step.get("done_when")
+        if isinstance(done_when, dict) and "start_no_longer_true" in done_when:
+            done_when.setdefault(
+                "activation_conditions_no_longer_true",
+                done_when.pop("start_no_longer_true"),
+            )
+
+
 def _upgrade_listed_item(item: dict[str, Any], key: str, own_id: Any) -> None:
     options = item.pop("options", None)
     if isinstance(options, dict):
@@ -1085,13 +1115,13 @@ OWN_CONDITION_SCHEMAS: Final[dict[str, vol.Schema]] = {
 
 def _trigger_lists(step: dict[str, Any]) -> list[list[dict[str, Any]]]:
     lists = [step["done_when"]["triggers"]]
-    if step["start"]["type"] == "triggers":
-        lists.append(step["start"]["triggers"])
+    if step["activation"]["type"] == "triggers":
+        lists.append(step["activation"]["triggers"])
     return lists
 
 
 def _condition_lists(step: dict[str, Any]) -> list[list[dict[str, Any]]]:
-    return [step["show_when"]["conditions"]]
+    return [step["conditions"]["conditions"]]
 
 
 def _own_items(step: dict[str, Any], kind: str) -> list[dict[str, Any]]:
@@ -1161,11 +1191,11 @@ async def _validate_step_automation(
     The validated form is not stored: the user's own form is kept, so that
     export gives back what was written.
     """
-    start = step["start"]
+    start = step["activation"]
     if start["type"] == "triggers":
-        await _validate_triggers(hass, start["triggers"], _path(where, "start"))
+        await _validate_triggers(hass, start["triggers"], _path(where, "activation"))
     await _validate_conditions(
-        hass, step["show_when"]["conditions"], _path(where, "show when")
+        hass, step["conditions"]["conditions"], _path(where, "conditions")
     )
     await _validate_triggers(
         hass, step["done_when"]["triggers"], _path(where, "done when")
@@ -1209,6 +1239,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
         # Before the structure check: the earlier fields are not in it.
         if isinstance(notification, dict):
             upgrade_show_when(notification)
+            upgrade_terms(notification)
             upgrade_buttons(notification)
     config: ConfigData = _structure(CONFIG_SCHEMA, data, "configuration")
     for notification in config["notifications"]:
