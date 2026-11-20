@@ -183,14 +183,13 @@ export class NcGroupDialog extends LitElement {
         this._set({ labels: (value as string[]) ?? [] }),
       )}
       <ha-alert alert-type="info">${count} matching ${count === 1 ? "entity" : "entities"}</ha-alert>
-      <div class="divider"></div>
-      <ha-settings-row>
-        <span slot="heading">Add new matching entities</span>
+      <label class="switch-row">
         <ha-switch
           .checked=${group.add_new}
           @change=${(ev: Event) => this._set({ add_new: (ev.target as HTMLInputElement).checked })}
         ></ha-switch>
-      </ha-settings-row>
+        <span>Add new matching entities</span>
+      </label>
     </div>`;
   }
 
@@ -222,11 +221,16 @@ export class NcGroupDialog extends LitElement {
       flex-direction: column;
       gap: 16px;
     }
-    /* Not as tall as in a settings page. */
-    ha-settings-row {
-      padding: 0;
-      margin: -8px 0;
-      min-height: 0;
+    /* A switch at the start of its row, as in the editor's lists. */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+    }
+    .switch-row .secondary {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
     }
     ha-tab-group {
       display: block;
