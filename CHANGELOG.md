@@ -7,7 +7,7 @@
 - Settings: the tabs have icons; every list has as much room at the sides as under the header (also the Overview and the editors).
 - General: Modes, Snooze and Import and export (in its own block) open as pages of their own, with a header and what they do at the top; the list has short lines under the names, as Home Assistant's System settings.
 - Categories list: the number of notifications is under the name.
-- Previews without an entity (category editor, a notification without entities): the placeholders read as words, *Area* instead of *{Area}*.
+- Category editor preview: the message of the first notification with an entity, rendered for that entity (real values). Previews without an entity: the placeholders read as words, *Area* instead of *{Area}*.
 - Category editor: *Category name*, no extra room under it; the blocks are always open; the category's custom buttons have no amber icon there (only in the notifications).
 - Modes: the condition is State or Template (Toggle is the same as State *on*; a `toggle` condition in YAML still works). The channels of a new mode cannot be skipped.
 - Button dialogs: a built-in or inherited button's label can be set, and X goes back to the default (or the category's); *Show button in the push notification* is on by default for every button, custom ones too; the Snooze times have more room on a phone.

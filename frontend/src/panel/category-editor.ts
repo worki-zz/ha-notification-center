@@ -27,7 +27,7 @@ import { field } from "./fields";
 import { BLOCK_STYLES, block } from "./editor/block";
 import { INTERACTION_DEFAULTS } from "./editor/interaction-dialog";
 import "./editor/interaction-dialog";
-import { newId } from "./editor/model";
+import { type EditorNotification, listedEntities, newId, toEditor } from "./editor/model";
 
 type Draft = Omit<Category, "id"> & { id?: string };
 
@@ -52,6 +52,9 @@ export class NcCategoryEditor extends LitElement {
   @state() private _inUse = false;
 
   @state() private _saving = false;
+
+  // The preview's message, rendered for a real entity of the example.
+  @state() private _example?: { key: string; message: string };
 
 
   // The button whose dialog is open.
@@ -82,6 +85,40 @@ export class NcCategoryEditor extends LitElement {
     else if (!this._isNew && changed.has("config")) {
       const stored = this._storedItem();
       if (stored && JSON.stringify(stored) !== this._stored && !this._dirty) this._load();
+    }
+    if (changed.has("config") || changed.has("categoryId")) this._renderExample();
+  }
+
+  // The example of the preview: the category's first notification with an
+  // entity, its message rendered for that entity (else the first one).
+  private _exampleOf(): { notification?: Notification; entity?: string } {
+    const hass = this.hass;
+    const notifications = this._isNew ? [] : this._notifications();
+    if (!hass) return { notification: notifications[0] };
+    const all = (this.config?.notifications ?? []) as unknown as EditorNotification[];
+    for (const notification of notifications) {
+      const entity = listedEntities(hass, toEditor(notification as unknown as EditorNotification, all, undefined))[0];
+      if (entity) return { notification, entity };
+    }
+    return { notification: notifications[0] };
+  }
+
+  private async _renderExample(): Promise<void> {
+    const { notification, entity } = this._exampleOf();
+    const message = notification?.steps[0]?.message;
+    if (!this.hass || !notification || !entity || !message) return;
+    const key = JSON.stringify([notification.id, entity, message]);
+    if (this._example?.key === key) return;
+    try {
+      const [result] = await this.hass.callWS<{ text: string | null }[]>({
+        type: `${DOMAIN}/text/preview`,
+        texts: [message],
+        entity_id: entity,
+        notification_id: notification.id,
+      });
+      if (result?.text) this._example = { key, message: result.text };
+    } catch {
+      // The plain message stays.
     }
   }
 
@@ -126,13 +163,13 @@ export class NcCategoryEditor extends LitElement {
   private _previewView(draft: Draft): NotificationViewData | undefined {
     const hass = this.hass;
     if (!hass) return undefined;
-    const notification = this._isNew ? undefined : this._notifications()[0];
+    const { notification, entity } = this._exampleOf();
     const step = notification?.steps[0] ?? { id: "", enabled: true, message: "", activation: { type: "triggers" }, buttons: [] };
     const category = { ...draft, id: draft.id ?? "" } as Category;
     const card = {
       notification_id: notification?.id ?? "",
       step_id: step.id,
-      entity_id: null,
+      entity_id: entity ?? null,
       status: "active",
       since: new Date(Date.now() - 5 * 60_000).toISOString(),
       state_since: new Date().toISOString(),
@@ -143,8 +180,14 @@ export class NcCategoryEditor extends LitElement {
     const live = { card, notification: notification ?? ({} as Notification), category, step };
     return {
       label: notification?.name ?? "Example",
-      // Without an entity: the placeholders read as words, {Area} as Area.
-      message: (step.message && !isTemplate(step.message) ? plainPlaceholders(step.message) : "") || "Message",
+      // Rendered for the example's entity; without one the placeholders
+      // read as words, {Area} as Area.
+      message:
+        (this._example && this._example.key === JSON.stringify([notification?.id, entity, step.message])
+          ? this._example.message
+          : step.message && !isTemplate(step.message)
+            ? plainPlaceholders(step.message)
+            : "") || "Message",
       icon: notification?.icon || draft.icon || "mdi:bell",
       color: cssColor(notification?.card_color ?? draft.card_color),
       buttons: liveButtons(live).map((button) => ({
