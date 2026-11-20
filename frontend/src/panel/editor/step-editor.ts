@@ -127,7 +127,7 @@ const FORMATS = [
   { value: "datetime", label: "Date and time" },
 ];
 
-export const STEP_BLOCKS = ["message", "start", "show", "done", "interactions"] as const;
+export const STEP_BLOCKS = ["message", "start", "show", "done", "interactions", "audience"] as const;
 export type StepBlock = (typeof STEP_BLOCKS)[number];
 
 @customElement("nc-step-editor")
@@ -170,7 +170,7 @@ export class NcStepEditor extends LitElement {
     this._emit({ ...this.step!, ...changes });
   }
 
-  private _panel(key: StepBlock, icon: string, header: string, count: number | undefined, content: unknown) {
+  private _panel(key: StepBlock, icon: string, header: string, count: number | string | undefined, content: unknown) {
     return block({
       icon,
       header,
@@ -207,6 +207,7 @@ export class NcStepEditor extends LitElement {
         step.buttons.filter((button) => button.enabled).length,
         this._renderInteractions(step),
       )}
+      ${this._panel("audience", "mdi:account-multiple", "Audience", this._audienceCount(step), this._renderAudience(step))}
       ${this._help ? this._renderHelp(this._help) : nothing}
       ${this._interaction ? this._renderInteractionDialog(step) : nothing}
     `;
@@ -649,6 +650,67 @@ export class NcStepEditor extends LitElement {
       );
   }
 
+  // Every person of Home Assistant, by name.
+  private _people(): { id: string; name: string; picture?: string }[] {
+    return Object.values(this.hass?.states ?? {})
+      .filter((state) => state.entity_id.startsWith("person."))
+      .map((state) => ({
+        id: state.entity_id,
+        name: String(state.attributes.friendly_name ?? state.entity_id.slice(7)),
+        picture: (state.attributes.entity_picture as string | undefined) ?? undefined,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private _audienceCount(step: EditorStep): string | undefined {
+    const people = this._people();
+    if (!people.length) return undefined;
+    const audience = step.audience ?? [];
+    const on = audience.length ? people.filter((person) => audience.includes(person.id)).length : people.length;
+    return `${on}/${people.length}`;
+  }
+
+  // Empty means everyone, a person added later too; with someone switched
+  // off, only the ones switched on.
+  private _renderAudience(step: EditorStep) {
+    const people = this._people();
+    const audience = step.audience ?? [];
+    const everyone = audience.length === 0;
+    if (!people.length) {
+      return html`<div class="block"><div class="secondary">No people in Home Assistant: everyone sees the card.</div></div>`;
+    }
+    const set = (id: string, on: boolean) => {
+      const chosen = new Set(everyone ? people.map((person) => person.id) : audience);
+      if (on) chosen.add(id);
+      else chosen.delete(id);
+      const all = people.every((person) => chosen.has(person.id));
+      this._change({ audience: all ? [] : people.map((person) => person.id).filter((item) => chosen.has(item)) });
+    };
+    return html`<div class="block">
+      <div class="secondary">
+        Who sees the card (and, later, gets the push). With everyone on, people added later see it too.
+      </div>
+      <ha-card outlined class="interactions">
+        ${people.map((person) => {
+          const on = everyone || audience.includes(person.id);
+          return html`<div class="own-row">
+            ${person.picture
+              ? html`<img class="avatar" src=${person.picture} alt="" />`
+              : html`<span class="avatar">${initials(person.name)}</span>`}
+            <div class="own-text">${person.name}</div>
+            <ha-switch
+              .checked=${on}
+              @change=${(ev: Event) => set(person.id, (ev.target as HTMLInputElement).checked)}
+            ></ha-switch>
+          </div>`;
+        })}
+      </ha-card>
+      ${!everyone && audience.every((id) => !people.some((person) => person.id === id))
+        ? html`<ha-alert alert-type="warning">Nobody listed exists any more: nobody sees the card.</ha-alert>`
+        : nothing}
+    </div>`;
+  }
+
   private _renderInteractions(step: EditorStep) {
     return html`<div class="block">
       ${this._title("Buttons", "interactions")}
@@ -903,6 +965,24 @@ export class NcStepEditor extends LitElement {
     .own-row ha-icon {
       flex: none;
     }
+    .own-row + .own-row {
+      border-top: 1px solid var(--divider-color);
+    }
+    /* As Home Assistant draws a person: the picture, or the initials. */
+    .avatar {
+      flex: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--light-primary-color);
+      color: var(--text-light-primary-color, var(--primary-text-color));
+      font-size: var(--ha-font-size-m, 14px);
+      overflow: hidden;
+    }
     .own-text {
       flex: 1;
       min-width: 0;
@@ -913,6 +993,17 @@ export class NcStepEditor extends LitElement {
     }
     ${BLOCK_STYLES}
   `;
+}
+
+/** "Test User" -> "TU", as Home Assistant's person badge. */
+function initials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 3)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase();
 }
 
 /** The text field inside an element, through the shadow roots. */

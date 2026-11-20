@@ -63,7 +63,7 @@ The settings use Home Assistant's own layout and elements, with the tabs in the 
 
 ### The notification editor
 
-Laid out like the automation editor: the name and status in the header, Undo and Redo (Ctrl+Z, Ctrl+Y), the Enabled switch (saved at once) and the menu: *Information* (the sensor's dialog, where its entity id can be changed), *Run now* (the selected step, like the Trigger action), *Clear notifications*, *Duplicate* (a disabled copy), *Disable* and *Delete*. Under the header a preview of the selected step's card, with the templates rendered for the first listed entity. Save appears when something changed; leaving asks first.
+Laid out like the automation editor: the name and status in the header, Undo and Redo (Ctrl+Z, Ctrl+Y), the Enabled switch (saved at once) and the menu: *Information* (the sensor's dialog, where its entity id can be changed), *Run now* (the selected step, like the Trigger action), *Clear notifications*, *Duplicate* (a disabled copy), *Edit in YAML* (the whole notification in Home Assistant's YAML editor, as it is saved; *Edit in visual editor* goes back, and Undo and Redo work in both), *Disable* and *Delete*. Under the header a preview of the selected step's card, with the templates rendered for the first listed entity. Save appears when something changed; leaving asks first.
 
 - **Settings:** name, category, icon and card colour. Left empty, the icon and the colour come from the category (shown in the fields). The light colour moves to the light channel settings (phase 6).
 - **Entities:** single entities and entity categories (a domain with an optional device class, floors, areas and labels). Entities are named as in Home Assistant's pickers, with their area and device; the pencil edits or deletes. Each category is its own list, always open, and each of its entities can be switched off on its own; *Add new matching entities* off keeps the entities that matched when it was saved. A category that matches nothing yet is fine.
@@ -73,6 +73,7 @@ Laid out like the automation editor: the name and status in the header, Undo and
   - **Show when:** one set of conditions (Home Assistant's condition editor) with two switches: *Start while conditions are met* (the step starts only when they are true; a scheduled card waits for them, hidden, until it expires) and *Hide while conditions are not met* (an open card shows only while they are true). Earlier Start conditions and Hide while are turned into Show when by themselves (Hide while as Not).
   - **Done when:** Home Assistant's trigger editor, and when Notification entities is set at the top of Start or Show when is used at the start, *Start condition no longer true* (an entity's card closes when that entity stops matching; a card closes when Show when is no longer met).
   - **Interactions:** the card's buttons: *Tap on the card*, *Done*, *Dismiss*, *Snooze* and own buttons (*Add button*). A row opens the button's dialog; its switch turns it on or off. See [Buttons](#buttons).
+  - **Audience:** every person of Home Assistant with a switch; the title shows how many are on (2/3). All on is stored as everyone, so a person added later sees the card too; with someone off, only the ones on see it.
 
 Inside a notification, the Notification state trigger with no notification means this one, and its step is given by number; they are stored by id, so they keep pointing to the same step.
 
@@ -90,7 +91,7 @@ A card's buttons work the same in the panel and on both cards. What a built-in b
 
 **Show in push:** whether the button is on the push notification (on by default for Done, Dismiss and Snooze, off for own buttons; Android shows at most 3). It is stored now and used by the push channel (phase 6).
 
-The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: Snooze, own buttons, Done, Dismiss. A step's audience decides who sees the card: empty means everyone. The Activity log names the user who changed a notification's state.
+The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: Snooze, own buttons, Done, Dismiss. A step's Audience decides who sees the card. The Activity log names the user who changed a notification's state.
 
 ## The Notification Center card
 
