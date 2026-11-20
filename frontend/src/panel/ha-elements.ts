@@ -45,6 +45,7 @@ async function load(): Promise<boolean> {
   );
   await loadSelectors();
   patchTriggerEditor();
+  patchRowTitles();
   patchPlatform("ha-automation-trigger-platform", "trigger");
   patchPlatform("ha-automation-condition-platform", "condition");
   return true;
@@ -117,6 +118,28 @@ function patchTriggerEditor(): void {
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(".card-content.card { padding: 16px; }");
   editor.elementStyles.push(sheet);
+}
+
+// The title of a trigger, condition or action row is an h3 that relies on
+// the page's styles for its margin; in this panel it gets the browser's
+// default margin and every row is half as tall again.
+function patchRowTitles(): void {
+  for (const name of [
+    "ha-automation-trigger-row",
+    "ha-automation-condition-row",
+    "ha-automation-action-row",
+  ]) {
+    void customElements.whenDefined(name).then(() => {
+      const row = customElements.get(name) as
+        | (CustomElementConstructor & { elementStyles?: unknown[]; _ncRowPatched?: boolean })
+        | undefined;
+      if (!row?.elementStyles || row._ncRowPatched) return;
+      row._ncRowPatched = true;
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync("h3 { margin: 0; }");
+      row.elementStyles.push(sheet);
+    });
+  }
 }
 
 // Selectors (and the elements that come with them, such as the button toggle

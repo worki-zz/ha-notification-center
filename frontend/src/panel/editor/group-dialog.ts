@@ -58,6 +58,9 @@ export class NcGroupDialog extends LitElement {
 
   @state() private _open = true;
 
+  // An existing category opens on its entity actions.
+  @state() private _tab: "actions" | "settings" = "actions";
+
   private _result?: EntityGroup | "delete";
 
   protected override willUpdate(): void {
@@ -102,58 +105,33 @@ export class NcGroupDialog extends LitElement {
           >
             <ha-icon icon="mdi:delete"></ha-icon>
           </ha-icon-button>`}
-      <div class="form">
-        ${this._selector(
-          {
-            select: {
-              mode: "dropdown",
-              options: this._domains().map((value) => ({ value, label: domainName(value) })),
-            },
-          },
-          group.domain,
-          "Domain",
-          (value) => this._set({ domain: (value as string) || group.domain, device_class: null }),
-        )}
-        ${this._selector(
-          {
-            select: {
-              mode: "dropdown",
-              options: [
-                { value: "", label: "Any" },
-                ...classes.map((value) => ({ value, label: deviceClassName(hass, group.domain, value) })),
-              ],
-            },
-          },
-          group.device_class ?? "",
-          "Device class",
-          (value) => this._set({ device_class: (value as string) || null }),
-        )}
-        ${Object.keys(hass.floors ?? {}).length || group.floors.length
-          ? this._selector({ floor: { multiple: true } }, group.floors, "Floors", (value) =>
-              this._set({ floors: (value as string[]) ?? [] }),
-            )
-          : nothing}
-        ${this._selector({ area: { multiple: true } }, group.areas, "Areas", (value) =>
-          this._set({ areas: (value as string[]) ?? [] }),
-        )}
-        ${this._selector({ label: { multiple: true } }, group.labels, "", (value) =>
-          this._set({ labels: (value as string[]) ?? [] }),
-        )}
-        <ha-alert alert-type="info">${count} ${count === 1 ? "entity matches" : "entities match"} now.</ha-alert>
-        <div class="divider"></div>
-        <ha-settings-row>
-          <span slot="heading">Add new matching entities</span>
-          <span slot="description">
-            Off: only the entities that match when the notification is saved.
-          </span>
-          <ha-switch
-            .checked=${group.add_new}
-            @change=${(ev: Event) => this._set({ add_new: (ev.target as HTMLInputElement).checked })}
-          ></ha-switch>
-        </ha-settings-row>
-        <div class="divider"></div>
-        ${renderActionSlots(hass, this.narrow, this.slots, group.actions, (actions) => this._set({ actions }))}
-      </div>
+      ${this.isNew
+        ? nothing
+        : html`<ha-tab-group
+            @wa-tab-show=${(ev: CustomEvent<{ name: string }>) => {
+              ev.stopPropagation();
+              this._tab = ev.detail.name === "settings" ? "settings" : "actions";
+            }}
+          >
+            <ha-tab-group-tab slot="nav" panel="actions" .active=${this._tab === "actions"}>
+              Entity actions
+            </ha-tab-group-tab>
+            <ha-tab-group-tab slot="nav" panel="settings" .active=${this._tab === "settings"}>
+              Settings
+            </ha-tab-group-tab>
+          </ha-tab-group>`}
+      ${!this.isNew && this._tab === "actions"
+        ? html`<div class="form">
+            ${renderActionSlots(
+              hass,
+              this.narrow,
+              this.slots,
+              group.actions,
+              (actions) => this._set({ actions }),
+              false,
+            )}
+          </div>`
+        : this._renderSettings(group, count, classes)}
       <ha-dialog-footer slot="footer">
         <ha-button slot="secondaryAction" appearance="plain" @click=${() => this._close()}>
           Cancel
@@ -163,6 +141,57 @@ export class NcGroupDialog extends LitElement {
         </ha-button>
       </ha-dialog-footer>
     </ha-dialog>`;
+  }
+
+  private _renderSettings(group: EntityGroup, count: number, classes: string[]) {
+    const hass = this.hass!;
+    return html`<div class="form">
+      ${this._selector(
+        {
+          select: {
+            mode: "dropdown",
+            options: this._domains().map((value) => ({ value, label: domainName(value) })),
+          },
+        },
+        group.domain,
+        "Domain",
+        (value) => this._set({ domain: (value as string) || group.domain, device_class: null }),
+      )}
+      ${this._selector(
+        {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "", label: "Any" },
+              ...classes.map((value) => ({ value, label: deviceClassName(hass, group.domain, value) })),
+            ],
+          },
+        },
+        group.device_class ?? "",
+        "Device class",
+        (value) => this._set({ device_class: (value as string) || null }),
+      )}
+      ${Object.keys(hass.floors ?? {}).length || group.floors.length
+        ? this._selector({ floor: { multiple: true } }, group.floors, "Floors", (value) =>
+            this._set({ floors: (value as string[]) ?? [] }),
+          )
+        : nothing}
+      ${this._selector({ area: { multiple: true } }, group.areas, "Areas", (value) =>
+        this._set({ areas: (value as string[]) ?? [] }),
+      )}
+      ${this._selector({ label: { multiple: true } }, group.labels, "", (value) =>
+        this._set({ labels: (value as string[]) ?? [] }),
+      )}
+      <ha-alert alert-type="info">${count} matching ${count === 1 ? "entity" : "entities"}</ha-alert>
+      <div class="divider"></div>
+      <ha-settings-row>
+        <span slot="heading">Add new matching entities</span>
+        <ha-switch
+          .checked=${group.add_new}
+          @change=${(ev: Event) => this._set({ add_new: (ev.target as HTMLInputElement).checked })}
+        ></ha-switch>
+      </ha-settings-row>
+    </div>`;
   }
 
   private _selector(
@@ -198,6 +227,10 @@ export class NcGroupDialog extends LitElement {
       padding: 0;
       margin: -8px 0;
       min-height: 0;
+    }
+    ha-tab-group {
+      display: block;
+      margin: -8px -24px 16px;
     }
     .divider {
       height: 1px;

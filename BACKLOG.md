@@ -23,6 +23,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### Scheduled preview card
 *Area: Cards and panel.* A dashboard card that shows the upcoming scheduled notifications (for example the next garbage collections), not only the active ones. *(Phase 3, 2026-11-18)*
 
+### Icon tap behavior
+*Area: Cards and panel.* The card's icon gets its own tap behavior, as Home Assistant's tile card has (icon tap action), following Home Assistant's general tap logic. *(Kristóf, 2026-11-20; phase 4)*
+
 ### TV channel
 *Area: Channels.* Push notifications to the LG webOS TV (`notify.tv`) as a separate channel instead of a push device, since a TV needs other options than a phone (no buttons, short text, maybe only while it is on). *(Scope cut, 2026-11-15)*
 

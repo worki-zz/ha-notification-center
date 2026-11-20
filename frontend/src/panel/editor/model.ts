@@ -158,7 +158,7 @@ export interface ActionSlot {
 }
 
 const BUTTON_NAMES: Record<string, string> = {
-  tap: "Tap on the card",
+  tap: "Tap behavior",
   done: "Done",
   dismiss: "Dismiss",
   snooze: "Snooze",

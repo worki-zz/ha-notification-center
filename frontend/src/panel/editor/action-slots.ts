@@ -2,7 +2,7 @@
 // action editor for every switched on button whose action is Entity action.
 // An action written for a button that is now off stays, it only is not shown.
 
-import { css, html } from "lit";
+import { css, html, nothing } from "lit";
 
 import type { HomeAssistant } from "../../shared/types";
 import type { ActionSlot, Obj } from "./model";
@@ -13,9 +13,10 @@ export function renderActionSlots(
   slots: ActionSlot[],
   actions: Obj | undefined,
   changed: (actions: Obj) => void,
+  title = true,
 ) {
   return html`<div class="slots">
-    <div class="slots-title">Entity actions</div>
+    ${title ? html`<div class="slots-title">Entity actions</div>` : nothing}
     ${slots.length
       ? slots.map(
           (slot) =>

@@ -1,6 +1,7 @@
 // The dialog of an interaction (a button of the card, or the tap on it):
-// label and icon, the action, the Snooze button's times and whether it is
-// shown in the push notification.
+// whether it is in the push notification, the Snooze button's times, the
+// action, and for an own button its label and icon (the built-in buttons
+// have only an icon here; their label is set in YAML).
 //
 // What a button does to the card is fixed: Done marks it done, Dismiss
 // dismisses it, Snooze snoozes it; the Tap and the own buttons leave it as
@@ -10,7 +11,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { Button, ButtonAction } from "../../shared/config";
-import { DEFAULT_SNOOZE, SNOOZE_CHOICES } from "../../shared/live";
+import { DEFAULT_SNOOZE, SNOOZE_CHOICES, snoozeChoices } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { field } from "../fields";
 
@@ -19,7 +20,7 @@ export const INTERACTION_DEFAULTS: Record<
   Button["type"],
   { label: string; icon: string }
 > = {
-  tap: { label: "Tap on the card", icon: "mdi:gesture-tap" },
+  tap: { label: "Tap behavior", icon: "mdi:gesture-tap" },
   done: { label: "Done", icon: "mdi:check" },
   dismiss: { label: "Dismiss", icon: "mdi:close" },
   snooze: { label: "Snooze", icon: "mdi:alarm-snooze" },
@@ -116,8 +117,9 @@ export class NcInteractionDialog extends LitElement {
     if (!button || !hass) return nothing;
     const defaults = INTERACTION_DEFAULTS[button.type];
     const action = button.action ?? { type: "nothing" };
+    // The built-in buttons' labels are set in YAML only.
     const title =
-      button.type === "custom" ? button.label || "Button" : defaults.label;
+      button.type === "tap" ? defaults.label : button.label || defaults.label;
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
@@ -134,44 +136,38 @@ export class NcInteractionDialog extends LitElement {
           </ha-icon-button>`
         : nothing}
       <div class="form">
-        ${button.type === "tap"
-          ? html`<p class="note">
-              What happens when the card is tapped. The card stays as it is.
-            </p>`
-          : html`<div class="row">
+        ${button.type === "custom"
+          ? html`<div class="row">
               ${field(
                 hass,
                 { text: {} },
                 button.label ?? "",
                 "Label",
                 (value) => this._set({ label: (value as string) || null }),
-                {
-                  helper:
-                    button.type === "custom"
-                      ? undefined
-                      : `Empty: ${defaults.label}`,
-                },
               )}
-              ${field(
-                hass,
-                { icon: { placeholder: defaults.icon } },
-                button.icon ?? "",
-                "Icon",
-                (value) => this._set({ icon: (value as string) || null }),
-              )}
-            </div>`}
-        ${this._renderEffect(button)}
+              ${this._iconField(button)}
+            </div>`
+          : button.type === "tap"
+            ? nothing
+            : this._iconField(button)}
+        ${this._renderPush(button)}
         ${button.type === "snooze" ? this._renderSnooze(button) : nothing}
+        <div class="divider"></div>
         ${field(
           hass,
-          { select: { mode: "dropdown", options: ACTIONS } },
-          action.type,
+          {
+            select: {
+              mode: "dropdown",
+              options: ACTIONS.filter((choice) => choice.value !== "nothing"),
+            },
+          },
+          action.type === "nothing" ? "" : action.type,
           "Action",
           (value) =>
             this._setAction((value as ButtonAction["type"]) || "nothing"),
+          { clearable: true },
         )}
         ${this._renderAction(action)}
-        ${button.type === "tap" ? nothing : this._renderPush(button)}
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button
@@ -191,52 +187,44 @@ export class NcInteractionDialog extends LitElement {
     </ha-dialog>`;
   }
 
-  // What the button does to the card, which cannot be changed.
-  private _renderEffect(button: Button) {
-    const text: Partial<Record<Button["type"], string>> = {
-      done: "Marks the card done.",
-      dismiss: "Dismisses the card.",
-      snooze: "Snoozes the card.",
-      custom:
-        "The card stays as it is: to close it when something happens, use Done when.",
-    };
-    const line = text[button.type];
-    return line ? html`<p class="note">${line}</p>` : nothing;
+  private _iconField(button: Button) {
+    const defaults = INTERACTION_DEFAULTS[button.type];
+    return field(
+      this.hass,
+      { icon: { placeholder: defaults.icon } },
+      button.icon ?? "",
+      "Icon",
+      (value) => this._set({ icon: (value as string) || null }),
+    );
   }
 
   private _renderSnooze(button: Button) {
     const chosen = button.snooze?.length ? button.snooze : DEFAULT_SNOOZE;
+    const toggle = (key: string, on: boolean) => {
+      const keys = on ? [...chosen, key] : chosen.filter((k) => k !== key);
+      // At least one time.
+      if (keys.length)
+        this._set({
+          snooze: SNOOZE_CHOICES.map((c) => c.key).filter((k) =>
+            keys.includes(k),
+          ),
+        });
+    };
     return html`<div class="snooze">
       <div class="title">Times</div>
-      <div class="secondary">
-        One time snoozes at once; with more, the card offers them. Days come
-        back in the morning (a scheduled step at its time).
+      <div class="times">
+        ${SNOOZE_CHOICES.map(
+          (choice) =>
+            html`<ha-formfield .label=${choice.label}>
+              <ha-checkbox
+                .checked=${chosen.includes(choice.key)}
+                .disabled=${chosen.length === 1 && chosen.includes(choice.key)}
+                @change=${(ev: Event) =>
+                  toggle(choice.key, (ev.target as HTMLInputElement).checked)}
+              ></ha-checkbox>
+            </ha-formfield>`,
+        )}
       </div>
-      ${field(
-        this.hass,
-        {
-          select: {
-            multiple: true,
-            mode: "list",
-            options: SNOOZE_CHOICES.map((choice) => ({
-              value: choice.key,
-              label: choice.label,
-            })),
-          },
-        },
-        chosen,
-        "",
-        (value) => {
-          const keys = (value as string[]) ?? [];
-          // At least one time.
-          if (keys.length)
-            this._set({
-              snooze: SNOOZE_CHOICES.map((c) => c.key).filter((k) =>
-                keys.includes(k),
-              ),
-            });
-        },
-      )}
     </div>`;
   }
 
@@ -245,9 +233,7 @@ export class NcInteractionDialog extends LitElement {
     switch (action.type) {
       case "entity_action":
         return this.entityActionSet
-          ? html`<p class="note">
-              Runs the action set for the card's entity in the Entities block.
-            </p>`
+          ? nothing
           : html`<ha-alert alert-type="info"
               >Set the action for each entity in the Entities block.</ha-alert
             >`;
@@ -288,25 +274,32 @@ export class NcInteractionDialog extends LitElement {
   }
 
   private _renderPush(button: Button) {
-    const on = button.show_in_push ?? button.type !== "custom";
+    const tap = button.type === "tap";
+    const on = tap
+      ? (button.push_tap ?? true)
+      : (button.show_in_push ?? button.type !== "custom");
     const total = this.otherPushButtons + (on ? 1 : 0);
-    return html`<div class="divider"></div>
-      <ha-settings-row>
-        <span slot="heading">Show in push</span>
-        <span slot="description">
-          ${button.type === "snooze"
-            ? "With more times, the push gets the first; the others are on the card."
-            : "A button of the push notification."}
+    const times = button.type === "snooze" ? snoozeChoices(button) : [];
+    return html`<ha-settings-row>
+        <span slot="heading">
+          ${tap
+            ? "Also when the push notification is tapped"
+            : "Show button in the push notification"}
         </span>
+        ${on && times.length > 1
+          ? html`<span slot="description">
+              The push snoozes for ${times[0].label.toLowerCase()}.
+            </span>`
+          : nothing}
         <ha-switch
           .checked=${on}
-          @change=${(ev: Event) =>
-            this._set({
-              show_in_push: (ev.target as HTMLInputElement).checked,
-            })}
+          @change=${(ev: Event) => {
+            const checked = (ev.target as HTMLInputElement).checked;
+            this._set(tap ? { push_tap: checked } : { show_in_push: checked });
+          }}
         ></ha-switch>
       </ha-settings-row>
-      ${on && total > 3
+      ${!tap && on && total > 3
         ? html`<ha-alert alert-type="warning">
             ${total} buttons are shown in the push: Android shows only the first
             3, in the order of this list.
@@ -343,20 +336,19 @@ export class NcInteractionDialog extends LitElement {
     .row > * {
       flex: 1 1 200px;
     }
-    .note {
-      margin: 0;
-      color: var(--secondary-text-color);
-    }
     .title {
       font-weight: var(--ha-font-weight-medium, 500);
     }
-    .secondary {
-      color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s, 12px);
-      margin-bottom: 4px;
-    }
+    /* Not as tall as in a settings page. */
     ha-settings-row {
       padding: 0;
+      margin: -8px 0;
+      min-height: 0;
+    }
+    .times {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      margin: 0 -8px;
     }
     .divider {
       height: 1px;

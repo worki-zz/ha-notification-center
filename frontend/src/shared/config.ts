@@ -50,6 +50,8 @@ export interface Button {
   snooze?: string[] | null;
   // Shown in the push notification (takes effect with the push channel).
   show_in_push?: boolean;
+  /** Tap behavior: also when the push notification is tapped (default on). */
+  push_tap?: boolean;
   confirm: boolean;
 }
 

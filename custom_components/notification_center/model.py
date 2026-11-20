@@ -545,8 +545,10 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
             button.pop("snooze", None)
         if button["type"] != "tap":
             button.setdefault("show_in_push", button["type"] in PUSH_BUTTONS)
+            button.pop("push_tap", None)
         else:
             button.pop("show_in_push", None)
+            button.setdefault("push_tap", True)
     return buttons
 
 
