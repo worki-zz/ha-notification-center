@@ -8,6 +8,8 @@
 import {
   DOMAIN,
   type Button,
+  type CategoryButton,
+  type EffectiveButton,
   type CardState,
   type Category,
   type Notification,
@@ -42,7 +44,9 @@ export const SNOOZE_CHOICES: { key: string; text: string; label: string }[] = [
 export const DEFAULT_SNOOZE = ["1h", "3h", "tomorrow"];
 
 /** The Snooze button's times, in the fixed order. */
-export function snoozeChoices(button: Button): typeof SNOOZE_CHOICES {
+export function snoozeChoices(button: {
+  snooze?: string[] | null;
+}): typeof SNOOZE_CHOICES {
   const chosen = button.snooze?.length ? button.snooze : DEFAULT_SNOOZE;
   return SNOOZE_CHOICES.filter((choice) => chosen.includes(choice.key));
 }
@@ -99,10 +103,94 @@ const DEFAULTS: Record<string, { label: string; icon: string }> = {
 // Always in this order: Snooze, the own buttons, Done, Dismiss.
 const ORDER = ["snooze", "custom", "done", "dismiss"];
 
+// The built-in buttons of a category, in the order of the editor.
+export const BUILTIN_ORDER: Button["type"][] = ["tap", "done", "dismiss", "snooze"];
+const CATEGORY_ENABLED: Record<string, boolean> = {
+  tap: false,
+  done: true,
+  dismiss: false,
+  snooze: false,
+};
+const PUSH_BUTTONS = ["done", "snooze", "dismiss"];
+
+/** A category's buttons with every setting filled in. */
+export function categoryButtons(category: Category | undefined): CategoryButton[] {
+  const given = category?.buttons ?? [];
+  const builtins = BUILTIN_ORDER.map(
+    (type) =>
+      given.find((button) => button.type === type) ?? {
+        id: type,
+        type,
+        enabled: CATEGORY_ENABLED[type],
+      },
+  );
+  return [...builtins, ...given.filter((button) => button.type === "custom")].map(
+    (button) => ({
+      ...button,
+      enabled: button.enabled ?? CATEGORY_ENABLED[button.type] ?? true,
+      snooze:
+        button.type === "snooze"
+          ? button.snooze?.length
+            ? button.snooze
+            : DEFAULT_SNOOZE
+          : undefined,
+      show_in_push:
+        button.type === "tap" ? undefined : (button.show_in_push ?? PUSH_BUTTONS.includes(button.type)),
+      push_tap: button.type === "tap" ? (button.push_tap ?? true) : undefined,
+    }),
+  );
+}
+
+/**
+ * A step's buttons as they work: the category's buttons (the built-in ones
+ * and its custom ones) with what the step changes, then the step's own
+ * custom buttons. The same as `effective_buttons` in Home Assistant.
+ */
+export function effectiveButtons(
+  category: Category | undefined,
+  step: Pick<Step, "buttons"> | undefined,
+): EffectiveButton[] {
+  const own = step?.buttons ?? [];
+  const bases = categoryButtons(category);
+  const linked = new Set(bases.filter((base) => base.type === "custom").map((base) => base.id));
+  const result: EffectiveButton[] = bases.map((base) => {
+    const entry: Partial<Button> =
+      own.find((button) =>
+        base.type === "custom"
+          ? button.type === "custom" && button.id === base.id
+          : button.type === base.type,
+      ) ?? {};
+    const merged: EffectiveButton = {
+      id: entry.id || base.id,
+      type: base.type,
+      enabled: entry.enabled ?? base.enabled,
+      label: entry.label || base.label,
+      icon: entry.icon || base.icon,
+      action: entry.action ?? (base.type === "tap" ? { type: "more_info" } : { type: "nothing" }),
+      confirm: entry.confirm ?? false,
+      category: true,
+    };
+    if (base.type === "snooze") merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze;
+    if (base.type === "tap") merged.push_tap = entry.push_tap ?? base.push_tap;
+    else merged.show_in_push = entry.show_in_push ?? base.show_in_push;
+    return merged;
+  });
+  for (const entry of own) {
+    if (entry.type !== "custom" || linked.has(entry.id)) continue;
+    result.push({
+      ...entry,
+      enabled: entry.enabled ?? true,
+      show_in_push: entry.show_in_push ?? false,
+      category: false,
+    });
+  }
+  return result;
+}
+
 /** The buttons a card shows, in their fixed order. */
 export function liveButtons(live: LiveCard): LiveButton[] {
   const result: LiveButton[] = [];
-  for (const button of live.step?.buttons ?? []) {
+  for (const button of effectiveButtons(live.category, live.step)) {
     if (!button.enabled || button.type === "tap") continue;
     const ask = button.type === "snooze" && snoozeChoices(button).length > 1;
     const defaults = DEFAULTS[button.type] ?? DEFAULTS.custom;
@@ -120,7 +208,9 @@ export function liveButtons(live: LiveCard): LiveButton[] {
 
 /** The tap of the card, when it is switched on and does something. */
 export function tapButton(live: LiveCard): Button | undefined {
-  const tap = live.step?.buttons.find((button) => button.type === "tap" && button.enabled);
+  const tap = effectiveButtons(live.category, live.step).find(
+    (button) => button.type === "tap" && button.enabled,
+  );
   if (!tap) return undefined;
   if (tap.action.type === "nothing") return undefined;
   return tap;

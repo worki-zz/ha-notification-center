@@ -15,17 +15,34 @@ export interface Duration {
   seconds?: number;
 }
 
-export type Snooze =
-  | { type: "not_allowed" }
-  | { type: "fixed"; duration: Duration }
-  | { type: "ask" };
+/** A button of a category: what its notifications inherit (no action). */
+export interface CategoryButton {
+  id: string;
+  type: ButtonType;
+  enabled: boolean;
+  label?: string | null;
+  icon?: string | null;
+  snooze?: string[] | null;
+  show_in_push?: boolean;
+  push_tap?: boolean;
+}
+
+export interface ChannelSettings {
+  modes?: string[];
+  when?: { type: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
 
 export interface Category {
   id: string;
   name: string;
   icon?: string | null;
   card_color?: string | null;
-  snooze?: Snooze;
+  light_color?: number[] | null;
+  chime?: string | null;
+  // The built-in buttons (always there) and the category's custom ones.
+  buttons: CategoryButton[];
+  channels: Record<string, ChannelSettings>;
 }
 
 export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "custom";
@@ -38,10 +55,14 @@ export type ButtonAction =
   | { type: "navigate"; path: string }
   | { type: "show_attachment" };
 
+/**
+ * A button of a step. Left out fields come from the category's button of
+ * the same type (a custom button: the same id); see `effectiveButtons`.
+ */
 export interface Button {
   id: string;
   type: ButtonType;
-  enabled: boolean;
+  enabled?: boolean;
   label?: string | null;
   icon?: string | null;
   action: ButtonAction;
@@ -52,7 +73,14 @@ export interface Button {
   show_in_push?: boolean;
   /** Tap behavior: also when the push notification is tapped (default on). */
   push_tap?: boolean;
-  confirm: boolean;
+  confirm?: boolean;
+}
+
+/** A button as it works: the step's settings over the category's. */
+export interface EffectiveButton extends Button {
+  enabled: boolean;
+  // Inherited from the category (built-in buttons and its custom ones).
+  category: boolean;
 }
 
 // The text after the label of a card.
@@ -102,13 +130,19 @@ export interface Person {
   device_type: "ios" | "android" | "other";
 }
 
+export interface GeneralSettings {
+  snooze_tomorrow_at: string;
+  [key: string]: unknown;
+}
+
 export interface NotificationCenterConfig {
+  general: GeneralSettings;
   modes: Mode[];
   categories: Category[];
   notifications: Notification[];
   people: Person[];
-  lights: { id: string; entity_id: string }[];
-  speakers: { id: string; entity_id: string }[];
+  lights: { id: string; entity_id: string; name?: string }[];
+  speakers: { id: string; entity_id: string; name?: string }[];
   chimes: { id: string; name: string }[];
 }
 
@@ -148,7 +182,8 @@ export interface NotificationState {
 }
 
 export interface StateMessage {
-  mode: string;
+  // The current mode; null when no mode applies (every channel sends).
+  mode: string | null;
   notifications: Record<string, NotificationState>;
 }
 

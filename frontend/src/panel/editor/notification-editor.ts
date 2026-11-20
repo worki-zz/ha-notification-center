@@ -32,7 +32,9 @@ import {
   type EditorStep,
   type EntityGroup,
   type Obj,
+  applyCategoryDefaults,
   buttonsWithEntityActions,
+  detachCategoryButtons,
   entityActionSlots,
   entityDisplay,
   newId,
@@ -160,7 +162,8 @@ export class NcNotificationEditor extends LitElement {
     this._redo = [];
     this._error = undefined;
     if (this._isNew) {
-      this._draft = newNotification();
+      const general = this.config!.categories.find((item) => item.id === "general");
+      this._draft = newNotification(general);
       this._stored = "";
       this._original = JSON.stringify(this._draft);
       this._expanded = new Set(["settings"]);
@@ -381,7 +384,7 @@ export class NcNotificationEditor extends LitElement {
             .group=${this._group.group}
             .isNew=${this._group.index < 0}
             .narrow=${this.narrow}
-            .slots=${entityActionSlots(this._draft!)}
+            .slots=${entityActionSlots(this._draft!, this._category())}
             @group-closed=${this._groupClosed}
           ></nc-group-dialog>`
         : nothing}
@@ -603,7 +606,7 @@ export class NcNotificationEditor extends LitElement {
             label: item.name,
             icon: item.icon || "mdi:shape-outline",
           })),
-          (value) => this._change({ category: value || "general" }),
+          (value) => this._changeCategory(value || "general"),
         )}
       </div>
       <div class="row">
@@ -626,6 +629,23 @@ export class NcNotificationEditor extends LitElement {
         )}
       </div>
     </div>`;
+  }
+
+  private _category() {
+    return this._draft ? categoryOf(this.config!, this._draft as unknown as Notification) : undefined;
+  }
+
+  // Another category: its buttons are inherited from now on. The old
+  // category's own buttons stay as the notification's own; a new
+  // notification takes the new category's switches.
+  private _changeCategory(value: string): void {
+    const draft = JSON.parse(JSON.stringify(this._draft)) as EditorNotification;
+    const previous = this._category();
+    const next = this.config!.categories.find((item) => item.id === value);
+    draft.category = value;
+    detachCategoryButtons(draft, previous, next);
+    if (this._isNew) applyCategoryDefaults(draft, next);
+    this._set(draft);
   }
 
   private _selector(
@@ -820,7 +840,7 @@ export class NcNotificationEditor extends LitElement {
       }}
     >
       <div class="dialog-slots">
-        ${renderMemberSlots(this.hass, this.narrow, entityActionSlots(draft), group.actions, edit.custom, (custom) => {
+        ${renderMemberSlots(this.hass, this.narrow, entityActionSlots(draft, this._category()), group.actions, edit.custom, (custom) => {
           this._member = { ...this._member!, custom };
         })}
       </div>
@@ -869,7 +889,7 @@ export class NcNotificationEditor extends LitElement {
         <ha-icon icon="mdi:delete"></ha-icon>
       </ha-icon-button>
       <div class="dialog-slots">
-        ${renderActionSlots(this.hass, this.narrow, entityActionSlots(draft), edit.actions, (actions) => {
+        ${renderActionSlots(this.hass, this.narrow, entityActionSlots(draft, this._category()), edit.actions, (actions) => {
           this._entity = { ...this._entity!, actions };
         })}
       </div>
@@ -1030,6 +1050,7 @@ export class NcNotificationEditor extends LitElement {
           .expanded=${expanded}
           .entities=${this.hass ? listedEntities(this.hass, draft) : []}
           .entityActions=${buttonsWithEntityActions(draft)}
+          .category=${this._category()}
           @value-changed=${(ev: CustomEvent<{ value: EditorStep }>) => {
             ev.stopPropagation();
             this._changeStep(index, ev.detail.value);
@@ -1042,7 +1063,7 @@ export class NcNotificationEditor extends LitElement {
   }
 
   private _addStep(): void {
-    const steps = [...this._draft!.steps, newStep()];
+    const steps = [...this._draft!.steps, newStep(this._category())];
     this._change({ steps });
     this._step = steps.length - 1;
   }
@@ -1059,7 +1080,13 @@ export class NcNotificationEditor extends LitElement {
       case "duplicate": {
         const copy = JSON.parse(JSON.stringify(step)) as EditorStep;
         delete copy.id;
-        copy.buttons = copy.buttons.map((button) => ({ ...button, id: newId() }));
+        // A category's custom button is linked by its id: it keeps it.
+        const linked = new Set(
+          (this._category()?.buttons ?? []).filter((b) => b.type === "custom").map((b) => b.id),
+        );
+        copy.buttons = copy.buttons.map((button) =>
+          linked.has(button.id) ? { ...button } : { ...button, id: newId() },
+        );
         steps.splice(index + 1, 0, copy);
         this._change({ steps });
         this._step = index + 1;

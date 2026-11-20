@@ -1,7 +1,8 @@
 // The notification as the editor holds it, and the conversions between
 // its stored form and the form Home Assistant's own editors use.
 
-import type { Button, Duration, NotificationState } from "../../shared/config";
+import type { Button, Category, Duration, NotificationState } from "../../shared/config";
+import { categoryButtons, effectiveButtons } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
 
@@ -111,19 +112,24 @@ export const ENTITIES_NUMERIC = "notification_center.entities_numeric_state";
 export const ENTITIES_KINDS = [ENTITIES_STATE, ENTITIES_NUMERIC];
 
 /** A new notification: one step that only the trigger action starts. */
-export function newNotification(): EditorNotification {
+export function newNotification(category?: Category): EditorNotification {
   return {
     name: "",
-    category: "general",
+    category: category?.id ?? "general",
     enabled: true,
     entities: [],
     entity_groups: [],
-    steps: [newStep()],
+    steps: [newStep(category)],
   };
 }
 
-/** A new step: Done on, Snooze off (the decisions of phase 4). */
-export function newStep(): EditorStep {
+/**
+ * A new step: the built-in buttons switched on as in the category (only
+ * Done in a new category). Their other settings stay inherited.
+ */
+export function newStep(category?: Category): EditorStep {
+  const enabled = (type: Button["type"]) =>
+    categoryButtons(category).find((button) => button.type === type)?.enabled ?? type === "done";
   return {
     enabled: true,
     message: "",
@@ -131,10 +137,10 @@ export function newStep(): EditorStep {
     conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
     done_when: { triggers: [], activation_conditions_no_longer_true: false },
     buttons: [
-      builtin("tap", false, { type: "more_info" }),
-      builtin("done", true),
-      builtin("dismiss", false),
-      builtin("snooze", false),
+      builtin("tap", enabled("tap"), { type: "more_info" }),
+      builtin("done", enabled("done")),
+      builtin("dismiss", enabled("dismiss")),
+      builtin("snooze", enabled("snooze")),
     ],
     audience: [],
   };
@@ -145,7 +151,50 @@ function builtin(
   enabled: boolean,
   action: Button["action"] = { type: "nothing" },
 ): Button {
-  return { id: newId(), type, enabled, action, confirm: false } as Button;
+  return { id: newId(), type, enabled, action } as Button;
+}
+
+/**
+ * Switch the built-in buttons of a new notification's steps as the newly
+ * chosen category has them.
+ */
+export function applyCategoryDefaults(draft: EditorNotification, category?: Category): void {
+  const bases = categoryButtons(category);
+  for (const step of draft.steps) {
+    for (const button of step.buttons) {
+      if (button.type === "custom") continue;
+      const base = bases.find((item) => item.type === button.type);
+      if (base) button.enabled = base.enabled;
+    }
+  }
+}
+
+/**
+ * When a notification moves to another category, the custom buttons of the
+ * old category it used become its own ones, with the label and icon they
+ * showed. As Home Assistant does on save.
+ */
+export function detachCategoryButtons(
+  draft: EditorNotification,
+  previous: Category | undefined,
+  next: Category | undefined,
+): void {
+  const keep = new Set(categoryButtons(next).filter((b) => b.type === "custom").map((b) => b.id));
+  const sources = categoryButtons(previous).filter((b) => b.type === "custom" && !keep.has(b.id));
+  for (const step of draft.steps) {
+    for (const source of sources) {
+      let entry = step.buttons.find((b) => b.type === "custom" && b.id === source.id);
+      if (!entry) {
+        if (!source.enabled) continue;
+        entry = { id: source.id, type: "custom", action: { type: "nothing" } } as Button;
+        step.buttons.push(entry);
+      }
+      entry.enabled ??= source.enabled;
+      entry.label ||= source.label || "Button";
+      entry.icon ||= source.icon ?? undefined;
+      entry.show_in_push ??= source.show_in_push ?? false;
+    }
+  }
 }
 
 /** A new id for an item, so an entity action can point to a new button. */
@@ -171,10 +220,10 @@ const BUTTON_NAMES: Record<string, string> = {
  * The buttons whose action is Entity action, in every step ("Step 1 ·
  * Mute"; without the step when there is only one).
  */
-export function entityActionSlots(draft: EditorNotification): ActionSlot[] {
+export function entityActionSlots(draft: EditorNotification, category?: Category): ActionSlot[] {
   const many = draft.steps.length > 1;
   return draft.steps.flatMap((step, index) =>
-    step.buttons
+    effectiveButtons(category, step)
       .filter((button) => button.enabled && button.action?.type === "entity_action" && button.id)
       .map((button) => {
         const name = button.type === "tap" ? BUTTON_NAMES.tap : button.label || BUTTON_NAMES[button.type];
