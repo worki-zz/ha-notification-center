@@ -8,6 +8,7 @@
 - Editor, Activation: the title shows *Schedule* or *Repeat* instead of a number when the step is not started by triggers.
 - Editor, Interactions: *Tap on the card* is on its own above *Buttons*; own buttons are in their own list, *Custom buttons*.
 - Editor: no explanations under the Conditions switches, Done when's built-in item and Audience, and no *Entity parameters* label before the parameters.
+- Overview: the Done and Schedule buttons sit side by side in the middle again (Done first).
 
 ### Fixed
 
