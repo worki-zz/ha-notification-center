@@ -1108,7 +1108,10 @@ async def test_snooze_choices(
         DOMAIN, "trigger", {"entity_id": "sensor.nc_plants"}, blocking=True
     )
     card = center.engine.cards_of(nid)[0]
-    local = lambda choice: dt_util.as_local(center.engine.snooze_choice(card, choice))  # noqa: E731
+
+    def local(choice: str) -> datetime:
+        return dt_util.as_local(center.engine.snooze_choice(card, choice))
+
     assert local("15m") == dt_util.now() + timedelta(minutes=15)
     assert local("12h") == dt_util.now() + timedelta(hours=12)
     assert (

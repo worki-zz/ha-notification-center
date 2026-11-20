@@ -2009,8 +2009,10 @@ class Engine:
 
         The chosen time when it is one of the button's, otherwise its first.
         """
-        choices = list(button.get("snooze") or DEFAULT_SNOOZE_CHOICES)
-        return self.snooze_choice(card, choice if choice in choices else choices[0])
+        choices: list[str] = list(button.get("snooze") or DEFAULT_SNOOZE_CHOICES)
+        if choice is None or choice not in choices:
+            choice = choices[0]
+        return self.snooze_choice(card, choice)
 
     def entity_actions(self, card: Card, button_id: str) -> list[dict[str, Any]]:
         """Return the entity action of a card's entity for a button."""
