@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Overview: the Done and Schedule buttons sit side by side in the middle again (Done first).
+
 ## 0.4.11
 
 ### Added
