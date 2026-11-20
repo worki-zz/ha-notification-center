@@ -62,7 +62,29 @@ CHANNEL_SPEAKER_PREFIX: Final = "speaker:"
 
 BUILTIN_BUTTONS: Final = ("tap", "done", "snooze", "dismiss")
 BUTTON_TYPES: Final = (*BUILTIN_BUTTONS, "custom")
-CARD_EFFECTS: Final = ("done", "snooze", "dismiss", "keep", "keep_silent")
+# What a built-in button does to the card; the others only run their action.
+BUTTON_EFFECTS: Final = {"done": "done", "dismiss": "dismiss", "snooze": "snooze"}
+# The snooze times a Snooze button can offer, in this order. The minutes and
+# hours count from now; the days come back on that day, at the time the card
+# first came (a scheduled step) or at General's "Tomorrow" time.
+SNOOZE_CHOICES: Final = (
+    "15m",
+    "30m",
+    "1h",
+    "2h",
+    "3h",
+    "6h",
+    "12h",
+    "tomorrow",
+    "2d",
+    "3d",
+    "1w",
+    "2w",
+    "1mo",
+)
+DEFAULT_SNOOZE_CHOICES: Final = ("1h", "3h", "tomorrow")
+# Shown in the push notification unless switched off (phase 6).
+PUSH_BUTTONS: Final = ("done", "snooze", "dismiss")
 WEEKDAYS: Final = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 INTERVAL_UNITS: Final = ("days", "weeks", "months", "years")
 
@@ -159,8 +181,6 @@ def _date(value: Any) -> str:
     """Validate a date and keep it as ``YYYY-MM-DD``."""
     return cv.date(value).isoformat()
 
-
-DURATION_OR_ASK = vol.Any("ask", DURATION)
 
 ACTIONS = vol.All(cv.ensure_list, [dict])
 TRIGGERS = vol.All(cv.ensure_list, [dict])
@@ -475,9 +495,11 @@ BUTTON_SCHEMA = _with_id(
         vol.Optional("enabled", default=True): cv.boolean,
         vol.Optional("label"): _optional(cv.string),
         vol.Optional("icon"): _optional(cv.icon),
-        vol.Optional("card"): vol.In(CARD_EFFECTS),
         vol.Optional("action", default={"type": "nothing"}): BUTTON_ACTION_SCHEMA,
-        vol.Optional("snooze"): DURATION_OR_ASK,
+        # The Snooze button's times: one snoozes at once, more are offered.
+        vol.Optional("snooze"): vol.All(cv.ensure_list, [vol.In(SNOOZE_CHOICES)]),
+        # Shown in the push notification (it takes effect with the push).
+        vol.Optional("show_in_push"): cv.boolean,
         vol.Optional("confirm", default=False): cv.boolean,
         # Tap on the card: also when the push notification is tapped.
         vol.Optional("push_tap"): cv.boolean,
@@ -486,10 +508,10 @@ BUTTON_SCHEMA = _with_id(
 
 # Default state of the built-in buttons of a new step.
 BUILTIN_BUTTON_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
-    "tap": {"enabled": False, "card": "keep", "action": {"type": "more_info"}},
-    "done": {"enabled": True, "card": "done", "action": {"type": "nothing"}},
-    "snooze": {"enabled": True, "card": "snooze", "action": {"type": "nothing"}},
-    "dismiss": {"enabled": False, "card": "dismiss", "action": {"type": "nothing"}},
+    "tap": {"enabled": False, "action": {"type": "more_info"}},
+    "done": {"enabled": True, "action": {"type": "nothing"}},
+    "snooze": {"enabled": True, "action": {"type": "nothing"}},
+    "dismiss": {"enabled": False, "action": {"type": "nothing"}},
 }
 
 
@@ -509,15 +531,23 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
             if kind in seen:
                 raise vol.Invalid(f"the {kind} button is listed twice")
             seen.add(kind)
-            button.setdefault("card", BUILTIN_BUTTON_DEFAULTS[kind]["card"])
-        elif "card" not in button:
-            button["card"] = "keep"
     missing = [
         BUTTON_SCHEMA({"type": kind, **BUILTIN_BUTTON_DEFAULTS[kind]})
         for kind in BUILTIN_BUTTONS
         if kind not in seen
     ]
-    return missing + buttons if missing else buttons
+    buttons = missing + buttons if missing else buttons
+    for button in buttons:
+        if button["type"] == "snooze":
+            chosen = set(button.get("snooze") or DEFAULT_SNOOZE_CHOICES)
+            button["snooze"] = [item for item in SNOOZE_CHOICES if item in chosen]
+        else:
+            button.pop("snooze", None)
+        if button["type"] != "tap":
+            button.setdefault("show_in_push", button["type"] in PUSH_BUTTONS)
+        else:
+            button.pop("show_in_push", None)
+    return buttons
 
 
 ENTITY_SCHEMA = vol.Schema(
@@ -633,7 +663,6 @@ NOTIFICATION_SCHEMA = _with_id(
         vol.Optional("enabled", default=True): cv.boolean,
         # Left out: inherited from the category.
         vol.Optional("icon"): _optional(cv.icon),
-        vol.Optional("snooze"): _optional(SNOOZE_SCHEMA),
         vol.Optional("card_color"): _optional(cv.string),
         vol.Optional("light_color"): _optional(_rgb),
         vol.Optional("entities", default=list): vol.All(
@@ -875,6 +904,83 @@ def upgrade_listed(notification: dict[str, Any]) -> None:
                     _upgrade_listed_item(item, key, notification.get("id"))
 
 
+def _snooze_choice(duration: Any) -> str:
+    """Return the snooze choice nearest to an earlier fixed duration."""
+    try:
+        minutes = cv.time_period(duration).total_seconds() / 60
+    except vol.Invalid:
+        return "1h"
+    lengths = {
+        "15m": 15,
+        "30m": 30,
+        "1h": 60,
+        "2h": 120,
+        "3h": 180,
+        "6h": 360,
+        "12h": 720,
+        "tomorrow": 1440,
+        "2d": 2880,
+        "3d": 4320,
+        "1w": 10080,
+        "2w": 20160,
+        "1mo": 43200,
+    }
+    return min(lengths, key=lambda key: abs(lengths[key] - minutes))
+
+
+def upgrade_buttons(notification: dict[str, Any]) -> None:
+    """Turn earlier buttons and the notification's Snooze into the new ones.
+
+    A button no longer chooses what happens to the card: Done marks it done,
+    Dismiss dismisses it, Snooze snoozes it, and the others only run their
+    action. An earlier Dismiss that kept the card silently (Mute) becomes a
+    button of its own (with its id, so its entity actions stay), so it does
+    not start dismissing. The notification's
+    Snooze moves to its Snooze button: not allowed switches it off, a fixed
+    time becomes its one choice.
+    """
+    snooze = notification.pop("snooze", None)
+    snooze = snooze if isinstance(snooze, dict) else {}
+    for step in notification.get("steps") or []:
+        buttons = step.get("buttons") if isinstance(step, dict) else None
+        if not isinstance(buttons, list):
+            if isinstance(step, dict) and snooze.get("type") in (
+                "not_allowed",
+                "fixed",
+            ):
+                step["buttons"] = buttons = []
+            else:
+                continue
+        found = False
+        for button in buttons:
+            if not isinstance(button, dict):
+                continue
+            effect = button.pop("card", None)
+            if button.get("type") == "dismiss" and effect == "keep_silent":
+                button["type"] = "custom"
+                button.setdefault("label", "Mute")
+                button.setdefault("icon", "mdi:volume-off")
+            if button.get("type") != "snooze":
+                continue
+            found = True
+            own = button.get("snooze")
+            if isinstance(own, list):
+                continue
+            if isinstance(own, dict):
+                button["snooze"] = [_snooze_choice(own)]
+            elif own != "ask" and snooze.get("type") == "fixed":
+                button["snooze"] = [_snooze_choice(snooze.get("duration"))]
+            else:
+                button.pop("snooze", None)
+            if snooze.get("type") == "not_allowed" and own is None:
+                button["enabled"] = False
+        if not found and snooze.get("type") in ("not_allowed", "fixed"):
+            button = {"type": "snooze", "enabled": snooze["type"] == "fixed"}
+            if snooze["type"] == "fixed":
+                button["snooze"] = [_snooze_choice(snooze.get("duration"))]
+            buttons.insert(0, button)
+
+
 def upgrade_show_when(notification: dict[str, Any]) -> None:
     """Turn the Start conditions and Hide while of earlier steps into Show when.
 
@@ -1103,6 +1209,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
         # Before the structure check: the earlier fields are not in it.
         if isinstance(notification, dict):
             upgrade_show_when(notification)
+            upgrade_buttons(notification)
     config: ConfigData = _structure(CONFIG_SCHEMA, data, "configuration")
     for notification in config["notifications"]:
         upgrade_listed(notification)

@@ -15,6 +15,7 @@ import {
   ENTITIES_STATE,
   type Obj,
   PINNED,
+  newId,
   type Schedule,
   type StepData,
   pinnedEntities,
@@ -25,10 +26,18 @@ import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
 import { BLOCK_STYLES, block } from "./block";
 import "./schedule-editor";
+import type { Button } from "../../shared/config";
+import { snoozeChoices } from "../../shared/live";
+import { INTERACTION_DEFAULTS, actionText } from "./interaction-dialog";
+import "./interaction-dialog";
+
+// The order of the Interactions list: the tap, the built-in buttons, then
+// the own buttons as they were added.
+const INTERACTION_ORDER: Button["type"][] = ["tap", "done", "dismiss", "snooze", "custom"];
 
 type StartKind = "triggers" | "schedule" | "repeat";
 
-const HELP: Record<StartKind | "show" | "done", { title: string; text: string[] }> = {
+const HELP: Record<StartKind | "show" | "done" | "interactions", { title: string; text: string[] }> = {
   triggers: {
     title: "Triggers",
     text: [
@@ -59,6 +68,14 @@ const HELP: Record<StartKind | "show" | "done", { title: string; text: string[] 
       "One set of conditions, used as switched on above them.",
       "Start while conditions are met: the step starts only when they are all true at that moment, for example the door card only while the alarm is armed. A scheduled card waits for them, hidden, until it expires.",
       "Hide while conditions are not met: an open card is hidden while any of them is false, and shows again when they are all true, for example the window card only while the heating is on. Push and light come again when it shows.",
+    ],
+  },
+  interactions: {
+    title: "Interactions",
+    text: [
+      "The buttons of the card and what a tap on it does. Done marks the card done, Dismiss dismisses it and Snooze snoozes it, for one of its times; the tap and the own buttons leave the card as it is.",
+      "Every one can also run an action: the entity action set for the card's entity in the Entities block, More info, a Home Assistant action or Navigate.",
+      "Show in push puts the button on the push notification too (with the push channel). Android shows at most 3.",
     ],
   },
   done: {
@@ -110,7 +127,7 @@ const FORMATS = [
   { value: "datetime", label: "Date and time" },
 ];
 
-export const STEP_BLOCKS = ["message", "start", "show", "done"] as const;
+export const STEP_BLOCKS = ["message", "start", "show", "done", "interactions"] as const;
 export type StepBlock = (typeof STEP_BLOCKS)[number];
 
 @customElement("nc-step-editor")
@@ -130,6 +147,12 @@ export class NcStepEditor extends LitElement {
 
   // The entities of the notification's Entities block, switched on.
   @property({ attribute: false }) public entities: string[] = [];
+
+  // The buttons some entity or entity category has an action for.
+  @property({ attribute: false }) public entityActions: Set<string> = new Set();
+
+  // The interaction whose dialog is open (index -1: a new button).
+  @state() private _interaction?: { index: number; button: Button };
 
   @state() private _help?: keyof typeof HELP;
 
@@ -177,7 +200,15 @@ export class NcStepEditor extends LitElement {
       )}
       ${this._panel("show", "mdi:eye-outline", "Show when", step.show_when.conditions.length, this._renderShow(step))}
       ${this._panel("done", "mdi:check-circle-outline", "Done when", doneCount, this._renderDone(step))}
+      ${this._panel(
+        "interactions",
+        "mdi:gesture-tap-button",
+        "Interactions",
+        step.buttons.filter((button) => button.enabled).length,
+        this._renderInteractions(step),
+      )}
       ${this._help ? this._renderHelp(this._help) : nothing}
+      ${this._interaction ? this._renderInteractionDialog(step) : nothing}
     `;
   }
 
@@ -606,6 +637,116 @@ export class NcStepEditor extends LitElement {
     </div>`;
   }
 
+  // -- Interactions --------------------------------------------------------
+
+  private _sortedButtons(step: EditorStep): { button: Button; index: number }[] {
+    return step.buttons
+      .map((button, index) => ({ button, index }))
+      .sort(
+        (a, b) =>
+          INTERACTION_ORDER.indexOf(a.button.type) - INTERACTION_ORDER.indexOf(b.button.type) ||
+          a.index - b.index,
+      );
+  }
+
+  private _renderInteractions(step: EditorStep) {
+    return html`<div class="block">
+      ${this._title("Buttons", "interactions")}
+      <ha-card outlined class="interactions">
+        ${this._sortedButtons(step).map(({ button, index }) => {
+          const defaults = INTERACTION_DEFAULTS[button.type];
+          const label = button.type === "tap" ? defaults.label : button.label || defaults.label;
+          const parts: string[] = [];
+          if (button.type === "snooze") {
+            parts.push(snoozeChoices(button).map((choice) => choice.text).join(", "));
+          }
+          if (button.type !== "snooze" || (button.action?.type ?? "nothing") !== "nothing") {
+            parts.push(actionText(this.hass, button.action));
+          }
+          const open = () => (this._interaction = { index, button });
+          return html`<div
+            class="interaction ${button.enabled ? "" : "off"}"
+            role="button"
+            tabindex="0"
+            @click=${open}
+            @keydown=${(ev: KeyboardEvent) => {
+              if (ev.key === "Enter") open();
+            }}
+          >
+            <ha-icon
+              class=${button.type === "custom" ? "" : "builtin"}
+              .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}
+            ></ha-icon>
+            <div class="own-text">
+              <div>${label}</div>
+              <div class="secondary">${parts.join(" · ")}</div>
+            </div>
+            <ha-switch
+              .checked=${button.enabled}
+              @click=${(ev: Event) => ev.stopPropagation()}
+              @change=${(ev: Event) => {
+                const buttons = [...step.buttons];
+                buttons[index] = { ...button, enabled: (ev.target as HTMLInputElement).checked };
+                this._change({ buttons });
+              }}
+            ></ha-switch>
+          </div>`;
+        })}
+      </ha-card>
+      <div>
+        <ha-button appearance="filled" size="s" @click=${this._addButton}>
+          <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+          Add button
+        </ha-button>
+      </div>
+    </div>`;
+  }
+
+  private _addButton(): void {
+    this._interaction = {
+      index: -1,
+      button: {
+        id: newId(),
+        type: "custom",
+        enabled: true,
+        label: "",
+        action: { type: "nothing" },
+        show_in_push: false,
+        confirm: false,
+      },
+    };
+  }
+
+  private _renderInteractionDialog(step: EditorStep) {
+    const edit = this._interaction!;
+    const otherPushButtons = step.buttons.filter(
+      (button, index) =>
+        index !== edit.index &&
+        button.enabled &&
+        button.type !== "tap" &&
+        (button.show_in_push ?? button.type !== "custom"),
+    ).length;
+    return html`<nc-interaction-dialog
+      .hass=${this.hass}
+      .narrow=${this.narrow}
+      .button=${edit.button}
+      .isNew=${edit.index < 0}
+      .entityActionSet=${this.entityActions.has(edit.button.id)}
+      .otherPushButtons=${otherPushButtons}
+      @interaction-closed=${(ev: CustomEvent<{ result?: Button | "delete" }>) => {
+        ev.stopPropagation();
+        this._interaction = undefined;
+        const result = ev.detail.result;
+        if (!result) return;
+        const buttons = [...step.buttons];
+        if (result === "delete") buttons.splice(edit.index, 1);
+        else if (edit.index < 0) buttons.push(result);
+        else buttons[edit.index] = result;
+        this._change({ buttons });
+      }}
+    ></nc-interaction-dialog>`;
+  }
+
   private _renderHelp(key: keyof typeof HELP) {
     const help = HELP[key];
     return html`<ha-dialog
@@ -727,6 +868,31 @@ export class NcStepEditor extends LitElement {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 8px;
+    }
+    ha-card.interactions {
+      overflow: hidden;
+    }
+    .interaction {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      cursor: pointer;
+    }
+    .interaction + .interaction {
+      border-top: 1px solid var(--divider-color);
+    }
+    .interaction:hover,
+    .interaction:focus-visible {
+      background-color: var(--secondary-background-color);
+      outline: none;
+    }
+    .interaction.off .own-text,
+    .interaction.off ha-icon {
+      opacity: 0.6;
+    }
+    .interaction ha-icon {
+      flex: none;
     }
     .own-row {
       display: flex;

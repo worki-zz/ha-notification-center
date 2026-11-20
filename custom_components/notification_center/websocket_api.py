@@ -430,6 +430,8 @@ def ws_card_action(
         vol.Required("button_id"): str,
         # A snooze time the user chose; left out, the button's own is used.
         vol.Optional("until"): str,
+        # One of the Snooze button's times, which Home Assistant works out.
+        vol.Optional("choice"): str,
     }
 )
 @websocket_api.async_response
@@ -463,7 +465,13 @@ async def ws_card_press(
             connection.send_error(msg["id"], ERR_INVALID, "until is not a time")
             return
     try:
-        await engine.async_press(card, msg["button_id"], until, connection.context(msg))
+        await engine.async_press(
+            card,
+            msg["button_id"],
+            until,
+            connection.context(msg),
+            choice=msg.get("choice"),
+        )
     except HomeAssistantError as err:
         connection.send_error(msg["id"], ERR_INVALID, str(err))
         return

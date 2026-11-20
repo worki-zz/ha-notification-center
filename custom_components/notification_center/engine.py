@@ -16,6 +16,7 @@ they survive a restart.
 
 from __future__ import annotations
 
+import calendar
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -85,6 +86,8 @@ from .const import (
 from .issues import IssueTracker
 from .listed import EntityList, ListedMatcher, ListedTracker, matching_entities
 from .model import (
+    BUTTON_EFFECTS,
+    DEFAULT_SNOOZE_CHOICES,
     ENTITIES_KINDS,
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
@@ -182,6 +185,14 @@ def _period(value: Any) -> timedelta | None:
 
 def _parse_time(value: str | None) -> datetime | None:
     return dt_util.parse_datetime(value) if value else None
+
+
+def _add_month(day: date) -> date:
+    """Return the same day a month later (or that month's last day)."""
+    year, month = (day.year + 1, 1) if day.month == 12 else (day.year, day.month + 1)
+    return day.replace(
+        year=year, month=month, day=min(day.day, calendar.monthrange(year, month)[1])
+    )
 
 
 @dataclass(slots=True)
@@ -1281,8 +1292,27 @@ class Engine:
 
     def snooze_tomorrow(self, card: Card) -> datetime:
         """Return when a card snoozed until "Tomorrow" comes back."""
+        return self.snooze_choice(card, "tomorrow")
+
+    def snooze_choice(self, card: Card, choice: str) -> datetime:
+        """Return when a card snoozed with one of the Snooze button's times comes back.
+
+        Minutes and hours count from now. The days come back on that day, at
+        the time the card first came for a scheduled step, otherwise at
+        General's "Tomorrow" time, so an evening reminder does not return
+        at night.
+        """
+        now = dt_util.now()
+        if choice.endswith("m") and not choice.endswith("mo"):
+            return dt_util.as_utc(now + timedelta(minutes=int(choice[:-1])))
+        if choice.endswith("h"):
+            return dt_util.as_utc(now + timedelta(hours=int(choice[:-1])))
+        days = {"tomorrow": 1, "2d": 2, "3d": 3, "1w": 7, "2w": 14}
+        if choice == "1mo":
+            day = _add_month(now.date())
+        else:
+            day = now.date() + timedelta(days=days.get(choice, 1))
         step = self._step_config(card.notification_id, card.step_id) or {}
-        tomorrow = dt_util.now().date() + timedelta(days=1)
         if step.get("start", {}).get("type") == "schedule":
             at = dt_util.as_local(card.since).time()
         else:
@@ -1290,7 +1320,7 @@ class Engine:
                 self._config["general"].get("snooze_tomorrow_at", "08:00")
             ) or time(8)
         return dt_util.as_utc(
-            datetime.combine(tomorrow, at, tzinfo=dt_util.get_default_time_zone())
+            datetime.combine(day, at, tzinfo=dt_util.get_default_time_zone())
         )
 
     def set_last_done(self, notification_id: str, step_id: str, when: datetime) -> None:
@@ -1972,30 +2002,15 @@ class Engine:
             None,
         )
 
-    def snooze_until(self, card: Card, button: Mapping[str, Any]) -> datetime:
-        """Return until when a button snoozes a card it does not ask about.
+    def snooze_until(
+        self, card: Card, button: Mapping[str, Any], choice: str | None = None
+    ) -> datetime:
+        """Return until when a Snooze button snoozes a card.
 
-        The button's own time comes first, then the notification's and the
-        category's; when they ask, the card comes back "Tomorrow".
+        The chosen time when it is one of the button's, otherwise its first.
         """
-        own = button.get("snooze")
-        if isinstance(own, Mapping):
-            return dt_util.utcnow() + timedelta(**own)
-        if own != "ask":
-            notification = self.notification_config(card.notification_id) or {}
-            snooze = notification.get("snooze") or next(
-                (
-                    item.get("snooze")
-                    for item in self._config["categories"]
-                    if item["id"] == notification.get("category")
-                ),
-                None,
-            )
-            if snooze and snooze.get("type") == "not_allowed":
-                raise ServiceValidationError("This notification cannot be snoozed")
-            if snooze and snooze.get("type") == "fixed":
-                return dt_util.utcnow() + timedelta(**snooze["duration"])
-        return self.snooze_tomorrow(card)
+        choices = list(button.get("snooze") or DEFAULT_SNOOZE_CHOICES)
+        return self.snooze_choice(card, choice if choice in choices else choices[0])
 
     def entity_actions(self, card: Card, button_id: str) -> list[dict[str, Any]]:
         """Return the entity action of a card's entity for a button."""
@@ -2021,11 +2036,15 @@ class Engine:
         button_id: str,
         until: datetime | None,
         context: Context | None = None,
+        choice: str | None = None,
     ) -> None:
         """Press a button of a card: change the card, then run its action.
 
-        More info and Navigate happen where the button was pressed; the
-        Home Assistant action and the entity action run here.
+        Done marks the card done, Dismiss dismisses it and Snooze snoozes it
+        (until the given time, or for the chosen or first of its times); the
+        Tap and the own buttons leave it as it is. More info and Navigate
+        happen where the button was pressed; the Home Assistant action and
+        the entity action run here.
         """
         button = self.button_of(card, button_id)
         if button is None:
@@ -2037,17 +2056,18 @@ class Engine:
         elif action["type"] == "entity_action":
             actions = self.entity_actions(card, button_id)
         variables = self.variables(card)
-        effect = button.get("card", "keep")
+        effect = BUTTON_EFFECTS.get(button["type"])
         if effect == CLOSED_DONE:
             self.close(card, CLOSED_DONE, SOURCE_BUTTON, context)
         elif effect == CLOSED_DISMISSED:
             self.close(card, CLOSED_DISMISSED, SOURCE_BUTTON, context)
         elif effect == "snooze":
             self.snooze(
-                card, until or self.snooze_until(card, button), SOURCE_BUTTON, context
+                card,
+                until or self.snooze_until(card, button, choice),
+                SOURCE_BUTTON,
+                context,
             )
-        elif effect == "keep_silent":
-            self.silence_cards([card], SOURCE_BUTTON, context)
         if actions:
             await self._async_run_actions(card, button, actions, variables, context)
 

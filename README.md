@@ -72,17 +72,25 @@ Laid out like the automation editor: the name and status in the header, Undo and
   - **Start:** *Triggers*: at the top *Notification entities*, shown when the notification lists entities: *State* (is or is not some states) or *Numeric state* (above or below a number or an entity's value, or a template), of the state or an attribute, with For. Every entity gets its own card when it starts to match. Left empty it is not used; a new notification whose entities are all on or off starts with *Is on*. It is the first trigger in YAML. Below it Home Assistant's trigger editor (none means only the Trigger action starts it); the Notification entities triggers and conditions there take any notification and show the same compact form. *Schedule* (the calendar) or *Repeat* (after last done). Both show when they come next; Repeat's next time can be set with the pencil (it is stored as the last done time). A card can expire after a duration or on the same or a later day at a time.
   - **Show when:** one set of conditions (Home Assistant's condition editor) with two switches: *Start while conditions are met* (the step starts only when they are true; a scheduled card waits for them, hidden, until it expires) and *Hide while conditions are not met* (an open card shows only while they are true). Earlier Start conditions and Hide while are turned into Show when by themselves (Hide while as Not).
   - **Done when:** Home Assistant's trigger editor, and when Notification entities is set at the top of Start or Show when is used at the start, *Start condition no longer true* (an entity's card closes when that entity stops matching; a card closes when Show when is no longer met).
+  - **Interactions:** the card's buttons: *Tap on the card*, *Done*, *Dismiss*, *Snooze* and own buttons (*Add button*). A row opens the button's dialog; its switch turns it on or off. See [Buttons](#buttons).
 
 Inside a notification, the Notification state trigger with no notification means this one, and its step is given by number; they are stored by id, so they keep pointing to the same step.
 
 ## Buttons
 
-A card's buttons work the same in the panel and on both cards. A button first changes the card (Done, Snooze, Dismiss, Keep it silently, or keep it as it is), then does its action:
+A card's buttons work the same in the panel and on both cards. What a built-in button does to the card is fixed: **Done** closes it, **Dismiss** dismisses it, **Snooze** snoozes it. **Tap on the card** and own buttons leave the card as it is (to close it when something happens, use Done when). Each button can also run an **Action**:
 
-- **Home Assistant action** and **Entity action** (the listed entity's own action for that button) run in Home Assistant, as the user who pressed the button.
-- **More info** opens the entity's dialog (the button's entity, else the card's entity, else the notification's sensor); **Navigate** opens a page.
+- **Nothing**.
+- **Entity action**: the listed entity's own action for that button, set in the entity's (or entity category's) dialog under *Entity actions*, which lists the switched-on buttons that use it.
+- **More info** opens the entity's dialog (the button's entity, else the card's entity, else the notification's sensor).
+- **Action** (Home Assistant's action editor) and Entity action run in Home Assistant, as the user who pressed the button.
+- **Navigate** opens a page.
 
-The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: Snooze, own buttons, Done, Dismiss (or Mute). A step's audience decides who sees the card: empty means everyone. The Activity log names the user who changed a notification's state.
+**Snooze times:** the Snooze button's dialog lists 15 and 30 minutes, 1, 2, 3, 6 and 12 hours, Tomorrow, 2 and 3 days, 1 and 2 weeks and 1 month; at least one is chosen (by default 1 h, 3 h and Tomorrow). With one, the button snoozes at once; with more, the card offers them (15 min, 1 h, Tomorrow, 2 d, 1 w, 1 mo). Minutes and hours count from the press; days come back on that day at the step's time (a scheduled step) or at 8:00 (`snooze_tomorrow_at` in the general settings).
+
+**Show in push:** whether the button is on the push notification (on by default for Done, Dismiss and Snooze, off for own buttons; Android shows at most 3). It is stored now and used by the push channel (phase 6).
+
+The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: Snooze, own buttons, Done, Dismiss. A step's audience decides who sees the card: empty means everyone. The Activity log names the user who changed a notification's state.
 
 ## The Notification Center card
 
@@ -104,7 +112,7 @@ max_cards: 3
 
 One notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour is used for the border, the icon, the label and the buttons; the background is the normal card background.
 
-**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active card of the notification shows (a notification started by its entities can have several), with all its buttons and its tap (see [Buttons](#buttons)). Snooze with "Ask" offers 1 h, 3 h and Tomorrow on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
+**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active card of the notification shows (a notification started by its entities can have several), with all its buttons and its tap (see [Buttons](#buttons)). A Snooze with more than one time offers them on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
 
 ```yaml
 type: custom:notification-center-card

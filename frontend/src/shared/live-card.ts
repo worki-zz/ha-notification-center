@@ -9,7 +9,7 @@ import { property, state } from "lit/decorators.js";
 import { defineElement } from "./define";
 import { cssColor } from "./format";
 import {
-  SNOOZE_CHOICES,
+  snoozeChoices,
   cardData,
   errorText,
   liveButtons,
@@ -66,9 +66,9 @@ export class NotificationCenterLiveCard extends LitElement {
       ? []
       : this._asking
         ? [
-            ...SNOOZE_CHOICES.map((choice) => ({
+            ...this._choices(live).map((choice) => ({
               key: `choice:${choice.key}`,
-              label: choice.label,
+              label: `Snooze: ${choice.label}`,
               text: choice.text,
             })),
             { key: "choice:cancel", label: "Back", icon: "mdi:arrow-u-left-top", plain: true },
@@ -104,6 +104,12 @@ export class NotificationCenterLiveCard extends LitElement {
     }
   }
 
+  // The times of the card's Snooze button.
+  private _choices(live: LiveCard) {
+    const snooze = liveButtons(live).find((item) => item.ask);
+    return snooze ? snoozeChoices(snooze.button) : [];
+  }
+
   private _tap(): void {
     const hass = this.hass;
     const live = this.live;
@@ -118,12 +124,11 @@ export class NotificationCenterLiveCard extends LitElement {
     if (!hass || !live) return;
     if (key.startsWith("choice:")) {
       this._asking = false;
-      const choice = SNOOZE_CHOICES.find((item) => `choice:${item.key}` === key);
+      const choice = this._choices(live).find((item) => `choice:${item.key}` === key);
       const snooze = liveButtons(live).find((item) => item.ask);
       if (!choice || !snooze) return;
-      // Tomorrow: Home Assistant works out the time.
-      const until = choice.hours ? new Date(Date.now() + choice.hours * 3600_000) : undefined;
-      void this._run(() => pressButton(hass, this, live, snooze.button, until));
+      // Home Assistant works out when it ends.
+      void this._run(() => pressButton(hass, this, live, snooze.button, choice.key));
       return;
     }
     const button = liveButtons(live).find((item) => item.key === key);

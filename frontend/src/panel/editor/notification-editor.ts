@@ -25,11 +25,16 @@ import { STATUS_STYLES, renderStatus, statusOf } from "../status";
 import { domainName, groupName, newGroup } from "./group-dialog";
 import { BLOCK_STYLES, block } from "./block";
 import "./group-dialog";
+import { ACTION_SLOT_STYLES, renderActionSlots } from "./action-slots";
 import {
   type EditorNotification,
   type EditorStep,
   type EntityGroup,
+  type Obj,
+  buttonsWithEntityActions,
+  entityActionSlots,
   entityDisplay,
+  newId,
   groupMatches,
   listedEntities,
   newNotification,
@@ -84,7 +89,7 @@ export class NcNotificationEditor extends LitElement {
   // Add entity shows the picker in place of the button, open.
   @state() private _addingEntity = false;
 
-  @state() private _entity?: { index: number; entityId: string };
+  @state() private _entity?: { index: number; entityId: string; actions: Obj };
 
   // The draft as it was loaded or saved, to tell whether it changed.
   private _original = "";
@@ -363,6 +368,8 @@ export class NcNotificationEditor extends LitElement {
             .hass=${this.hass}
             .group=${this._group.group}
             .isNew=${this._group.index < 0}
+            .narrow=${this.narrow}
+            .slots=${entityActionSlots(this._draft!)}
             @group-closed=${this._groupClosed}
           ></nc-group-dialog>`
         : nothing}
@@ -574,7 +581,8 @@ export class NcNotificationEditor extends LitElement {
                 ></ha-switch>
                 <ha-state-icon .hass=${hass} .stateObj=${hass.states[item.entity_id]}></ha-state-icon>
                 ${this._renderEntityText(item.entity_id)}
-                <ha-icon-button .label=${"Edit"} @click=${() => (this._entity = { index, entityId: item.entity_id })}>
+                <ha-icon-button .label=${"Edit"} @click=${() =>
+                    (this._entity = { index, entityId: item.entity_id, actions: { ...(item.actions ?? {}) } })}>
                   <ha-icon icon="mdi:pencil"></ha-icon>
                 </ha-icon-button>
               </div>`,
@@ -682,7 +690,7 @@ export class NcNotificationEditor extends LitElement {
     const close = () => (this._entity = undefined);
     return html`<ha-dialog
       open
-      width="small"
+      width="medium"
       header-title="Entity"
       @closed=${(ev: Event) => {
         ev.stopPropagation();
@@ -711,6 +719,11 @@ export class NcNotificationEditor extends LitElement {
           this._entity = { ...edit, entityId: ev.detail.value ?? "" };
         }}
       ></ha-entity-picker>
+      <div class="dialog-slots">
+        ${renderActionSlots(this.hass, this.narrow, entityActionSlots(draft), edit.actions, (actions) => {
+          this._entity = { ...this._entity!, actions };
+        })}
+      </div>
       <ha-dialog-footer slot="footer">
         <ha-button slot="secondaryAction" appearance="plain" @click=${close}>Cancel</ha-button>
         <ha-button
@@ -718,7 +731,11 @@ export class NcNotificationEditor extends LitElement {
           .disabled=${!edit.entityId}
           @click=${() => {
             const entities = [...draft.entities];
-            entities[edit.index] = { ...entities[edit.index], entity_id: edit.entityId };
+            entities[edit.index] = {
+              ...entities[edit.index],
+              entity_id: edit.entityId,
+              actions: edit.actions,
+            };
             this._change({ entities });
             close();
           }}
@@ -862,6 +879,7 @@ export class NcNotificationEditor extends LitElement {
           .saved=${savedStep}
           .expanded=${expanded}
           .entities=${this.hass ? listedEntities(this.hass, draft) : []}
+          .entityActions=${buttonsWithEntityActions(draft)}
           @value-changed=${(ev: CustomEvent<{ value: EditorStep }>) => {
             ev.stopPropagation();
             this._changeStep(index, ev.detail.value);
@@ -891,7 +909,7 @@ export class NcNotificationEditor extends LitElement {
       case "duplicate": {
         const copy = JSON.parse(JSON.stringify(step)) as EditorStep;
         delete copy.id;
-        copy.buttons = copy.buttons.map((button) => ({ ...button, id: "" }));
+        copy.buttons = copy.buttons.map((button) => ({ ...button, id: newId() }));
         steps.splice(index + 1, 0, copy);
         this._change({ steps });
         this._step = index + 1;
@@ -1099,7 +1117,9 @@ export class NcNotificationEditor extends LitElement {
     }
   }
 
-  static override styles = css`
+  static override styles = [
+    ACTION_SLOT_STYLES,
+    css`
     :host {
       display: block;
       height: 100%;
@@ -1275,7 +1295,11 @@ export class NcNotificationEditor extends LitElement {
     }
     ${unsafeCSS(STATUS_STYLES)}
     ${BLOCK_STYLES}
-  `;
+      .dialog-slots {
+      margin-top: 16px;
+    }
+  `,
+  ];
 }
 
 declare global {

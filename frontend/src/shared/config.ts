@@ -30,8 +30,6 @@ export interface Category {
 
 export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "custom";
 
-export type CardEffect = "done" | "snooze" | "dismiss" | "keep" | "keep_silent";
-
 export type ButtonAction =
   | { type: "nothing" }
   | { type: "ha_action"; actions: unknown[] }
@@ -46,10 +44,12 @@ export interface Button {
   enabled: boolean;
   label?: string | null;
   icon?: string | null;
-  card: CardEffect;
   action: ButtonAction;
-  // A button's own snooze: "ask" or a duration.
-  snooze?: "ask" | Duration | null;
+  // The Snooze button's times (keys of SNOOZE_CHOICES): one snoozes at
+  // once, more are offered on the card.
+  snooze?: string[] | null;
+  // Shown in the push notification (takes effect with the push channel).
+  show_in_push?: boolean;
   confirm: boolean;
 }
 
@@ -89,7 +89,6 @@ export interface Notification {
   enabled: boolean;
   icon?: string | null;
   card_color?: string | null;
-  snooze?: Snooze | null;
   steps: Step[];
 }
 

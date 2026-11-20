@@ -6,7 +6,8 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { field } from "../fields";
 import type { HomeAssistant } from "../../shared/types";
-import { type EntityGroup, groupMatches } from "./model";
+import { ACTION_SLOT_STYLES, renderActionSlots } from "./action-slots";
+import { type ActionSlot, type EntityGroup, groupMatches } from "./model";
 
 export function newGroup(): EntityGroup {
   return {
@@ -46,6 +47,11 @@ export class NcGroupDialog extends LitElement {
   @property({ attribute: false }) public group?: EntityGroup;
 
   @property({ type: Boolean }) public isNew = false;
+
+  @property({ type: Boolean }) public narrow = false;
+
+  // The buttons that run an entity action.
+  @property({ attribute: false }) public slots: ActionSlot[] = [];
 
   @state() private _group?: EntityGroup;
 
@@ -144,6 +150,8 @@ export class NcGroupDialog extends LitElement {
             @change=${(ev: Event) => this._set({ add_new: (ev.target as HTMLInputElement).checked })}
           ></ha-switch>
         </ha-settings-row>
+        <div class="divider"></div>
+        ${renderActionSlots(hass, this.narrow, this.slots, group.actions, (actions) => this._set({ actions }))}
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button slot="secondaryAction" appearance="plain" @click=${() => this._close()}>
@@ -176,7 +184,9 @@ export class NcGroupDialog extends LitElement {
     this.dispatchEvent(new CustomEvent("group-closed", { detail: { result: this._result } }));
   }
 
-  static override styles = css`
+  static override styles = [
+    ACTION_SLOT_STYLES,
+    css`
     .form {
       display: flex;
       flex-direction: column;
@@ -193,7 +203,8 @@ export class NcGroupDialog extends LitElement {
       background-color: var(--divider-color);
       margin: 0 -24px;
     }
-  `;
+  `,
+  ];
 }
 
 declare global {

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.10
+
+### Added
+
+- Editor, step: **Interactions** block with the card's buttons: *Tap on the card*, *Done*, *Dismiss*, *Snooze* and own buttons (*Add button*). A row opens the button's dialog (label, icon, Action, Show in push; Delete for own buttons); its switch turns it on or off.
+- Each button's **Action**: Nothing, Entity action, More info, Action (Home Assistant's action editor) or Navigate.
+- **Snooze times** in the Snooze button's dialog: 15 and 30 minutes, 1, 2, 3, 6 and 12 hours, Tomorrow, 2 and 3 days, 1 and 2 weeks, 1 month (by default 1 h, 3 h and Tomorrow). With more than one, the card offers them. Days come back on that day at the step's time (a scheduled step) or at 8:00.
+- **Show in push** per button (on by default for Done, Dismiss and Snooze). Stored now, used by the push channel later.
+- Entity and entity category dialogs: **Entity actions**, one for each switched-on button whose Action is Entity action.
+
+### Changed
+
+- What a button does to the card is fixed: Done closes it, Dismiss dismisses it, Snooze snoozes it. Tap and own buttons no longer close or snooze the card; they only run their action.
+- The notification-wide Snooze setting moved to the Snooze button. Saved durations become the nearest snooze time; "Ask" becomes the default times; "Not allowed" switches the Snooze button off.
+- A Dismiss that kept the card silently (Mute) becomes an own button named *Mute*, keeping its entity actions.
+
 ## 0.4.9
 
 ### Changed

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -1030,7 +1030,7 @@ async def test_button_press(
                         ],
                     },
                 },
-                {"type": "snooze", "id": "snooze", "snooze": {"minutes": 20}},
+                {"type": "snooze", "id": "snooze", "snooze": ["30m", "2h"]},
             ]
         ),
         entities=[
@@ -1072,13 +1072,13 @@ async def test_button_press(
     assert center.state("sensor.nc_doors") == "active"
     assert calls[-1].data == {"who": "Doors"}
 
-    # Snooze with the button's own time.
+    # Snooze with one of the button's times; without a choice, its first.
     before = dt_util.utcnow()
-    assert (await press("snooze"))["success"]
+    assert (await press("snooze", choice="2h"))["success"]
     assert center.state("sensor.nc_doors") == "snoozed"
     until = card.snoozed_until
     assert until is not None
-    assert timedelta(minutes=19) < until - before <= timedelta(minutes=21)
+    assert timedelta(minutes=119) < until - before <= timedelta(minutes=121)
 
     # Done runs the entity's own action; the state carries the user.
     assert (await press("done"))["success"]
@@ -1092,6 +1092,35 @@ async def test_button_press(
     result = await press("done")
     assert not result["success"]
     assert result["error"]["code"] == "not_found"
+
+
+async def test_snooze_choices(
+    hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
+) -> None:
+    """Minutes and hours count from now; days come back at the morning time."""
+    freezer.move_to(
+        dt_util.as_utc(
+            datetime(2026, 1, 31, 20, 0, tzinfo=dt_util.get_default_time_zone())
+        )
+    )
+    nid = await center.add("Plants", step())
+    await hass.services.async_call(
+        DOMAIN, "trigger", {"entity_id": "sensor.nc_plants"}, blocking=True
+    )
+    card = center.engine.cards_of(nid)[0]
+    local = lambda choice: dt_util.as_local(center.engine.snooze_choice(card, choice))  # noqa: E731
+    assert local("15m") == dt_util.now() + timedelta(minutes=15)
+    assert local("12h") == dt_util.now() + timedelta(hours=12)
+    assert (
+        local("tomorrow").date().isoformat(),
+        local("tomorrow").strftime("%H:%M"),
+    ) == (
+        "2026-02-01",
+        "08:00",
+    )
+    assert local("1w").date().isoformat() == "2026-02-07"
+    # A month later, or that month's last day.
+    assert local("1mo").date().isoformat() == "2026-02-28"
 
 
 async def test_switched_on_again_entities_match(
