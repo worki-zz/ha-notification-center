@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.11
+
+### Added
+
+- Editor, step: **Audience** block: every person with a switch and their picture or initials, and the number on in the title (2/3). All on means everyone, people added later too.
+- Editor menu: **Edit in YAML**, the whole notification in Home Assistant's YAML editor; *Edit in visual editor* goes back. Undo, Redo and the preview follow the YAML.
+
 ## 0.4.10
 
 ### Added

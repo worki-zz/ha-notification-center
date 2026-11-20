@@ -5,6 +5,7 @@
 
 import { LitElement, css, html, nothing, unsafeCSS, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
 
 import {
   DOMAIN,
@@ -72,6 +73,10 @@ export class NcNotificationEditor extends LitElement {
 
   @state() private _step = 0;
 
+  // The whole notification in Home Assistant's YAML editor; the value it
+  // starts from (set again on undo and redo), and its last parse error.
+  @state() private _yaml?: { value: unknown; error?: string };
+
   @state() private _expanded = new Set<string>();
 
   @state() private _error?: string;
@@ -132,6 +137,7 @@ export class NcNotificationEditor extends LitElement {
     setEntitiesResolver(this._entitiesOfSensor);
     if (changed.has("notificationId") && this._loadedFor !== this.notificationId) {
       this._draft = undefined;
+      this._yaml = undefined;
     }
     if (!this.config || !this.state) return;
     if (!this._draft) {
@@ -172,6 +178,7 @@ export class NcNotificationEditor extends LitElement {
     );
     this._original = JSON.stringify(this._draft);
     this._step = Math.min(this._step, this._draft.steps.length - 1);
+    if (this._yaml) this._yaml = { value: this._yamlValue(this._draft) };
   }
 
   // -- Changes, undo and redo ---------------------------------------------
@@ -222,6 +229,7 @@ export class NcNotificationEditor extends LitElement {
     this._undo = this._undo.slice(0, -1);
     this._draft = JSON.parse(previous) as EditorNotification;
     this._step = Math.min(this._step, this._draft.steps.length - 1);
+    if (this._yaml) this._yaml = { value: this._yamlValue(this._draft) };
   }
 
   private _redoChange(): void {
@@ -231,6 +239,7 @@ export class NcNotificationEditor extends LitElement {
     this._redo = this._redo.slice(0, -1);
     this._draft = JSON.parse(next) as EditorNotification;
     this._step = Math.min(this._step, this._draft.steps.length - 1);
+    if (this._yaml) this._yaml = { value: this._yamlValue(this._draft) };
   }
 
   private _keydown = (ev: KeyboardEvent): void => {
@@ -447,6 +456,15 @@ export class NcNotificationEditor extends LitElement {
         <ha-icon slot="icon" icon="mdi:content-duplicate"></ha-icon>
         Duplicate
       </ha-dropdown-item>
+      ${this._yaml
+        ? html`<ha-dropdown-item value="visual" .disabled=${!!this._yaml.error}>
+            <ha-icon slot="icon" icon="mdi:list-box-outline"></ha-icon>
+            Edit in visual editor
+          </ha-dropdown-item>`
+        : html`<ha-dropdown-item value="yaml">
+            <ha-icon slot="icon" icon="mdi:code-braces"></ha-icon>
+            Edit in YAML
+          </ha-dropdown-item>`}
       <wa-divider></wa-divider>
       <ha-dropdown-item value="toggle">
         <ha-icon
@@ -465,14 +483,76 @@ export class NcNotificationEditor extends LitElement {
   private _renderEditor(draft: EditorNotification) {
     const view = this._previewView();
     const count = this.hass ? listedEntities(this.hass, draft).length : 0;
+    const preview = view
+      ? html`<notification-center-view class="preview" .hass=${this.hass} .view=${view}></notification-center-view>`
+      : nothing;
+    if (this._yaml) {
+      const yaml = this._yaml;
+      return html`
+        ${preview}
+        <ha-card outlined class="yaml">
+          ${yaml.error ? html`<ha-alert alert-type="error">${yaml.error}</ha-alert>` : nothing}
+          ${keyed(
+            yaml.value,
+            html`<ha-yaml-editor
+              .hass=${this.hass}
+              .defaultValue=${yaml.value}
+              @value-changed=${this._yamlChanged}
+            ></ha-yaml-editor>`,
+          )}
+        </ha-card>
+      `;
+    }
     return html`
-      ${view
-        ? html`<notification-center-view class="preview" .hass=${this.hass} .view=${view}></notification-center-view>`
-        : nothing}
+      ${preview}
       ${this._panel("settings", "mdi:cog-outline", "Settings", undefined, () => this._renderSettings(draft))}
       ${this._panel("entities", "mdi:format-list-checks", "Entities", count, () => this._renderEntities(draft))}
       ${this._renderSteps(draft)}
     `;
+  }
+
+  // What the YAML editor shows: the notification as it is saved.
+  private _yamlValue(draft: EditorNotification): unknown {
+    return toSaved(draft);
+  }
+
+  private _yamlChanged(ev: CustomEvent<{ value: unknown; isValid: boolean }>): void {
+    ev.stopPropagation();
+    const yaml = this._yaml;
+    if (!yaml || !this._draft) return;
+    const value = ev.detail.value as Partial<EditorNotification> | null;
+    const error = !ev.detail.isValid
+      ? "This is not valid YAML."
+      : !value || typeof value !== "object" || Array.isArray(value)
+        ? "The notification has to be a mapping."
+        : !Array.isArray(value.steps) || !value.steps.length
+          ? "The notification needs at least one step (steps)."
+          : value.steps.some((step) => !step || typeof step !== "object" || typeof step.message !== "string")
+            ? "Every step needs a message."
+            : undefined;
+    if (error) {
+      this._yaml = { ...yaml, error };
+      return;
+    }
+    const copy = JSON.parse(JSON.stringify(value)) as EditorNotification;
+    copy.id = this._draft.id;
+    copy.entities ??= [];
+    copy.entity_groups ??= [];
+    copy.enabled ??= true;
+    for (const step of copy.steps) {
+      step.buttons ??= [];
+      step.start ??= { type: "triggers", triggers: [] };
+      step.start.triggers ??= [];
+    }
+    this._set(
+      toEditor(
+        copy,
+        (this.config?.notifications ?? []) as unknown as EditorNotification[],
+        this.state?.notifications,
+      ),
+    );
+    this._step = Math.min(this._step, this._draft!.steps.length - 1);
+    this._yaml = { value: yaml.value };
   }
 
   private _panel(
@@ -984,6 +1064,12 @@ export class NcNotificationEditor extends LitElement {
       case "redo":
         this._redoChange();
         return;
+      case "yaml":
+        this._yaml = { value: this._yamlValue(draft) };
+        return;
+      case "visual":
+        this._yaml = undefined;
+        return;
       case "info": {
         const entityId = this._sensor();
         if (entityId) {
@@ -1123,6 +1209,16 @@ export class NcNotificationEditor extends LitElement {
     :host {
       display: block;
       height: 100%;
+    }
+    ha-card.yaml {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px 0;
+      overflow: hidden;
+    }
+    ha-card.yaml ha-alert {
+      padding: 0 16px;
     }
     .toolbar {
       display: flex;
