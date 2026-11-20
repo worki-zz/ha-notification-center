@@ -62,6 +62,8 @@ CHANNEL_SPEAKER_PREFIX: Final = "speaker:"
 
 BUILTIN_BUTTONS: Final = ("tap", "done", "snooze", "dismiss")
 BUTTON_TYPES: Final = (*BUILTIN_BUTTONS, "custom")
+# The order of the buttons in the editors.
+INTERACTION_ORDER: Final = ("tap", "done", "dismiss", "snooze", "custom")
 # What a built-in button does to the card; the others only run their action.
 BUTTON_EFFECTS: Final = {"done": "done", "dismiss": "dismiss", "snooze": "snooze"}
 # The snooze times a Snooze button can offer, in this order. The minutes and
@@ -373,11 +375,11 @@ def _channels(value: Any) -> dict[str, dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Categories
 
-SNOOZE_SCHEMA = vol.Any(
-    vol.Schema({vol.Required("type"): "not_allowed"}),
-    vol.Schema({vol.Required("type"): "fixed", vol.Required("duration"): DURATION}),
-    vol.Schema({vol.Required("type"): "ask"}),
-)
+
+def _category_buttons_late(value: Any) -> list[dict[str, Any]]:
+    # Defined below, with the buttons of the steps.
+    return _category_buttons(value)
+
 
 CATEGORY_SCHEMA = _with_id(
     {
@@ -386,7 +388,7 @@ CATEGORY_SCHEMA = _with_id(
         vol.Optional("card_color"): _optional(cv.string),
         vol.Optional("light_color"): _optional(_rgb),
         vol.Optional("chime"): _optional(_id),
-        vol.Optional("snooze", default={"type": "ask"}): SNOOZE_SCHEMA,
+        vol.Optional("buttons", default=list): _category_buttons_late,
         vol.Optional("channels", default=dict): _channels,
     }
 )
@@ -489,41 +491,64 @@ BUTTON_ACTION_SCHEMA = vol.Any(
     vol.Schema({vol.Required("type"): "show_attachment"}),
 )
 
+# A button of a step. The buttons of the step's category (the four built-in
+# ones and the category's custom buttons) are inherited: the step stores
+# their action and only what it changes. A custom button of the category is
+# linked by its id; a custom button with an id of its own is the step's.
 BUTTON_SCHEMA = _with_id(
     {
         vol.Required("type"): vol.In(BUTTON_TYPES),
-        vol.Optional("enabled", default=True): cv.boolean,
+        # Left out: the category's setting.
+        vol.Optional("enabled"): cv.boolean,
+        # A category button's label is changed in YAML only.
         vol.Optional("label"): _optional(cv.string),
         vol.Optional("icon"): _optional(cv.icon),
         vol.Optional("action", default={"type": "nothing"}): BUTTON_ACTION_SCHEMA,
         # The Snooze button's times: one snoozes at once, more are offered.
-        vol.Optional("snooze"): vol.All(cv.ensure_list, [vol.In(SNOOZE_CHOICES)]),
+        vol.Optional("snooze"): _optional(
+            vol.All(cv.ensure_list, [vol.In(SNOOZE_CHOICES)])
+        ),
         # Shown in the push notification (it takes effect with the push).
-        vol.Optional("show_in_push"): cv.boolean,
+        vol.Optional("show_in_push"): _optional(cv.boolean),
         vol.Optional("confirm", default=False): cv.boolean,
         # Tap on the card: also when the push notification is tapped.
-        vol.Optional("push_tap"): cv.boolean,
+        vol.Optional("push_tap"): _optional(cv.boolean),
     }
 )
 
-# Default state of the built-in buttons of a new step.
-BUILTIN_BUTTON_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
-    "tap": {"enabled": False, "action": {"type": "more_info"}},
-    "done": {"enabled": True, "action": {"type": "nothing"}},
-    "snooze": {"enabled": True, "action": {"type": "nothing"}},
-    "dismiss": {"enabled": False, "action": {"type": "nothing"}},
+# A button of a category: what its notifications inherit. No action: that
+# belongs to each notification.
+CATEGORY_BUTTON_SCHEMA = _with_id(
+    {
+        vol.Required("type"): vol.In(BUTTON_TYPES),
+        vol.Optional("enabled"): cv.boolean,
+        vol.Optional("label"): _optional(cv.string),
+        vol.Optional("icon"): _optional(cv.icon),
+        vol.Optional("snooze"): _optional(
+            vol.All(cv.ensure_list, [vol.In(SNOOZE_CHOICES)])
+        ),
+        vol.Optional("show_in_push"): _optional(cv.boolean),
+        vol.Optional("push_tap"): _optional(cv.boolean),
+    }
+)
+
+# The built-in buttons of a new category: only Done is switched on.
+CATEGORY_BUTTON_DEFAULTS: Final[dict[str, bool]] = {
+    "tap": False,
+    "done": True,
+    "dismiss": False,
+    "snooze": False,
+}
+# The action of a built-in button a step has not stored yet.
+BUILTIN_ACTION_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
+    "tap": {"type": "more_info"},
+    "done": {"type": "nothing"},
+    "dismiss": {"type": "nothing"},
+    "snooze": {"type": "nothing"},
 }
 
 
-def _buttons(value: Any) -> list[dict[str, Any]]:
-    """Validate the buttons and make sure every built-in button is there.
-
-    The built-in buttons (tap, done, snooze, dismiss) are always listed,
-    switched on or off; custom buttons can be added and removed freely.
-    """
-    buttons: list[dict[str, Any]] = vol.All(cv.ensure_list, [BUTTON_SCHEMA])(
-        value or []
-    )
+def _check_builtins_once(buttons: list[dict[str, Any]]) -> set[str]:
     seen: set[str] = set()
     for button in buttons:
         kind = button["type"]
@@ -531,25 +556,201 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
             if kind in seen:
                 raise vol.Invalid(f"the {kind} button is listed twice")
             seen.add(kind)
+    return seen
+
+
+def _sorted_snooze(choices: Iterable[str]) -> list[str]:
+    chosen = set(choices)
+    return [item for item in SNOOZE_CHOICES if item in chosen]
+
+
+def _buttons(value: Any) -> list[dict[str, Any]]:
+    """Validate the buttons of a step.
+
+    Every built-in button (tap, done, snooze, dismiss) is listed, so that it
+    has an id an entity action can point to. What is left out of a button
+    comes from the category.
+    """
+    buttons: list[dict[str, Any]] = vol.All(cv.ensure_list, [BUTTON_SCHEMA])(
+        value or []
+    )
+    seen = _check_builtins_once(buttons)
     missing = [
-        BUTTON_SCHEMA({"type": kind, **BUILTIN_BUTTON_DEFAULTS[kind]})
+        BUTTON_SCHEMA({"type": kind, "action": BUILTIN_ACTION_DEFAULTS[kind]})
         for kind in BUILTIN_BUTTONS
         if kind not in seen
     ]
     buttons = missing + buttons if missing else buttons
     for button in buttons:
-        if button["type"] == "snooze":
-            chosen = set(button.get("snooze") or DEFAULT_SNOOZE_CHOICES)
-            button["snooze"] = [item for item in SNOOZE_CHOICES if item in chosen]
+        if button["type"] != "snooze" or not button.get("snooze"):
+            button.pop("snooze", None)
+        else:
+            button["snooze"] = _sorted_snooze(button["snooze"])
+        for key in ("label", "icon", "show_in_push", "push_tap"):
+            if button.get(key) is None:
+                button.pop(key, None)
+        if button["type"] == "tap":
+            button.pop("show_in_push", None)
+        else:
+            button.pop("push_tap", None)
+    return buttons
+
+
+def _category_buttons(value: Any) -> list[dict[str, Any]]:
+    """Validate a category's buttons and fill in every setting.
+
+    A built-in button's id is its type.
+    """
+    items = [
+        {**item, "id": item.get("id") or item["type"]}
+        if isinstance(item, dict) and item.get("type") in BUILTIN_BUTTONS
+        else item
+        for item in cv.ensure_list(value or [])
+    ]
+    buttons: list[dict[str, Any]] = vol.All(cv.ensure_list, [CATEGORY_BUTTON_SCHEMA])(
+        items
+    )
+    seen = _check_builtins_once(buttons)
+    missing = [
+        CATEGORY_BUTTON_SCHEMA({"type": kind, "id": kind})
+        for kind in BUILTIN_BUTTONS
+        if kind not in seen
+    ]
+    buttons = missing + buttons if missing else buttons
+    # The built-in buttons first, in the order of the editor.
+    buttons.sort(key=lambda button: INTERACTION_ORDER.index(button["type"]))
+    for button in buttons:
+        kind = button["type"]
+        button.setdefault("enabled", CATEGORY_BUTTON_DEFAULTS.get(kind, True))
+        if kind == "snooze":
+            button["snooze"] = _sorted_snooze(
+                button.get("snooze") or DEFAULT_SNOOZE_CHOICES
+            )
         else:
             button.pop("snooze", None)
-        if button["type"] != "tap":
-            button.setdefault("show_in_push", button["type"] in PUSH_BUTTONS)
-            button.pop("push_tap", None)
-        else:
+        if kind == "tap":
             button.pop("show_in_push", None)
-            button.setdefault("push_tap", True)
+            if button.get("push_tap") is None:
+                button["push_tap"] = True
+        else:
+            button.pop("push_tap", None)
+            if button.get("show_in_push") is None:
+                button["show_in_push"] = kind in PUSH_BUTTONS
     return buttons
+
+
+def category_custom_ids(category: dict[str, Any] | None) -> set[str]:
+    """Return the ids of a category's custom buttons."""
+    return {
+        button["id"]
+        for button in (category or {}).get("buttons", [])
+        if button["type"] == "custom"
+    }
+
+
+def effective_buttons(
+    category: dict[str, Any] | None, step: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Return a step's buttons with what they inherit from the category.
+
+    The order: the built-in buttons, the category's custom buttons, then
+    the step's own custom buttons. ``category`` is true on the inherited
+    ones.
+    """
+    own = list(step.get("buttons") or [])
+    category_buttons = (
+        list(category["buttons"])
+        if category and category.get("buttons")
+        else _category_buttons([])
+    )
+    linked = {button["id"] for button in category_buttons if button["type"] == "custom"}
+    result: list[dict[str, Any]] = []
+    for base in category_buttons:
+        entry: dict[str, Any]
+        if base["type"] == "custom":
+            entry = next(
+                (b for b in own if b["type"] == "custom" and b["id"] == base["id"]),
+                {},
+            )
+        else:
+            entry = next((b for b in own if b["type"] == base["type"]), {})
+        result.append(_merge_button(base, entry))
+    for entry in own:
+        if entry["type"] == "custom" and entry["id"] not in linked:
+            button = {
+                "enabled": True,
+                "show_in_push": False,
+                **entry,
+                "category": False,
+            }
+            result.append(button)
+    return result
+
+
+def detach_category_buttons(
+    notification: dict[str, Any], category: dict[str, Any], ids: set[str]
+) -> None:
+    """Make the given custom buttons of a category the steps' own ones.
+
+    Used when the category's button is deleted, or the notification moves
+    to another category: where a step has the button, it keeps it with the
+    label and icon it showed.
+    """
+    sources = {
+        button["id"]: button
+        for button in category.get("buttons", [])
+        if button["id"] in ids
+    }
+    for step in notification.get("steps", []):
+        buttons = step.get("buttons", [])
+        present = {button["id"] for button in buttons if button["type"] == "custom"}
+        for button_id, source in sources.items():
+            if button_id not in present:
+                # Not stored in the step: it showed as the category set it.
+                if not source.get("enabled", True):
+                    continue
+                buttons.append({"id": button_id, "type": "custom"})
+        for button in buttons:
+            source = sources.get(button["id"])
+            if button["type"] != "custom" or source is None:
+                continue
+            button.setdefault("enabled", source.get("enabled", True))
+            if not button.get("label"):
+                button["label"] = source.get("label") or "Button"
+            if not button.get("icon") and source.get("icon"):
+                button["icon"] = source["icon"]
+            if button.get("show_in_push") is None:
+                button["show_in_push"] = source.get("show_in_push", False)
+            button.setdefault("action", {"type": "nothing"})
+        step["buttons"] = buttons
+
+
+def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
+    kind = base["type"]
+    button: dict[str, Any] = {
+        "id": entry.get("id") or base["id"],
+        "type": kind,
+        "enabled": entry.get("enabled", base.get("enabled", True)),
+        "label": entry.get("label") or base.get("label"),
+        "icon": entry.get("icon") or base.get("icon"),
+        "action": entry.get("action")
+        or BUILTIN_ACTION_DEFAULTS.get(kind, {"type": "nothing"}),
+        "confirm": entry.get("confirm", False),
+        "category": True,
+    }
+    if kind == "snooze":
+        button["snooze"] = (
+            entry.get("snooze") or base.get("snooze") or list(DEFAULT_SNOOZE_CHOICES)
+        )
+    if kind == "tap":
+        value = entry.get("push_tap")
+        button["push_tap"] = base.get("push_tap", True) if value is None else value
+    else:
+        value = entry.get("show_in_push")
+        button["show_in_push"] = (
+            base.get("show_in_push", kind in PUSH_BUTTONS) if value is None else value
+        )
+    return button
 
 
 ENTITY_SCHEMA = vol.Schema(
@@ -725,7 +926,6 @@ def default_config() -> ConfigData:
                     "name": "General",
                     "icon": "mdi:bell",
                     "card_color": "blue",
-                    "snooze": {"type": "ask"},
                     "channels": {
                         CHANNEL_NOTIFICATION_CENTER: {
                             "modes": [HOME_MODE_ID],
@@ -768,8 +968,6 @@ def _check_references(config: ConfigData) -> None:
     home = modes.get(HOME_MODE_ID)
     if home is None:
         raise ConfigValidationError(f"modes: the '{HOME_MODE_ID}' mode is required")
-    if home.get("condition"):
-        raise ConfigValidationError("modes: the Home mode has no condition")
     for mode in config["modes"]:
         if mode["id"] != HOME_MODE_ID and not mode.get("condition"):
             raise ConfigValidationError(
@@ -987,6 +1185,50 @@ def upgrade_buttons(notification: dict[str, Any]) -> None:
             if snooze["type"] == "fixed":
                 button["snooze"] = [_snooze_choice(snooze.get("duration"))]
             buttons.insert(0, button)
+
+
+def upgrade_category_buttons(data: dict[str, Any]) -> None:
+    """Give categories of 0.4 and before their buttons.
+
+    A category's Snooze becomes its Snooze button. The steps then keep only
+    what differs from the category: the snooze times, the push settings and
+    the icons that were the defaults are left out, so they are inherited.
+    Runs once: afterwards every category has its buttons.
+    """
+    categories = data.get("categories")
+    if not isinstance(categories, list) or all(
+        not isinstance(category, dict) or "buttons" in category
+        for category in categories
+    ):
+        return
+    for category in categories:
+        if not isinstance(category, dict) or "buttons" in category:
+            continue
+        snooze = category.pop("snooze", None)
+        snooze = snooze if isinstance(snooze, dict) else {}
+        button: dict[str, Any] = {"type": "snooze"}
+        if snooze.get("type") == "fixed":
+            button["snooze"] = [_snooze_choice(snooze.get("duration"))]
+        category["buttons"] = [button]
+    defaults = list(DEFAULT_SNOOZE_CHOICES)
+    for notification in data.get("notifications") or []:
+        if not isinstance(notification, dict):
+            continue
+        for step in notification.get("steps") or []:
+            buttons = step.get("buttons") if isinstance(step, dict) else None
+            for button in buttons if isinstance(buttons, list) else []:
+                kind = button.get("type") if isinstance(button, dict) else None
+                if kind is None:
+                    continue
+                if kind == "snooze" and list(button.get("snooze") or []) == defaults:
+                    button.pop("snooze", None)
+                if button.get("show_in_push") == (kind in PUSH_BUTTONS):
+                    button.pop("show_in_push", None)
+                if button.get("push_tap") is True:
+                    button.pop("push_tap", None)
+                for key in ("icon", "label"):
+                    if not button.get(key):
+                        button.pop(key, None)
 
 
 def upgrade_show_when(notification: dict[str, Any]) -> None:
@@ -1240,6 +1482,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     """
     if not isinstance(data, dict):
         raise ConfigValidationError("the configuration must be a mapping")
+    upgrade_category_buttons(data)
     for notification in data.get("notifications") or []:
         # Before the structure check: the earlier fields are not in it.
         if isinstance(notification, dict):
@@ -1277,8 +1520,19 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
                     _validate_actions(actions, _path(where, entity_id, button))
     for category in config["categories"]:
         _check_category_channels_complete(category)
+    order_modes(config["modes"])
     _check_references(config)
     return config
+
+
+def order_modes(modes: list[dict[str, Any]]) -> None:
+    """Put Home last when it has no condition: then it is always true.
+
+    Home with a condition is ordered like any other mode.
+    """
+    modes.sort(
+        key=lambda mode: mode["id"] == HOME_MODE_ID and not mode.get("condition")
+    )
 
 
 def _check_category_channels_complete(category: dict[str, Any]) -> None:

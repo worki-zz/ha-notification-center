@@ -19,7 +19,7 @@ import { confirmDialog } from "./confirm";
 import "./settings-general";
 import { STATUS_STYLES, renderStatus, statusOf } from "./status";
 
-export type SettingsTab = "notifications" | "general";
+export type SettingsTab = "notifications" | "categories" | "general";
 
 @customElement("nc-settings")
 export class NcSettings extends LitElement {
@@ -34,6 +34,9 @@ export class NcSettings extends LitElement {
   @property({ type: Boolean }) public hasData = false;
 
   @property() public tab: SettingsTab = "notifications";
+
+  // A page of the General tab, such as "modes".
+  @property() public sub = "";
 
   // The panel's own path, such as /notification-center.
   @property() public base = "/notification-center";
@@ -63,6 +66,7 @@ export class NcSettings extends LitElement {
     const base = `${this.base}/settings`;
     const tabs = [
       { path: `${base}/notifications`, name: "Notifications" },
+      { path: `${base}/categories`, name: "Categories" },
       { path: `${base}/general`, name: "General" },
     ];
     const route = { prefix: "", path: `${base}/${this.tab}` };
@@ -73,7 +77,7 @@ export class NcSettings extends LitElement {
         .tabs=${tabs}
         .route=${route}
         back-path=${this.base}
-        ?has-fab=${this.tab === "notifications"}
+        ?has-fab=${this.tab !== "general"}
       >
         <span slot="header">Notification Center settings</span>
         <div class="content">
@@ -82,18 +86,61 @@ export class NcSettings extends LitElement {
             ? html`<nc-settings-general
                 .hass=${this.hass}
                 .config=${this.config}
+                .state=${this.state}
                 .hasData=${this.hasData}
+                .sub=${this.sub}
+                .base=${this.base}
               ></nc-settings-general>`
-            : this._renderList()}
+            : this.tab === "categories"
+              ? this._renderCategories()
+              : this._renderList()}
         </div>
         ${this.tab === "notifications"
           ? html`<ha-button slot="fab" size="l" @click=${this._add}>
               <ha-icon slot="start" icon="mdi:plus"></ha-icon>
               Add notification
             </ha-button>`
-          : nothing}
+          : this.tab === "categories"
+            ? html`<ha-button
+                slot="fab"
+                size="l"
+                @click=${() => navigate(`${this.base}/settings/categories/new`)}
+              >
+                <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+                Add category
+              </ha-button>`
+            : nothing}
       </hass-tabs-subpage>
     `;
+  }
+
+  // The categories by name, each with its number of notifications.
+  private _renderCategories() {
+    const config = this.config;
+    if (!config) return nothing;
+    const categories = [...config.categories].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+    return html`<ha-card outlined>
+      <ha-list-base class="rows">
+        ${categories.map((item) => {
+          const count = config.notifications.filter((n) => n.category === item.id).length;
+          return html`<ha-list-item-button
+            href=${`${this.base}/settings/categories/${item.id}`}
+            @click=${this._link}
+          >
+            <div slot="start" class="icon" style=${`--icon-color: ${cssColor(item.card_color)}`}>
+              <ha-icon .icon=${item.icon || "mdi:bell"}></ha-icon>
+            </div>
+            <span slot="headline">${item.name}</span>
+            <div slot="end" class="end count">
+              ${count === 1 ? "1 notification" : `${count} notifications`}
+              <ha-icon icon="mdi:chevron-right"></ha-icon>
+            </div>
+          </ha-list-item-button>`;
+        })}
+      </ha-list-base>
+    </ha-card>`;
   }
 
   private _renderList() {
@@ -380,6 +427,10 @@ export class NcSettings extends LitElement {
       display: flex;
       align-items: center;
       gap: 4px;
+    }
+    .count {
+      color: var(--secondary-text-color);
+      gap: 8px;
     }
     .empty {
       padding: 32px 16px;

@@ -125,8 +125,23 @@ async def test_home_mode_and_used_category_cannot_be_deleted(
 ) -> None:
     error = await client.error("item/delete", section="modes", item_id="home")
     assert "cannot be deleted" in error["message"]
-    await _create_notification(client)
     error = await client.error("item/delete", section="categories", item_id="general")
+    assert "cannot be deleted" in error["message"]
+    kitchen = await client.ok(
+        "item/create", section="categories", data={"name": "Kitchen"}
+    )
+    await client.ok(
+        "item/create",
+        section="notifications",
+        data={
+            "name": "Dishwasher",
+            "category": kitchen["id"],
+            "steps": [{"message": "Unload the dishwasher"}],
+        },
+    )
+    error = await client.error(
+        "item/delete", section="categories", item_id=kitchen["id"]
+    )
     assert "Dishwasher" in error["message"]
 
 
@@ -158,10 +173,23 @@ async def test_new_mode_goes_before_home_and_reorder(
     modes = [mode["id"] for mode in (await client.config())["modes"]]
     assert modes == [sleep["id"], away["id"], "home"]
 
-    error = await client.error(
+    # Home without a condition stays last: it applies when no other mode does.
+    await client.ok(
         "item/reorder", section="modes", item_ids=["home", sleep["id"], away["id"]]
     )
-    assert "last" in error["message"]
+    modes = [mode["id"] for mode in (await client.config())["modes"]]
+    assert modes == [sleep["id"], away["id"], "home"]
+
+    # With a condition, Home is ordered like any other mode.
+    config = await client.config()
+    home = next(mode for mode in config["modes"] if mode["id"] == "home")
+    home["condition"] = {"type": "toggle", "entity_id": "input_boolean.home"}
+    await client.ok("item/update", section="modes", item_id="home", data=home)
+    await client.ok(
+        "item/reorder", section="modes", item_ids=["home", sleep["id"], away["id"]]
+    )
+    modes = [mode["id"] for mode in (await client.config())["modes"]]
+    assert modes == ["home", sleep["id"], away["id"]]
 
 
 async def test_deleting_a_mode_removes_it_from_channels(
@@ -175,11 +203,9 @@ async def test_deleting_a_mode_removes_it_from_channels(
             "condition": {"type": "state", "entity_id": "zone.home", "state": "0"},
         },
     )
-    category = (await client.config())["categories"][0]
-    category["channels"]["notification_center"]["modes"].append(away["id"])
-    await client.ok(
-        "item/update", section="categories", item_id="general", data=category
-    )
+    # A new mode starts with Home's channels.
+    channels = (await client.config())["categories"][0]["channels"]
+    assert channels["notification_center"]["modes"] == ["home", away["id"]]
     await client.ok("item/delete", section="modes", item_id=away["id"])
     channels = (await client.config())["categories"][0]["channels"]
     assert channels["notification_center"]["modes"] == ["home"]

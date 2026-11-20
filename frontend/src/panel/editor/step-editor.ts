@@ -26,14 +26,10 @@ import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
 import { BLOCK_STYLES, block } from "./block";
 import "./schedule-editor";
-import type { Button } from "../../shared/config";
-import { snoozeChoices } from "../../shared/live";
+import type { Button, Category, CategoryButton, EffectiveButton } from "../../shared/config";
+import { categoryButtons, effectiveButtons, snoozeChoices } from "../../shared/live";
 import { INTERACTION_DEFAULTS, actionText } from "./interaction-dialog";
 import "./interaction-dialog";
-
-// The order of the Interactions list: the tap, the built-in buttons, then
-// the own buttons as they were added.
-const INTERACTION_ORDER: Button["type"][] = ["tap", "done", "dismiss", "snooze", "custom"];
 
 type StartKind = "triggers" | "schedule" | "repeat";
 
@@ -151,8 +147,12 @@ export class NcStepEditor extends LitElement {
   // The buttons some entity or entity group has an action for.
   @property({ attribute: false }) public entityActions: Set<string> = new Set();
 
-  // The interaction whose dialog is open (index -1: a new button).
-  @state() private _interaction?: { index: number; button: Button };
+  // The notification's category: its buttons are inherited.
+  @property({ attribute: false }) public category?: Category;
+
+  // The interaction whose dialog is open: the step's own entry for it, the
+  // category's button it inherits from, and whether it is a new own button.
+  @state() private _interaction?: { button: Button; inherited?: CategoryButton; isNew: boolean };
 
   @state() private _help?: keyof typeof HELP;
 
@@ -195,7 +195,7 @@ export class NcStepEditor extends LitElement {
         "interactions",
         "mdi:gesture-tap-button",
         "Interactions",
-        step.buttons.filter((button) => button.enabled).length,
+        effectiveButtons(this.category, step).filter((button) => button.enabled).length,
         this._renderInteractions(step),
       )}
       <div class="group-gap"></div>
@@ -640,14 +640,21 @@ export class NcStepEditor extends LitElement {
 
   // -- Interactions --------------------------------------------------------
 
-  private _sortedButtons(step: EditorStep): { button: Button; index: number }[] {
-    return step.buttons
-      .map((button, index) => ({ button, index }))
-      .sort(
-        (a, b) =>
-          INTERACTION_ORDER.indexOf(a.button.type) - INTERACTION_ORDER.indexOf(b.button.type) ||
-          a.index - b.index,
-      );
+  // The step's own entry for a button, matched as effectiveButtons does.
+  private _entryIndex(step: EditorStep, button: Pick<Button, "id" | "type">, inherited: boolean): number {
+    return step.buttons.findIndex((item) =>
+      inherited && button.type !== "custom"
+        ? item.type === button.type
+        : item.type === button.type && item.id === button.id,
+    );
+  }
+
+  private _setEntry(step: EditorStep, entry: Button, inherited: boolean): void {
+    const buttons = [...step.buttons];
+    const index = this._entryIndex(step, entry, inherited);
+    if (index < 0) buttons.push(entry);
+    else buttons[index] = entry;
+    this._change({ buttons });
   }
 
   // Every person of Home Assistant, by name.
@@ -695,9 +702,14 @@ export class NcStepEditor extends LitElement {
               .checked=${on}
               @change=${(ev: Event) => set(person.id, (ev.target as HTMLInputElement).checked)}
             ></ha-switch>
-            ${person.picture
-              ? html`<img class="avatar" src=${person.picture} alt="" />`
-              : html`<span class="avatar">${initials(person.name)}</span>`}
+            ${customElements.get("ha-person-badge")
+              ? html`<ha-person-badge
+                  class="avatar"
+                  .person=${{ id: person.id, name: person.name, picture: person.picture }}
+                ></ha-person-badge>`
+              : person.picture
+                ? html`<img class="avatar" src=${person.picture} alt="" />`
+                : html`<span class="avatar">${initials(person.name)}</span>`}
             <div class="own-text">${person.name}</div>
           </div>`;
         })}
@@ -709,19 +721,21 @@ export class NcStepEditor extends LitElement {
   }
 
   private _renderInteractions(step: EditorStep) {
-    const rows = this._sortedButtons(step);
-    const tap = rows.filter(({ button }) => button.type === "tap");
-    const builtin = rows.filter(({ button }) => button.type !== "tap" && button.type !== "custom");
-    const custom = rows.filter(({ button }) => button.type === "custom");
-    const card = (items: typeof rows) =>
+    const rows = effectiveButtons(this.category, step);
+    const tap = rows.filter((button) => button.type === "tap");
+    const builtin = rows.filter((button) => button.category && button.type !== "tap" && button.type !== "custom");
+    const fromCategory = rows.filter((button) => button.category && button.type === "custom");
+    const own = rows.filter((button) => !button.category);
+    const card = (items: EffectiveButton[]) =>
       html`<ha-card outlined class="interactions">
-        ${items.map(({ button, index }) => this._interactionRow(step, button, index))}
+        ${items.map((button) => this._interactionRow(step, button))}
       </ha-card>`;
     return html`<div class="block">
       ${tap.length ? card(tap) : nothing}
       ${this._title("Buttons", "interactions")}
       ${card(builtin)}
-      ${custom.length ? card(custom) : nothing}
+      ${fromCategory.length ? card(fromCategory) : nothing}
+      ${own.length ? card(own) : nothing}
       <div>
         <ha-button appearance="filled" size="s" @click=${this._addButton}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -731,7 +745,15 @@ export class NcStepEditor extends LitElement {
     </div>`;
   }
 
-  private _interactionRow(step: EditorStep, button: Button, index: number) {
+  // The category's button an inherited one comes from.
+  private _base(button: EffectiveButton): CategoryButton | undefined {
+    if (!button.category) return undefined;
+    return categoryButtons(this.category).find((item) =>
+      button.type === "custom" ? item.type === "custom" && item.id === button.id : item.type === button.type,
+    );
+  }
+
+  private _interactionRow(step: EditorStep, button: EffectiveButton) {
     const defaults = INTERACTION_DEFAULTS[button.type];
     const label = button.type === "tap" ? defaults.label : button.label || defaults.label;
     const parts: string[] = [];
@@ -741,7 +763,14 @@ export class NcStepEditor extends LitElement {
     if ((button.action?.type ?? "nothing") !== "nothing") {
       parts.push(actionText(this.hass, button.action));
     }
-    const open = () => (this._interaction = { index, button });
+    const inherited = this._base(button);
+    const entry = (): Button => {
+      const index = this._entryIndex(step, button, button.category);
+      return index >= 0
+        ? step.buttons[index]
+        : ({ id: button.id, type: button.type, action: button.action } as Button);
+    };
+    const open = () => (this._interaction = { button: entry(), inherited, isNew: false });
     return html`<div
       class="interaction ${button.enabled ? "" : "off"}"
       role="button"
@@ -754,14 +783,11 @@ export class NcStepEditor extends LitElement {
       <ha-switch
         .checked=${button.enabled}
         @click=${(ev: Event) => ev.stopPropagation()}
-        @change=${(ev: Event) => {
-          const buttons = [...step.buttons];
-          buttons[index] = { ...button, enabled: (ev.target as HTMLInputElement).checked };
-          this._change({ buttons });
-        }}
+        @change=${(ev: Event) =>
+          this._setEntry(step, { ...entry(), enabled: (ev.target as HTMLInputElement).checked }, button.category)}
       ></ha-switch>
       <ha-icon
-        class=${button.type === "custom" ? "" : "builtin"}
+        class=${button.category ? "builtin" : ""}
         .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}
       ></ha-icon>
       <div class="own-text">
@@ -774,10 +800,9 @@ export class NcStepEditor extends LitElement {
     </div>`;
   }
 
-
   private _addButton(): void {
     this._interaction = {
-      index: -1,
+      isNew: true,
       button: {
         id: newId(),
         type: "custom",
@@ -792,18 +817,20 @@ export class NcStepEditor extends LitElement {
 
   private _renderInteractionDialog(step: EditorStep) {
     const edit = this._interaction!;
-    const otherPushButtons = step.buttons.filter(
-      (button, index) =>
-        index !== edit.index &&
+    const otherPushButtons = effectiveButtons(this.category, step).filter(
+      (button) =>
+        !(button.type === edit.button.type && button.id === edit.button.id) &&
+        !(edit.inherited && edit.button.type !== "custom" && button.type === edit.button.type) &&
         button.enabled &&
         button.type !== "tap" &&
-        (button.show_in_push ?? button.type !== "custom"),
+        button.show_in_push,
     ).length;
     return html`<nc-interaction-dialog
       .hass=${this.hass}
       .narrow=${this.narrow}
       .button=${edit.button}
-      .isNew=${edit.index < 0}
+      .inherited=${edit.inherited}
+      .isNew=${edit.isNew}
       .entityActionSet=${this.entityActions.has(edit.button.id)}
       .otherPushButtons=${otherPushButtons}
       @interaction-closed=${(ev: CustomEvent<{ result?: Button | "delete" }>) => {
@@ -811,11 +838,15 @@ export class NcStepEditor extends LitElement {
         this._interaction = undefined;
         const result = ev.detail.result;
         if (!result) return;
-        const buttons = [...step.buttons];
-        if (result === "delete") buttons.splice(edit.index, 1);
-        else if (edit.index < 0) buttons.push(result);
-        else buttons[edit.index] = result;
-        this._change({ buttons });
+        if (result === "delete") {
+          this._change({
+            buttons: step.buttons.filter(
+              (button) => !(button.type === edit.button.type && button.id === edit.button.id),
+            ),
+          });
+          return;
+        }
+        this._setEntry(step, result, !!edit.inherited);
       }}
     ></nc-interaction-dialog>`;
   }

@@ -32,6 +32,11 @@ async function load(): Promise<boolean> {
     const config = document.createElement("ha-panel-config") as unknown as Routes;
     await config.routerOptions.routes.automation.load();
   }
+  if (!customElements.get("ha-person-badge")) {
+    // The People page brings the person badge of the Audience; not waited for.
+    const config = document.createElement("ha-panel-config") as unknown as Routes;
+    void config.routerOptions.routes.person?.load().catch(() => undefined);
+  }
   await Promise.all(
     [
       "ha-automation-trigger",

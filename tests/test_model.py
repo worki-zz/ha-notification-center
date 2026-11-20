@@ -13,7 +13,17 @@ from custom_components.notification_center.model import (
     ConfigValidationError,
     async_validate_config,
     default_config,
+    effective_buttons,
 )
+
+
+def _effective(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the first step's buttons as they work, with the category's."""
+    notification = config["notifications"][0]
+    category = next(
+        item for item in config["categories"] if item["id"] == notification["category"]
+    )
+    return effective_buttons(category, notification["steps"][0])
 
 
 def _with_notification(**step: Any) -> dict[str, Any]:
@@ -45,14 +55,25 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
         "conditions": [],
     }
     assert [button["type"] for button in step["buttons"]] == list(BUILTIN_BUTTONS)
-    done = next(button for button in step["buttons"] if button["type"] == "done")
+    # The step stores only its own settings: the rest comes from the category.
+    assert all("enabled" not in button for button in step["buttons"])
+    buttons = _effective(config)
+    assert [button["type"] for button in buttons] == [
+        "tap",
+        "done",
+        "dismiss",
+        "snooze",
+    ]
+    done = next(button for button in buttons if button["type"] == "done")
     assert done["enabled"] is True
     assert done["show_in_push"] is True
     assert "push_tap" not in done
-    tap = next(button for button in step["buttons"] if button["type"] == "tap")
+    tap = next(button for button in buttons if button["type"] == "tap")
     assert tap["push_tap"] is True
+    assert tap["action"] == {"type": "more_info"}
     assert "show_in_push" not in tap
-    snooze = next(button for button in step["buttons"] if button["type"] == "snooze")
+    snooze = next(button for button in buttons if button["type"] == "snooze")
+    assert snooze["enabled"] is False
     assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
 
 
@@ -66,7 +87,7 @@ async def test_builtin_buttons_keep_their_settings(hass: HomeAssistant) -> None:
             ]
         ),
     )
-    buttons = config["notifications"][0]["steps"][0]["buttons"]
+    buttons = _effective(config)
     assert sorted(button["type"] for button in buttons) == sorted(
         [*BUILTIN_BUTTONS, "custom"]
     )
@@ -94,19 +115,18 @@ async def test_earlier_buttons_and_snooze_are_upgraded(hass: HomeAssistant) -> N
     mute = next(button for button in buttons if button["id"] == "mute")
     assert (mute["type"], mute["label"]) == ("custom", "Mute")
     assert all("card" not in button for button in buttons)
-    snooze = next(button for button in buttons if button["type"] == "snooze")
+    snooze = next(button for button in _effective(config) if button["type"] == "snooze")
     assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
 
     data = _with_notification()
     data["notifications"][0]["snooze"] = {"type": "not_allowed"}
     config = await async_validate_config(hass, data)
-    buttons = config["notifications"][0]["steps"][0]["buttons"]
-    snooze = next(button for button in buttons if button["type"] == "snooze")
+    snooze = next(button for button in _effective(config) if button["type"] == "snooze")
     assert snooze["enabled"] is False
 
     data = _with_notification(buttons=[{"type": "snooze", "snooze": {"minutes": 20}}])
     config = await async_validate_config(hass, data)
-    buttons = config["notifications"][0]["steps"][0]["buttons"]
+    buttons = _effective(config)
     snooze = next(button for button in buttons if button["type"] == "snooze")
     assert snooze["snooze"] == ["15m"]
 
@@ -300,3 +320,65 @@ async def test_earlier_field_names_are_renamed(hass: HomeAssistant) -> None:
     assert step["done_when"]["activation_conditions_no_longer_true"] is True
     assert "show_when" not in step
     assert "start" not in step
+
+
+async def test_category_buttons_are_inherited(hass: HomeAssistant) -> None:
+    """Icon, times and push come from the category until a step sets them."""
+    data = _with_notification(
+        buttons=[
+            {"id": "s", "type": "snooze", "enabled": True},
+            {"id": "own", "type": "custom", "label": "Own"},
+            {"id": "door", "type": "custom", "icon": "mdi:door", "enabled": False},
+        ]
+    )
+    data["categories"][0]["buttons"] = [
+        {"type": "snooze", "snooze": ["30m"], "icon": "mdi:sleep"},
+        {"id": "door", "type": "custom", "label": "Open", "show_in_push": True},
+        {"id": "light", "type": "custom", "label": "Light"},
+    ]
+    config = await async_validate_config(hass, data)
+    category = config["categories"][0]
+    assert [button["id"] for button in category["buttons"]][:4] == [
+        "tap",
+        "done",
+        "dismiss",
+        "snooze",
+    ]
+    buttons = {button["id"]: button for button in _effective(config)}
+    assert buttons["s"]["snooze"] == ["30m"]
+    assert buttons["s"]["icon"] == "mdi:sleep"
+    assert buttons["s"]["enabled"] is True
+    assert buttons["door"]["label"] == "Open"
+    assert buttons["door"]["icon"] == "mdi:door"
+    assert buttons["door"]["enabled"] is False
+    assert buttons["door"]["show_in_push"] is True
+    assert buttons["door"]["category"] is True
+    assert buttons["light"]["enabled"] is True
+    assert buttons["own"]["category"] is False
+
+
+async def test_categories_of_0_4_get_buttons(hass: HomeAssistant) -> None:
+    """A category's Snooze becomes its button; default step values go."""
+    data = _with_notification(
+        buttons=[
+            {
+                "type": "snooze",
+                "enabled": True,
+                "snooze": ["1h", "3h", "tomorrow"],
+                "show_in_push": True,
+            },
+            {"type": "done", "enabled": True, "show_in_push": False},
+        ]
+    )
+    data["categories"][0].pop("buttons")
+    data["categories"][0]["snooze"] = {"type": "fixed", "duration": {"hours": 2}}
+    config = await async_validate_config(hass, data)
+    category = config["categories"][0]
+    assert "snooze" not in category
+    snooze = next(b for b in category["buttons"] if b["type"] == "snooze")
+    assert snooze["snooze"] == ["2h"]
+    step = config["notifications"][0]["steps"][0]
+    stored = {button["type"]: button for button in step["buttons"]}
+    assert "snooze" not in stored["snooze"]
+    assert "show_in_push" not in stored["snooze"]
+    assert stored["done"]["show_in_push"] is False

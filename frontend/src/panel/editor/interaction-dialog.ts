@@ -3,6 +3,12 @@
 // action, and for an own button its label and icon (the built-in buttons
 // have only an icon here; their label is set in YAML).
 //
+// In a category it sets what the notifications inherit: the label of every
+// button, its icon, push and times, but no action. In a notification, a
+// category's button shows the category's settings: the icon and times are
+// changed for this notification only, and Push is a choice that, left
+// empty, follows the category.
+//
 // What a button does to the card is fixed: Done marks it done, Dismiss
 // dismisses it, Snooze snoozes it; the Tap and the own buttons leave it as
 // it is and only run their action.
@@ -10,7 +16,7 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import type { Button, ButtonAction } from "../../shared/config";
+import type { Button, ButtonAction, CategoryButton } from "../../shared/config";
 import { DEFAULT_SNOOZE, SNOOZE_CHOICES, snoozeChoices } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { field } from "../fields";
@@ -76,6 +82,12 @@ export class NcInteractionDialog extends LitElement {
 
   @property({ type: Boolean }) public isNew = false;
 
+  // "category": a category's button (no action, every label).
+  @property() public mode: "step" | "category" = "step";
+
+  // In a notification: the category's button this one inherits from.
+  @property({ attribute: false }) public inherited?: CategoryButton;
+
   // Some entity (or entity group) has an action for this button.
   @property({ type: Boolean, attribute: false }) public entityActionSet = false;
 
@@ -117,16 +129,24 @@ export class NcInteractionDialog extends LitElement {
     if (!button || !hass) return nothing;
     const defaults = INTERACTION_DEFAULTS[button.type];
     const action = button.action ?? { type: "nothing" };
-    // The built-in buttons' labels are set in YAML only.
+    const category = this.mode === "category";
+    const inherited = this.inherited;
+    // In a notification, the built-in buttons' labels are set in YAML only.
     const title =
-      button.type === "tap" ? defaults.label : button.label || defaults.label;
+      button.type === "tap"
+        ? defaults.label
+        : button.label || inherited?.label || defaults.label;
+    // The label: every button of a category, a notification's own buttons.
+    const labelled =
+      button.type !== "tap" &&
+      (category || (button.type === "custom" && !inherited));
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
       header-title=${this.isNew ? "Add button" : title}
       @closed=${this._closed}
     >
-      ${button.type === "custom" && !this.isNew
+      ${button.type === "custom" && !this.isNew && !inherited
         ? html`<ha-icon-button
             slot="headerActionItems"
             .label=${"Delete"}
@@ -136,7 +156,7 @@ export class NcInteractionDialog extends LitElement {
           </ha-icon-button>`
         : nothing}
       <div class="form">
-        ${button.type === "custom"
+        ${labelled
           ? html`<div class="row">
               ${field(
                 hass,
@@ -144,15 +164,39 @@ export class NcInteractionDialog extends LitElement {
                 button.label ?? "",
                 "Label",
                 (value) => this._set({ label: (value as string) || null }),
+                { required: button.type === "custom" },
               )}
               ${this._iconField(button)}
             </div>`
           : button.type === "tap"
             ? nothing
             : this._iconField(button)}
-        ${this._renderPush(button)}
+        ${inherited ? this._renderPushChoice(button, inherited) : this._renderPush(button)}
         ${button.type === "snooze" ? this._renderSnooze(button) : nothing}
-        <div class="divider"></div>
+        ${category ? nothing : this._renderActionPart(action)}
+      </div>
+      <ha-dialog-footer slot="footer">
+        <ha-button
+          slot="secondaryAction"
+          appearance="plain"
+          @click=${() => this._close()}
+        >
+          Cancel
+        </ha-button>
+        <ha-button
+          slot="primaryAction"
+          .disabled=${button.type === "custom" && labelled && !button.label?.trim()}
+          @click=${() => this._close(this._button)}
+        >
+          ${this.isNew ? "Add" : "Update"}
+        </ha-button>
+      </ha-dialog-footer>
+    </ha-dialog>`;
+  }
+
+  private _renderActionPart(action: ButtonAction) {
+    const hass = this.hass!;
+    return html`<div class="divider"></div>
         ${field(
           hass,
           {
@@ -167,31 +211,14 @@ export class NcInteractionDialog extends LitElement {
             this._setAction((value as ButtonAction["type"]) || "nothing"),
           { clearable: true },
         )}
-        ${this._renderAction(action)}
-      </div>
-      <ha-dialog-footer slot="footer">
-        <ha-button
-          slot="secondaryAction"
-          appearance="plain"
-          @click=${() => this._close()}
-        >
-          Cancel
-        </ha-button>
-        <ha-button
-          slot="primaryAction"
-          @click=${() => this._close(this._button)}
-        >
-          ${this.isNew ? "Add" : "Update"}
-        </ha-button>
-      </ha-dialog-footer>
-    </ha-dialog>`;
+        ${this._renderAction(action)}`;
   }
 
   private _iconField(button: Button) {
     const defaults = INTERACTION_DEFAULTS[button.type];
     return field(
       this.hass,
-      { icon: { placeholder: defaults.icon } },
+      { icon: { placeholder: this.inherited?.icon || defaults.icon } },
       button.icon ?? "",
       "Icon",
       (value) => this._set({ icon: (value as string) || null }),
@@ -199,16 +226,21 @@ export class NcInteractionDialog extends LitElement {
   }
 
   private _renderSnooze(button: Button) {
-    const chosen = button.snooze?.length ? button.snooze : DEFAULT_SNOOZE;
+    const base = this.inherited?.snooze?.length
+      ? this.inherited.snooze
+      : DEFAULT_SNOOZE;
+    const chosen = button.snooze?.length ? button.snooze : base;
     const toggle = (key: string, on: boolean) => {
       const keys = on ? [...chosen, key] : chosen.filter((k) => k !== key);
       // At least one time.
-      if (keys.length)
-        this._set({
-          snooze: SNOOZE_CHOICES.map((c) => c.key).filter((k) =>
-            keys.includes(k),
-          ),
-        });
+      if (!keys.length) return;
+      const snooze = SNOOZE_CHOICES.map((c) => c.key).filter((k) =>
+        keys.includes(k),
+      );
+      // The category's times again: inherited, not stored.
+      const same =
+        !!this.inherited && snooze.join() === [...base].join();
+      this._set({ snooze: same ? null : snooze });
     };
     return html`<div class="divider"></div>
       <div class="snooze">
@@ -301,6 +333,48 @@ export class NcInteractionDialog extends LitElement {
             : nothing}
         </span>
       </label>
+      ${!tap && on && total > 3
+        ? html`<ha-alert alert-type="warning">
+            ${total} buttons are shown in the push: Android shows only the first
+            3, in the order of this list.
+          </ha-alert>`
+        : nothing}`;
+  }
+
+  // A category's button in a notification: Push follows the category unless
+  // chosen here.
+  private _renderPushChoice(button: Button, inherited: CategoryButton) {
+    const tap = button.type === "tap";
+    const own = tap ? button.push_tap : button.show_in_push;
+    const base = tap ? (inherited.push_tap ?? true) : (inherited.show_in_push ?? false);
+    const on = own ?? base;
+    const total = this.otherPushButtons + (on ? 1 : 0);
+    const options = tap
+      ? [
+          { value: "on", label: "Also when the push is tapped" },
+          { value: "off", label: "Not when the push is tapped" },
+        ]
+      : [
+          { value: "on", label: "Shown in the push" },
+          { value: "off", label: "Not in the push" },
+        ];
+    return html`${field(
+        this.hass,
+        { select: { mode: "dropdown", options } },
+        own === undefined || own === null ? "" : own ? "on" : "off",
+        `Push (category: ${base ? "on" : "off"})`,
+        (value) => {
+          const chosen = value === "on" ? true : value === "off" ? false : undefined;
+          const copy = { ...this._button! };
+          if (tap) {
+            if (chosen === undefined) delete copy.push_tap;
+            else copy.push_tap = chosen;
+          } else if (chosen === undefined) delete copy.show_in_push;
+          else copy.show_in_push = chosen;
+          this._button = copy;
+        },
+        { clearable: true },
+      )}
       ${!tap && on && total > 3
         ? html`<ha-alert alert-type="warning">
             ${total} buttons are shown in the push: Android shows only the first

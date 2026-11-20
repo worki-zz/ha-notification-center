@@ -1,15 +1,25 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
+
+Phase 5: categories, modes and the General settings.
 
 ### Added
 
+- Settings: **Categories** tab, alphabetical, with the number of notifications per category and *Add category*. The category editor is a page with a preview, *Notifications* (the list filtered to the category) and Delete; a category with notifications cannot be deleted (*View notifications*), the General category never. A new category starts with General's icon and colour.
+- Category buttons (`buttons` in a category): Tap behavior, the built-in buttons and custom buttons, with label, icon, Snooze times and push setting, but no action. Notifications use them live, in their own blocks with amber icons: the label always applies, the icon and the Snooze times unless the notification sets its own; *Show button in the push notification* follows the category unless the notification chooses (a dropdown that can be cleared). A category's custom button can only be switched off in a notification; deleting it in the category (or moving the notification to another category) turns it into an own custom button.
+- **General** settings in the style of Home Assistant's System settings: **Modes** and **Snooze** (*Tomorrow at*), import and export, the version.
+- **Modes** page: one active mode, the first whose condition (toggle, state or template) is true, with an *Active* chip; the order can be dragged. *Add mode* saves the mode with Home's channels, then asks which channels to switch on for it in every category.
+- Home can have a condition. Without one it is always true, shown on top and checked last; with one it is a normal row. With no active mode the page says *No active mode* and every channel sends.
+- Audience: the people are shown with Home Assistant's person badge.
 - Notification Center card: **Show empty state** (`show_empty`). While nothing is active, the card stays on the dashboard and says *All done* instead of hiding itself.
 
 ### Changed
 
 - Overview with nothing active: *All done* under a large icon in the text colour, centred, with more room above and below.
 - Editor: the number of a step with an active card is green.
+- The General category has only Done switched on by default; the Snooze times of a category (`snooze`) became its Snooze button's times. Existing categories get their buttons once, from their old Snooze setting.
+- A notification step keeps only what differs from its category's buttons.
 
 ## 0.4.16
 

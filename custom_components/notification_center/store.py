@@ -23,6 +23,7 @@ from .model import (
     CHANNEL_LIGHT_PREFIX,
     CHANNEL_SPEAKER_PREFIX,
     COLLECTIONS,
+    GENERAL_CATEGORY_ID,
     GENERAL_SCHEMA,
     HOME_MODE_ID,
     PERSON_SCHEMA,
@@ -30,7 +31,9 @@ from .model import (
     ConfigData,
     ConfigValidationError,
     async_validate_config,
+    category_custom_ids,
     default_config,
+    detach_category_buttons,
     new_id,
     validate_item,
 )
@@ -144,8 +147,13 @@ class ConfigManager:
         config = self._copy()
         config[section].append(item)
         if section == "modes":
-            # A new mode goes before Home, which is always the last fallback.
-            config["modes"].sort(key=lambda mode: mode["id"] == HOME_MODE_ID)
+            # A new mode starts with Home's channels; validation puts it
+            # before Home when Home has no condition.
+            for channels in _channel_lists(config):
+                for channel in channels.values():
+                    modes = channel.get("modes")
+                    if modes is not None and HOME_MODE_ID in modes:
+                        modes.append(item["id"])
         committed = await self._async_commit(config)
         index = self._index(committed, section, item["id"])
         return cast(dict[str, Any], committed[section][index])
@@ -157,11 +165,28 @@ class ConfigManager:
         config = self._copy()
         index = self._index(config, section, item_id)
         data = {**data, "id": item_id}
+        old = config[section][index]
         if section == "notifications":
-            data = normalize_notification(
-                self.hass, config, data, config[section][index]
-            )
-        config[section][index] = validate_item(section, data)
+            data = normalize_notification(self.hass, config, data, old)
+            if data.get("category", GENERAL_CATEGORY_ID) != old["category"]:
+                previous = _category(config, old["category"])
+                if previous is not None:
+                    detach_category_buttons(
+                        data,
+                        previous,
+                        category_custom_ids(previous)
+                        - category_custom_ids(
+                            _category(config, data.get("category", GENERAL_CATEGORY_ID))
+                        ),
+                    )
+        new_item = validate_item(section, data)
+        if section == "categories":
+            removed = category_custom_ids(old) - category_custom_ids(new_item)
+            if removed:
+                for notification in config["notifications"]:
+                    if notification["category"] == item_id:
+                        detach_category_buttons(notification, old, removed)
+        config[section][index] = new_item
         committed = await self._async_commit(config)
         return cast(dict[str, Any], committed[section][index])
 
@@ -171,6 +196,8 @@ class ConfigManager:
         index = self._index(config, section, item_id)
         if section == "modes" and item_id == HOME_MODE_ID:
             raise ConfigValidationError("the Home mode cannot be deleted")
+        if section == "categories" and item_id == GENERAL_CATEGORY_ID:
+            raise ConfigValidationError("the General category cannot be deleted")
         if section == "categories":
             used = [
                 item["name"]
@@ -185,6 +212,31 @@ class ConfigManager:
         _remove_references(config, section, item_id)
         await self._async_commit(config)
 
+    async def async_set_mode_channels(self, mode_id: str, channels: list[str]) -> None:
+        """Switch a mode on for the given channels of every category.
+
+        The second step of adding a mode. A channel a category does not use
+        yet is added for this mode only.
+        """
+        config = self._copy()
+        self._index(config, "modes", mode_id)
+        for category in config["categories"]:
+            settings = category["channels"]
+            for key in set(settings) | set(channels):
+                channel = settings.get(key)
+                if channel is None:
+                    settings[key] = {
+                        "modes": [mode_id],
+                        "when": {"type": "immediately"},
+                    }
+                    continue
+                modes = channel.setdefault("modes", [])
+                if key in channels and mode_id not in modes:
+                    modes.append(mode_id)
+                elif key not in channels and mode_id in modes:
+                    modes.remove(mode_id)
+        await self._async_commit(config)
+
     async def async_reorder(self, section: str, item_ids: list[str]) -> None:
         """Put the items of a collection in the given order."""
         config = self._copy()
@@ -196,8 +248,6 @@ class ConfigManager:
                 f"{section}: the new order must list every item exactly once"
             )
         config[section] = [items[item_id] for item_id in item_ids]
-        if section == "modes" and item_ids[-1] != HOME_MODE_ID:
-            raise ConfigValidationError("the Home mode stays the last one")
         await self._async_commit(config)
 
     async def async_duplicate(self, notification_id: str) -> dict[str, Any]:
@@ -214,9 +264,9 @@ class ConfigManager:
         copied["name"] = name
         step_ids = {}
         for step in copied["steps"]:
+            # The buttons keep their ids: the entity actions point to them,
+            # and a category's button is linked by its id.
             step_ids[step["id"]] = step["id"] = new_id()
-            for button in step["buttons"]:
-                button["id"] = new_id()
         for group in copied["entity_groups"]:
             group["id"] = new_id()
         # Notification state triggers that point to the copied notification's
@@ -361,18 +411,31 @@ def _replace_value(data: Any, old: str, new: str) -> bool:
     return changed
 
 
-def _remove_references(config: ConfigData, section: str, item_id: str) -> None:
-    """Remove the references to a deleted mode, light, speaker or chime."""
-    channel_lists = [category["channels"] for category in config["categories"]] + [
+def _channel_lists(config: ConfigData) -> list[dict[str, dict[str, Any]]]:
+    """Return the channel settings of every category and step."""
+    return [category["channels"] for category in config["categories"]] + [
         step["channels"]
         for notification in config["notifications"]
         for step in notification["steps"]
     ]
+
+
+def _category(config: ConfigData, category_id: str) -> dict[str, Any] | None:
+    return next(
+        (item for item in config["categories"] if item["id"] == category_id), None
+    )
+
+
+def _remove_references(config: ConfigData, section: str, item_id: str) -> None:
+    """Remove the references to a deleted mode, light, speaker or chime."""
+    channel_lists = _channel_lists(config)
     if section == "modes":
         for channels in channel_lists:
             for channel in channels.values():
                 if item_id in channel.get("modes", []):
-                    channel["modes"].remove(item_id)
+                    channel["modes"] = [
+                        mode for mode in channel["modes"] if mode != item_id
+                    ]
     elif section in ("lights", "speakers"):
         prefix = CHANNEL_LIGHT_PREFIX if section == "lights" else CHANNEL_SPEAKER_PREFIX
         for channels in channel_lists:
