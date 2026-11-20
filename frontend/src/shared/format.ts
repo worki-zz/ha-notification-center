@@ -206,18 +206,13 @@ export function formatWhen(hass: HomeAssistant, when: Date, now = Date.now()): s
   }
 }
 
-/** A day to come, without its time: the weekday this week, else the date. */
+/** A day to come, without its time, date first: "Nov 15, Wednesday". */
 export function formatDay(hass: HomeAssistant, when: Date, now = Date.now()): string {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const days = Math.floor((when.getTime() - start.getTime()) / 86_400_000);
-  const options: Intl.DateTimeFormatOptions =
-    days >= 0 && days < 7
-      ? { weekday: "short", month: "short", day: "numeric" }
-      : { month: "short", day: "numeric" };
-  if (when.getFullYear() > start.getFullYear() + 1) options.year = "numeric";
+  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  if (when.getFullYear() > new Date(now).getFullYear() + 1) options.year = "numeric";
   try {
-    return new Intl.DateTimeFormat(language(hass), options).format(when);
+    const date = new Intl.DateTimeFormat(language(hass), options).format(when);
+    return `${date}, ${weekday(hass, when)}`;
   } catch {
     return when.toDateString();
   }
@@ -251,14 +246,4 @@ export function firstWeekday(hass: HomeAssistant): number {
     // Fall through to Monday.
   }
   return 1;
-}
-
-/** The name of a month in the user's language, such as "November". */
-export function monthName(hass: HomeAssistant, when: Date): string {
-  try {
-    const name = new Intl.DateTimeFormat(language(hass), { month: "long" }).format(when);
-    return name.charAt(0).toLocaleUpperCase() + name.slice(1);
-  } catch {
-    return String(when.getMonth() + 1);
-  }
 }
