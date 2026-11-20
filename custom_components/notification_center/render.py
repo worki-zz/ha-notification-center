@@ -2,7 +2,7 @@
 
 A text is a Home Assistant template. It can also hold short placeholders
 that come from the card's entity: ``{Floor}``, ``{Area}``, ``{Device}``,
-``{Entity}`` and ``{State}``. The template is rendered first; the
+``{Entity}``, ``{Device class}`` and ``{State}``. The template is rendered first; the
 placeholders are replaced in its result, so they never clash with Jinja.
 
 While a card is open its text follows the changes of the entities the
@@ -22,6 +22,7 @@ from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
     floor_registry as fr,
+    translation,
 )
 from homeassistant.helpers.event import (
     TrackTemplate,
@@ -33,7 +34,25 @@ from homeassistant.helpers.template import Template, is_template_string
 
 _LOGGER = logging.getLogger(__name__)
 
-PLACEHOLDERS: Final = ("Floor", "Area", "Device", "Entity", "State")
+PLACEHOLDERS: Final = ("Floor", "Area", "Device", "Entity", "Device class", "State")
+
+
+@callback
+def device_class_name(hass: HomeAssistant, domain: str, device_class: str) -> str:
+    """Return the name Home Assistant shows for a device class ("Moisture").
+
+    From the domain's translations when they are loaded, otherwise made
+    from the key itself.
+    """
+    key = f"component.{domain}.entity_component.{device_class}.name"
+    name = translation.async_get_cached_translations(
+        hass, hass.config.language, "entity_component", domain
+    ).get(key)
+    if not name and hass.config.language != "en":
+        name = translation.async_get_cached_translations(
+            hass, "en", "entity_component", domain
+        ).get(key)
+    return name or device_class.replace("_", " ").capitalize()
 
 
 @callback
@@ -50,10 +69,16 @@ def entity_placeholders(hass: HomeAssistant, entity_id: str | None) -> dict[str,
     values = {
         "Entity": entity_name,
         "State": state.state if state is not None else "",
+        "Device class": "",
         "Device": entity_name,
         "Area": "",
         "Floor": "",
     }
+    device_class = state.attributes.get("device_class") if state is not None else None
+    if isinstance(device_class, str) and device_class:
+        values["Device class"] = device_class_name(
+            hass, entity_id.split(".", 1)[0], device_class
+        )
     entry = er.async_get(hass).async_get(entity_id)
     if entry is None:
         return values

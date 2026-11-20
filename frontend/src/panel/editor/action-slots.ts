@@ -45,11 +45,14 @@ export const ACTION_SLOT_STYLES = css`
     flex-direction: column;
     gap: 12px;
   }
+  /* Stronger than the actions listed under them. */
   .slots-title {
+    font-size: var(--ha-font-size-l, 18px);
     font-weight: var(--ha-font-weight-medium, 500);
   }
   .slot-label {
     margin-bottom: 8px;
+    font-weight: var(--ha-font-weight-medium, 500);
   }
   .slots-empty {
     color: var(--secondary-text-color);

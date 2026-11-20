@@ -5,6 +5,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { field } from "../fields";
+import { deviceClassName } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import { ACTION_SLOT_STYLES, renderActionSlots } from "./action-slots";
 import { type ActionSlot, type EntityGroup, groupMatches } from "./model";
@@ -26,7 +27,7 @@ export function newGroup(): EntityGroup {
 export function groupName(hass: HomeAssistant | undefined, group: EntityGroup): string {
   const domain = domainName(group.domain);
   const parts = [domain];
-  if (group.device_class) parts.push(group.device_class.replace(/_/g, " "));
+  if (group.device_class) parts.push(deviceClassName(hass, group.domain, group.device_class));
   const places = [
     ...group.floors.map((id) => hass?.floors?.[id]?.name ?? id),
     ...group.areas.map((id) => hass?.areas?.[id]?.name ?? id),
@@ -119,7 +120,7 @@ export class NcGroupDialog extends LitElement {
               mode: "dropdown",
               options: [
                 { value: "", label: "Any" },
-                ...classes.map((value) => ({ value, label: value.replace(/_/g, " ") })),
+                ...classes.map((value) => ({ value, label: deviceClassName(hass, group.domain, value) })),
               ],
             },
           },
@@ -138,7 +139,7 @@ export class NcGroupDialog extends LitElement {
         ${this._selector({ label: { multiple: true } }, group.labels, "", (value) =>
           this._set({ labels: (value as string[]) ?? [] }),
         )}
-        <div class="count">${count} ${count === 1 ? "entity" : "entities"}</div>
+        <ha-alert alert-type="info">${count} ${count === 1 ? "entity matches" : "entities match"} now.</ha-alert>
         <div class="divider"></div>
         <ha-settings-row>
           <span slot="heading">Add new matching entities</span>
@@ -192,11 +193,11 @@ export class NcGroupDialog extends LitElement {
       flex-direction: column;
       gap: 16px;
     }
+    /* Not as tall as in a settings page. */
     ha-settings-row {
       padding: 0;
-    }
-    .count {
-      color: var(--secondary-text-color);
+      margin: -8px 0;
+      min-height: 0;
     }
     .divider {
       height: 1px;
