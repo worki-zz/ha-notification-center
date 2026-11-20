@@ -86,6 +86,8 @@ export interface EntityGroup {
   enabled: boolean;
   excluded: string[];
   actions?: Obj;
+  /** Custom actions of single members, per button: they replace the group's. */
+  member_actions?: Record<string, Obj>;
 }
 
 export interface EditorNotification {

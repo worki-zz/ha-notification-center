@@ -593,6 +593,9 @@ _ENTITY_GROUP_FIELDS = _with_id(
         # Entities of the group that are switched off.
         vol.Optional("excluded", default=list): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional("actions", default=dict): {_id: ACTIONS},
+        # Custom actions of single members, per button: they replace the
+        # group's action for that member.
+        vol.Optional("member_actions", default=dict): {cv.entity_id: {_id: ACTIONS}},
     }
 )
 ENTITY_GROUP_SCHEMA = vol.All(_group_lists, _ENTITY_GROUP_FIELDS)
@@ -1263,6 +1266,15 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
                         button,
                     ),
                 )
+        for number, group in enumerate(notification["entity_groups"], start=1):
+            where = _path(
+                "notifications", notification["name"], f"entity group {number}"
+            )
+            for button, actions in group["actions"].items():
+                _validate_actions(actions, _path(where, button))
+            for entity_id, buttons in group["member_actions"].items():
+                for button, actions in buttons.items():
+                    _validate_actions(actions, _path(where, entity_id, button))
     for category in config["categories"]:
         _check_category_channels_complete(category)
     _check_references(config)

@@ -6,6 +6,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## High priority
 
+### Button action on the card's entity
+*Area: Notification editor.* A button's Action (Home Assistant action) can target the card's own entity, so one button action fits every entity of the notification without entity actions. *(Kristóf, 2026-11-20; phase 4)*
+
 ### Notification details view
 *Area: Notification content.* A detail page per notification (like a more-info dialog of its own) with the full message, data, attachments and history. Once it exists, it is also offered as a button action ("Notification details") next to Entity action, More info, Action and Navigate. *(Phase 3 and phase 4, 2026-11-19)*
 
@@ -30,9 +33,6 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Channels.* Push notifications to the LG webOS TV (`notify.tv`) as a separate channel instead of a push device, since a TV needs other options than a phone (no buttons, short text, maybe only while it is on). *(Scope cut, 2026-11-15)*
 
 ## Low priority
-
-### Entity actions per member of an entity group
-*Area: Notification editor.* An entity of an entity group can get its own entity actions instead of the group's (today every member runs the group's actions). *(Kristóf, 2026-11-20; phase 4)*
 
 ### Display channel
 *Area: Channels.* Show notifications on smart displays (for example a Nest Hub) as a channel of its own, with its own settings like the other channels. Deferred as a whole; 1.0 has no display support. *(Scope cut, 2026-11-15)*
