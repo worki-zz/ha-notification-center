@@ -58,6 +58,13 @@ export function placeholderValues(
   return values;
 }
 
+/** The placeholders as plain words: {Area} reads Area. */
+export function plainPlaceholders(text: string): string {
+  return text.replace(/\{(\w+(?: \w+)?)\}/g, (token: string, name: string) =>
+    (PLACEHOLDERS as readonly string[]).includes(name) ? name : token,
+  );
+}
+
 export function replacePlaceholders(text: string, values: Record<string, string>): string {
   let result = text;
   for (const name of PLACEHOLDERS) {

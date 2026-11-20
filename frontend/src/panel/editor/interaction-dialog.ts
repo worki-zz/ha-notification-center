@@ -136,10 +136,10 @@ export class NcInteractionDialog extends LitElement {
       button.type === "tap"
         ? defaults.label
         : button.label || inherited?.label || defaults.label;
-    // The label: every button of a category, a notification's own buttons.
-    const labelled =
-      button.type !== "tap" &&
-      (category || (button.type === "custom" && !inherited));
+    // The label: every button but Tap behavior. A built-in or inherited
+    // label can be changed and cleared again (X); a custom button of its
+    // own needs one.
+    const labelled = button.type !== "tap";
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
@@ -158,19 +158,9 @@ export class NcInteractionDialog extends LitElement {
       <div class="form">
         ${labelled
           ? html`<div class="row">
-              ${field(
-                hass,
-                { text: {} },
-                button.label ?? "",
-                "Label",
-                (value) => this._set({ label: (value as string) || null }),
-                { required: button.type === "custom" },
-              )}
-              ${this._iconField(button)}
+              ${this._labelField(button)} ${this._iconField(button)}
             </div>`
-          : button.type === "tap"
-            ? nothing
-            : this._iconField(button)}
+          : nothing}
         ${inherited ? this._renderPushChoice(button, inherited) : this._renderPush(button)}
         ${button.type === "snooze" ? this._renderSnooze(button) : nothing}
         ${category ? nothing : this._renderActionPart(action)}
@@ -185,7 +175,7 @@ export class NcInteractionDialog extends LitElement {
         </ha-button>
         <ha-button
           slot="primaryAction"
-          .disabled=${button.type === "custom" && labelled && !button.label?.trim()}
+          .disabled=${button.type === "custom" && !this.inherited && !button.label?.trim()}
           @click=${() => this._close(this._button)}
         >
           ${this.isNew ? "Add" : "Update"}
@@ -212,6 +202,28 @@ export class NcInteractionDialog extends LitElement {
           { clearable: true },
         )}
         ${this._renderAction(action)}`;
+  }
+
+  // Required for a custom button defined here (in the category, or a
+  // notification's own); else empty means the default or the category's.
+  private _labelField(button: Button) {
+    const own = button.type === "custom" && !this.inherited;
+    const fallback = this.inherited?.label || INTERACTION_DEFAULTS[button.type].label;
+    const field_ = field(
+      this.hass,
+      { text: {} },
+      button.label ?? "",
+      "Label",
+      (value) => this._set({ label: (value as string) || null }),
+      own ? { required: true } : { placeholder: fallback },
+    );
+    if (own || !button.label) return field_;
+    return html`<div class="clearable">
+      ${field_}
+      <ha-icon-button class="clear" .label=${"Clear"} @click=${() => this._set({ label: null })}>
+        <ha-icon icon="mdi:close"></ha-icon>
+      </ha-icon-button>
+    </div>`;
   }
 
   private _iconField(button: Button) {
@@ -311,7 +323,7 @@ export class NcInteractionDialog extends LitElement {
     const tap = button.type === "tap";
     const on = tap
       ? (button.push_tap ?? true)
-      : (button.show_in_push ?? button.type !== "custom");
+      : (button.show_in_push ?? true);
     const total = this.otherPushButtons + (on ? 1 : 0);
     const times = button.type === "snooze" ? snoozeChoices(button) : [];
     return html`<label class="switch-row">
@@ -346,7 +358,7 @@ export class NcInteractionDialog extends LitElement {
   private _renderPushChoice(button: Button, inherited: CategoryButton) {
     const tap = button.type === "tap";
     const own = tap ? button.push_tap : button.show_in_push;
-    const base = tap ? (inherited.push_tap ?? true) : (inherited.show_in_push ?? false);
+    const base = tap ? (inherited.push_tap ?? true) : (inherited.show_in_push ?? true);
     const on = own ?? base;
     const total = this.otherPushButtons + (on ? 1 : 0);
     const options = tap
@@ -429,13 +441,25 @@ export class NcInteractionDialog extends LitElement {
     .times {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      margin-top: 4px;
+      gap: 4px 16px;
+      margin-top: 8px;
     }
     .time {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-height: 40px;
       cursor: pointer;
+    }
+    .clearable {
+      position: relative;
+    }
+    .clearable .clear {
+      position: absolute;
+      top: 50%;
+      inset-inline-end: 4px;
+      transform: translateY(-50%);
+      color: var(--secondary-text-color);
     }
     .divider {
       height: 1px;

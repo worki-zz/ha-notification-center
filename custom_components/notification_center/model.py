@@ -85,8 +85,6 @@ SNOOZE_CHOICES: Final = (
     "1mo",
 )
 DEFAULT_SNOOZE_CHOICES: Final = ("1h", "3h", "tomorrow")
-# Shown in the push notification unless switched off (phase 6).
-PUSH_BUTTONS: Final = ("done", "snooze", "dismiss")
 WEEKDAYS: Final = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 INTERVAL_UNITS: Final = ("days", "weeks", "months", "years")
 
@@ -635,7 +633,7 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
         else:
             button.pop("push_tap", None)
             if button.get("show_in_push") is None:
-                button["show_in_push"] = kind in PUSH_BUTTONS
+                button["show_in_push"] = True
     return buttons
 
 
@@ -679,7 +677,7 @@ def effective_buttons(
         if entry["type"] == "custom" and entry["id"] not in linked:
             button = {
                 "enabled": True,
-                "show_in_push": False,
+                "show_in_push": True,
                 **entry,
                 "category": False,
             }
@@ -720,7 +718,7 @@ def detach_category_buttons(
             if not button.get("icon") and source.get("icon"):
                 button["icon"] = source["icon"]
             if button.get("show_in_push") is None:
-                button["show_in_push"] = source.get("show_in_push", False)
+                button["show_in_push"] = source.get("show_in_push", True)
             button.setdefault("action", {"type": "nothing"})
         step["buttons"] = buttons
 
@@ -748,7 +746,7 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
     else:
         value = entry.get("show_in_push")
         button["show_in_push"] = (
-            base.get("show_in_push", kind in PUSH_BUTTONS) if value is None else value
+            base.get("show_in_push", True) if value is None else value
         )
     return button
 
@@ -1222,7 +1220,7 @@ def upgrade_category_buttons(data: dict[str, Any]) -> None:
                     continue
                 if kind == "snooze" and list(button.get("snooze") or []) == defaults:
                     button.pop("snooze", None)
-                if button.get("show_in_push") == (kind in PUSH_BUTTONS):
+                if button.get("show_in_push") is True:
                     button.pop("show_in_push", None)
                 if button.get("push_tap") is True:
                     button.pop("push_tap", None)

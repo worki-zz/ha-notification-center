@@ -94,7 +94,8 @@ async def test_builtin_buttons_keep_their_settings(hass: HomeAssistant) -> None:
     dismiss = next(button for button in buttons if button["type"] == "dismiss")
     assert dismiss["label"] == "Close"
     custom = next(button for button in buttons if button["type"] == "custom")
-    assert custom["show_in_push"] is False
+    # Every button is in the push unless switched off.
+    assert custom["show_in_push"] is True
     assert "card" not in custom
 
 

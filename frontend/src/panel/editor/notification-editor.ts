@@ -18,7 +18,7 @@ import { cssColor } from "../../shared/format";
 import { cardData, categoryOf, errorText, liveButtons, navigate } from "../../shared/live";
 import "../../shared/notification-view";
 import type { NotificationViewData } from "../../shared/notification-view";
-import { isTemplate } from "../../shared/text";
+import { isTemplate, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import { confirmDialog } from "../confirm";
 import { type FieldOptions, field, iconSelect } from "../fields";
@@ -277,10 +277,12 @@ export class NcNotificationEditor extends LitElement {
     const step = draft.steps[this._step];
     if (!step || !this.hass) return;
     const entity = listedEntities(this.hass, draft)[0] ?? null;
+    // Without an entity the placeholders read as words: {Area} as Area.
+    const plain = (text: string | null) => (text && !entity ? plainPlaceholders(text) : text);
     const texts = [
-      step.message,
-      step.info ?? null,
-      step.data?.type === "custom" ? (step.data.text ?? null) : null,
+      plain(step.message),
+      plain(step.info ?? null),
+      plain(step.data?.type === "custom" ? (step.data.text ?? null) : null),
     ];
     const key = JSON.stringify([texts, entity, draft.id]);
     if (key === this._previewKey) return;
@@ -339,7 +341,7 @@ export class NcNotificationEditor extends LitElement {
     return {
       label: draft.name || "New notification",
       data: cardData(hass, live),
-      message: (message?.text ?? (isTemplate(step.message) ? "" : step.message)) || "Message",
+      message: (message?.text ?? (isTemplate(step.message) ? "" : plainPlaceholders(step.message))) || "Message",
       info: info?.text ?? step.info ?? undefined,
       icon,
       stateObj: icon || !entity ? undefined : hass.states[entity],
@@ -1335,7 +1337,7 @@ export class NcNotificationEditor extends LitElement {
       max-width: 1040px;
       margin: 0 auto;
       /* As much room under the header as on the overview. */
-      padding: 32px 16px 96px;
+      padding: 16px 16px 96px;
       display: flex;
       flex-direction: column;
       gap: 16px;

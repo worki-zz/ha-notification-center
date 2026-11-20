@@ -20,7 +20,7 @@ import { cssColor } from "../shared/format";
 import { categoryButtons, errorText, liveButtons, navigate, snoozeChoices } from "../shared/live";
 import "../shared/notification-view";
 import type { NotificationViewData } from "../shared/notification-view";
-import { isTemplate } from "../shared/text";
+import { isTemplate, plainPlaceholders } from "../shared/text";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
 import { field } from "./fields";
@@ -53,7 +53,6 @@ export class NcCategoryEditor extends LitElement {
 
   @state() private _saving = false;
 
-  @state() private _expanded = new Set(["settings", "interactions"]);
 
   // The button whose dialog is open.
   @state() private _button?: { button: CategoryButton; isNew: boolean };
@@ -144,7 +143,8 @@ export class NcCategoryEditor extends LitElement {
     const live = { card, notification: notification ?? ({} as Notification), category, step };
     return {
       label: notification?.name ?? "Example",
-      message: (step.message && !isTemplate(step.message) ? step.message : "") || "Message",
+      // Without an entity: the placeholders read as words, {Area} as Area.
+      message: (step.message && !isTemplate(step.message) ? plainPlaceholders(step.message) : "") || "Message",
       icon: notification?.icon || draft.icon || "mdi:bell",
       color: cssColor(notification?.card_color ?? draft.card_color),
       buttons: liveButtons(live).map((button) => ({
@@ -231,33 +231,29 @@ export class NcCategoryEditor extends LitElement {
     `;
   }
 
-  private _panel(key: string, icon: string, header: string, count: number | undefined, content: () => unknown) {
+  private _panel(_key: string, icon: string, header: string, count: number | undefined, content: () => unknown) {
     return block({
       icon,
       header,
       count,
-      expanded: this._expanded.has(key),
-      toggled: (expanded) => {
-        const next = new Set(this._expanded);
-        if (expanded) next.add(key);
-        else next.delete(key);
-        this._expanded = next;
-      },
+      expanded: true,
+      fixed: true,
+      toggled: () => undefined,
       content: content(),
     });
   }
 
+  // The name is required, but not marked so for Home Assistant: that keeps
+  // room for its message under the field. Save asks for it instead.
   private _renderSettings(draft: Draft) {
     return html`<div class="block">
-      <div class="row">
-        ${field(this.hass, { text: {} }, draft.name, "Name", (value) => this._change({ name: (value as string) ?? "" }), {
-          required: true,
-        })}
+      <div class="fields">
+        ${field(this.hass, { text: {} }, draft.name, "Category name*", (value) =>
+          this._change({ name: (value as string) ?? "" }),
+        )}
         ${field(this.hass, { icon: { placeholder: "mdi:bell" } }, draft.icon ?? "", "Icon", (value) =>
           this._change({ icon: (value as string) || null }),
         )}
-      </div>
-      <div class="row">
         ${field(
           this.hass,
           { ui_color: { include_none: false, default_color: "primary" } },
@@ -265,7 +261,6 @@ export class NcCategoryEditor extends LitElement {
           "Card color",
           (value) => this._change({ card_color: (value as string) || null }),
         )}
-        <div></div>
       </div>
     </div>`;
   }
@@ -311,7 +306,7 @@ export class NcCategoryEditor extends LitElement {
         @click=${(ev: Event) => ev.stopPropagation()}
         @change=${(ev: Event) => this._setButton({ ...button, enabled: (ev.target as HTMLInputElement).checked })}
       ></ha-switch>
-      <ha-icon class="builtin" .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}></ha-icon>
+      <ha-icon class=${button.type === "custom" ? "" : "builtin"} .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}></ha-icon>
       <div class="own-text">
         <div>${label}</div>
         ${secondary ? html`<div class="secondary">${secondary}</div>` : nothing}
@@ -333,7 +328,7 @@ export class NcCategoryEditor extends LitElement {
   private _addButton(): void {
     this._button = {
       isNew: true,
-      button: { id: newId(), type: "custom", enabled: true, label: "", show_in_push: false },
+      button: { id: newId(), type: "custom", enabled: true, label: "", show_in_push: true },
     };
   }
 
@@ -461,7 +456,7 @@ export class NcCategoryEditor extends LitElement {
     .content {
       max-width: 1040px;
       margin: 0 auto;
-      padding: 32px 16px 96px;
+      padding: 16px 16px 96px;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -478,14 +473,11 @@ export class NcCategoryEditor extends LitElement {
       flex-direction: column;
       gap: 12px;
     }
-    .row {
-      display: flex;
+    /* Two columns where they fit, without a gap at the end. */
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
       gap: 16px;
-      flex-wrap: wrap;
-    }
-    .row > * {
-      flex: 1 1 240px;
-      min-width: 0;
     }
     .title {
       font-weight: var(--ha-font-weight-medium, 500);

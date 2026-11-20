@@ -12,13 +12,16 @@ export interface BlockOptions {
   expanded: boolean;
   toggled: (expanded: boolean) => void;
   content: unknown;
+  // Always open, without the arrow (the category editor).
+  fixed?: boolean;
 }
 
 export function block(options: BlockOptions) {
   return html`<ha-expansion-panel
     outlined
     class="nc-block"
-    .expanded=${options.expanded}
+    .expanded=${options.fixed || options.expanded}
+    .noCollapse=${options.fixed ?? false}
     @expanded-will-change=${(ev: CustomEvent<{ expanded: boolean }>) => {
       // Panels inside the block (triggers, conditions) tell their own.
       if (ev.target !== ev.currentTarget) return;
@@ -38,7 +41,7 @@ export function block(options: BlockOptions) {
         ? nothing
         : html`<span class="block-count">${options.count}</span>`}
     </div>
-    ${options.expanded ? html`<div class="block-content">${options.content}</div>` : nothing}
+    ${options.fixed || options.expanded ? html`<div class="block-content">${options.content}</div>` : nothing}
   </ha-expansion-panel>`;
 }
 

@@ -809,7 +809,7 @@ export class NcStepEditor extends LitElement {
         enabled: true,
         label: "",
         action: { type: "nothing" },
-        show_in_push: false,
+        show_in_push: true,
         confirm: false,
       },
     };

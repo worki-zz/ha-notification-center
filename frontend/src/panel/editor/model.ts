@@ -192,7 +192,7 @@ export function detachCategoryButtons(
       entry.enabled ??= source.enabled;
       entry.label ||= source.label || "Button";
       entry.icon ||= source.icon ?? undefined;
-      entry.show_in_push ??= source.show_in_push ?? false;
+      entry.show_in_push ??= source.show_in_push ?? true;
     }
   }
 }

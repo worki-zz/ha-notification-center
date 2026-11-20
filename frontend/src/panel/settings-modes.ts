@@ -12,7 +12,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import { DOMAIN, type Mode, type NotificationCenterConfig, type StateMessage } from "../shared/config";
-import { errorText, navigate } from "../shared/live";
+import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
 import { field } from "./fields";
@@ -20,7 +20,8 @@ import { STATUS_STYLES, renderStatus } from "./status";
 
 const HOME = "home";
 
-type ConditionType = "none" | "toggle" | "state" | "template";
+// A toggle condition (older data) is edited as State "on".
+type ConditionType = "none" | "state" | "template";
 
 interface ModeDraft {
   id?: string;
@@ -57,8 +58,6 @@ export class NcSettingsModes extends LitElement {
 
   @property({ attribute: false }) public state?: StateMessage;
 
-  @property() public base = "/notification-center";
-
   @state() private _error?: string;
 
   @state() private _edit?: ModeDraft;
@@ -77,12 +76,6 @@ export class NcSettingsModes extends LitElement {
     const ordered = modes.filter((mode) => mode !== fixedHome);
     const noMode = this.state && this.state.mode === null;
     return html`
-      <div class="header">
-        <ha-icon-button .label=${"Back"} @click=${() => navigate(`${this.base}/settings/general`)}>
-          <ha-icon icon="mdi:arrow-left"></ha-icon>
-        </ha-icon-button>
-        <h1>Modes</h1>
-      </div>
       ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
       ${noMode
         ? html`<ha-alert alert-type="warning" title="No active mode">
@@ -138,19 +131,20 @@ export class NcSettingsModes extends LitElement {
 
   private _open(mode: Mode): void {
     const condition: Record<string, unknown> = mode.condition ?? {};
+    const toggle = condition.type === "toggle";
     this._edit = {
       id: mode.id,
       name: mode.name,
       icon: mode.icon ?? null,
-      type: (mode.condition?.type as ConditionType | undefined) ?? "none",
+      type: toggle ? "state" : ((mode.condition?.type as ConditionType | undefined) ?? "none"),
       entity_id: String(condition.entity_id ?? ""),
-      state: String(condition.state ?? ""),
+      state: toggle ? "on" : String(condition.state ?? ""),
       value_template: String(condition.value_template ?? ""),
     };
   }
 
   private _add(): void {
-    this._edit = { name: "", icon: null, type: "toggle", entity_id: "", state: "", value_template: "" };
+    this._edit = { name: "", icon: null, type: "state", entity_id: "", state: "", value_template: "" };
   }
 
   private _set(changes: Partial<ModeDraft>): void {
@@ -160,8 +154,6 @@ export class NcSettingsModes extends LitElement {
   private _valid(edit: ModeDraft): boolean {
     if (!edit.name.trim()) return false;
     switch (edit.type) {
-      case "toggle":
-        return !!edit.entity_id;
       case "state":
         return !!edit.entity_id && edit.state !== "";
       case "template":
@@ -175,7 +167,6 @@ export class NcSettingsModes extends LitElement {
     const isHome = edit.id === HOME;
     const types = [
       ...(isHome ? [{ label: "None", value: "none" }] : []),
-      { label: "Toggle", value: "toggle" },
       { label: "State", value: "state" },
       { label: "Template", value: "template" },
     ];
@@ -228,14 +219,6 @@ export class NcSettingsModes extends LitElement {
 
   private _renderCondition(edit: ModeDraft) {
     switch (edit.type) {
-      case "toggle":
-        return field(
-          this.hass,
-          { entity: { domain: ["input_boolean", "switch", "binary_sensor"] } },
-          edit.entity_id || undefined,
-          "Entity",
-          (value) => this._set({ entity_id: (value as string) ?? "" }),
-        );
       case "state":
         return html`${field(this.hass, { entity: {} }, edit.entity_id || undefined, "Entity", (value) =>
             this._set({ entity_id: (value as string) ?? "" }),
@@ -258,13 +241,11 @@ export class NcSettingsModes extends LitElement {
 
   private _data(edit: ModeDraft): Record<string, unknown> {
     const condition =
-      edit.type === "toggle"
-        ? { type: "toggle", entity_id: edit.entity_id }
-        : edit.type === "state"
-          ? { type: "state", entity_id: edit.entity_id, state: edit.state }
-          : edit.type === "template"
-            ? { type: "template", value_template: edit.value_template }
-            : null;
+      edit.type === "state"
+        ? { type: "state", entity_id: edit.entity_id, state: edit.state }
+        : edit.type === "template"
+          ? { type: "template", value_template: edit.value_template }
+          : null;
     return { name: edit.name.trim(), icon: edit.icon, condition };
   }
 
@@ -367,12 +348,15 @@ export class NcSettingsModes extends LitElement {
       open
       width="medium"
       header-title=${`${step.mode.name}: channels`}
+      prevent-scrim-close
       @closed=${(ev: Event) => {
         if (ev.target !== ev.currentTarget) return;
         ev.stopPropagation();
-        this._channels = undefined;
+        // Closed without Save: the ticks shown are saved all the same.
+        if (this._channels) void this._saveChannels();
       }}
     >
+      <p class="hint">Which channels send in this mode, in every category.</p>
       <ha-card outlined class="channels">
         ${this._channelList().map(
           (channel) => html`<label class="row channel">
@@ -386,10 +370,7 @@ export class NcSettingsModes extends LitElement {
         )}
       </ha-card>
       <ha-dialog-footer slot="footer">
-        <ha-button slot="secondaryAction" appearance="plain" @click=${() => (this._channels = undefined)}>
-          Skip
-        </ha-button>
-        <ha-button slot="primaryAction" .disabled=${this._busy} @click=${this._saveChannels}>Save</ha-button>
+        <ha-button slot="primaryAction" @click=${this._saveChannels}>Save</ha-button>
       </ha-dialog-footer>
     </ha-dialog>`;
   }
@@ -397,12 +378,10 @@ export class NcSettingsModes extends LitElement {
   private async _saveChannels(): Promise<void> {
     const step = this._channels;
     if (!step || !this.hass) return;
-    this._busy = true;
+    this._channels = undefined;
     await this._run(() =>
       this.hass!.callWS({ type: `${DOMAIN}/mode/set_channels`, mode_id: step.mode.id, channels: [...step.on] }),
     );
-    this._busy = false;
-    this._channels = undefined;
   }
 
   private async _run(task: () => Promise<unknown>): Promise<void> {
@@ -420,16 +399,9 @@ export class NcSettingsModes extends LitElement {
       flex-direction: column;
       gap: 16px;
     }
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: -8px 0 0 -12px;
-    }
-    h1 {
-      margin: 0;
-      font-size: var(--ha-font-size-xl, 20px);
-      font-weight: var(--ha-font-weight-normal, 400);
+    .hint {
+      margin: 0 0 16px;
+      color: var(--secondary-text-color);
     }
     ha-card {
       overflow: hidden;
