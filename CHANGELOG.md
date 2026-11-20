@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Schedule: the section titles are *This week*, *This month*, *This year* and *Next year*; a date is written with its weekday in full, date first (*Nov 15, Wednesday*).
+
 ## 0.4.12
 
 ### Changed

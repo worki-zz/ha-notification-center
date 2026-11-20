@@ -10,7 +10,6 @@ import {
   formatDay,
   formatTime,
   formatWhen,
-  monthName,
   weekday,
 } from "../shared/format";
 import {
@@ -45,7 +44,7 @@ const TITLES: Record<Page, string> = {
 };
 
 // The Schedule section of the days left this week.
-const WEEK = "Week";
+const WEEK = "This week";
 
 // How often relative times are written again.
 const TICK = 30_000;
@@ -404,8 +403,8 @@ export class NotificationCenterPanel extends LitElement {
     const nextYear = new Date(today.getFullYear() + 2, 0, 1);
     const title = (due: Date): string => {
       if (due < week) return WEEK;
-      if (due < month) return monthName(hass, today);
-      if (due < year) return "Year";
+      if (due < month) return "This month";
+      if (due < year) return "This year";
       if (due < nextYear) return "Next year";
       return String(due.getFullYear());
     };
