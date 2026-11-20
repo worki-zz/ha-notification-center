@@ -10,21 +10,42 @@ import {
   type Button,
   type CardState,
   type Category,
-  type Duration,
   type Notification,
   type NotificationCenterConfig,
-  type Snooze,
   type StateMessage,
   type Step,
 } from "./config";
 import { entityAttribute, entityState, formatTime } from "./format";
 import type { HomeAssistant } from "./types";
 
-export const SNOOZE_CHOICES: { key: string; text: string; label: string; hours?: number }[] = [
-  { key: "1h", text: "1 h", label: "Snooze for 1 hour", hours: 1 },
-  { key: "3h", text: "3 h", label: "Snooze for 3 hours", hours: 3 },
-  { key: "tomorrow", text: "Tomorrow", label: "Snooze until tomorrow" },
+/**
+ * The times a Snooze button can offer, in this order: written out in the
+ * editor, short on the card. Home Assistant works out when each ends; the
+ * days come back at the morning time (or when a scheduled step came).
+ */
+export const SNOOZE_CHOICES: { key: string; text: string; label: string }[] = [
+  { key: "15m", text: "15 min", label: "15 minutes" },
+  { key: "30m", text: "30 min", label: "30 minutes" },
+  { key: "1h", text: "1 h", label: "1 hour" },
+  { key: "2h", text: "2 h", label: "2 hours" },
+  { key: "3h", text: "3 h", label: "3 hours" },
+  { key: "6h", text: "6 h", label: "6 hours" },
+  { key: "12h", text: "12 h", label: "12 hours" },
+  { key: "tomorrow", text: "Tomorrow", label: "Tomorrow" },
+  { key: "2d", text: "2 d", label: "2 days" },
+  { key: "3d", text: "3 d", label: "3 days" },
+  { key: "1w", text: "1 w", label: "1 week" },
+  { key: "2w", text: "2 w", label: "2 weeks" },
+  { key: "1mo", text: "1 mo", label: "1 month" },
 ];
+
+export const DEFAULT_SNOOZE = ["1h", "3h", "tomorrow"];
+
+/** The Snooze button's times, in the fixed order. */
+export function snoozeChoices(button: Button): typeof SNOOZE_CHOICES {
+  const chosen = button.snooze?.length ? button.snooze : DEFAULT_SNOOZE;
+  return SNOOZE_CHOICES.filter((choice) => chosen.includes(choice.key));
+}
 
 /** A button of a live card, as it is shown. */
 export interface LiveButton {
@@ -34,7 +55,7 @@ export interface LiveButton {
   icon: string;
   // Snooze is the quiet one: a background only on hover.
   plain: boolean;
-  // Snooze that asks for the time.
+  // Snooze that offers its times.
   ask: boolean;
 }
 
@@ -68,23 +89,10 @@ export function stepOf(notification: Notification, stepId: string): Step | undef
   return notification.steps.find((item) => item.id === stepId);
 }
 
-export function snoozeOf(
-  button: Button,
-  notification: Notification,
-  category: Category | undefined,
-): Snooze {
-  if (button.snooze === "ask") return { type: "ask" };
-  if (button.snooze && typeof button.snooze === "object") {
-    return { type: "fixed", duration: button.snooze as Duration };
-  }
-  return notification.snooze ?? category?.snooze ?? { type: "ask" };
-}
-
 const DEFAULTS: Record<string, { label: string; icon: string }> = {
   done: { label: "Done", icon: "mdi:check" },
   snooze: { label: "Snooze", icon: "mdi:alarm-snooze" },
   dismiss: { label: "Dismiss", icon: "mdi:close" },
-  keep_silent: { label: "Mute", icon: "mdi:volume-off" },
   custom: { label: "", icon: "mdi:gesture-tap-button" },
 };
 
@@ -93,22 +101,11 @@ const ORDER = ["snooze", "custom", "done", "dismiss"];
 
 /** The buttons a card shows, in their fixed order. */
 export function liveButtons(live: LiveCard): LiveButton[] {
-  const { card, notification, category, step } = live;
   const result: LiveButton[] = [];
-  for (const button of step?.buttons ?? []) {
+  for (const button of live.step?.buttons ?? []) {
     if (!button.enabled || button.type === "tap") continue;
-    // Mute is gone once the card is silent.
-    if (button.card === "keep_silent" && card.silenced) continue;
-    let ask = false;
-    if (button.card === "snooze") {
-      const snooze = snoozeOf(button, notification, category);
-      if (snooze.type === "not_allowed") continue;
-      ask = snooze.type === "ask";
-    }
-    const defaults =
-      (button.type === "dismiss" && button.card === "keep_silent"
-        ? DEFAULTS.keep_silent
-        : DEFAULTS[button.type]) ?? DEFAULTS.custom;
+    const ask = button.type === "snooze" && snoozeChoices(button).length > 1;
+    const defaults = DEFAULTS[button.type] ?? DEFAULTS.custom;
     result.push({
       button,
       key: button.id,
@@ -125,7 +122,7 @@ export function liveButtons(live: LiveCard): LiveButton[] {
 export function tapButton(live: LiveCard): Button | undefined {
   const tap = live.step?.buttons.find((button) => button.type === "tap" && button.enabled);
   if (!tap) return undefined;
-  if (tap.card === "keep" && tap.action.type === "nothing") return undefined;
+  if (tap.action.type === "nothing") return undefined;
   return tap;
 }
 
@@ -196,12 +193,16 @@ export async function pressButton(
   element: HTMLElement,
   live: LiveCard,
   button: Button,
-  until?: Date,
+  choice?: string,
 ): Promise<void> {
   const { card } = live;
   const action = button.action ?? { type: "nothing" };
+  // Done, Dismiss and Snooze change the card in Home Assistant, where the
+  // Home Assistant and entity actions run too.
   const backend =
-    button.card !== "keep" || action.type === "ha_action" || action.type === "entity_action";
+    ["done", "dismiss", "snooze"].includes(button.type) ||
+    action.type === "ha_action" ||
+    action.type === "entity_action";
   if (backend) {
     await hass.callWS({
       type: `${DOMAIN}/card/press`,
@@ -209,7 +210,7 @@ export async function pressButton(
       step_id: card.step_id,
       entity_id: card.entity_id,
       button_id: button.id,
-      ...(until ? { until: until.toISOString() } : {}),
+      ...(choice ? { choice } : {}),
     });
   }
   if (action.type === "more_info") {

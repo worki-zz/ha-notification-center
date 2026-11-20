@@ -33,7 +33,13 @@ async function load(): Promise<boolean> {
     await config.routerOptions.routes.automation.load();
   }
   await Promise.all(
-    ["ha-automation-trigger", "ha-automation-condition", "hass-subpage", "ha-selector"].map(
+    [
+      "ha-automation-trigger",
+      "ha-automation-condition",
+      "ha-automation-action",
+      "hass-subpage",
+      "ha-selector",
+    ].map(
       (name) => customElements.whenDefined(name),
     ),
   );
@@ -132,6 +138,7 @@ const SELECTORS: Record<string, Record<string, unknown>> = {
   state: { state: {} },
   choose: { choose: { choices: { a: { selector: { text: {} } } } } },
   template: { template: {} },
+  navigation: { navigation: {} },
 };
 
 async function loadSelectors(): Promise<void> {

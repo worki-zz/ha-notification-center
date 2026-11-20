@@ -129,10 +129,10 @@ export function newStep(): EditorStep {
     show_when: { start: true, hide: true, conditions: [] },
     done_when: { triggers: [], start_no_longer_true: false },
     buttons: [
-      builtin("tap", false, "keep", { type: "more_info" }),
-      builtin("done", true, "done"),
-      builtin("dismiss", false, "dismiss"),
-      builtin("snooze", false, "snooze"),
+      builtin("tap", false, { type: "more_info" }),
+      builtin("done", true),
+      builtin("dismiss", false),
+      builtin("snooze", false),
     ],
     audience: [],
   };
@@ -141,10 +141,55 @@ export function newStep(): EditorStep {
 function builtin(
   type: Button["type"],
   enabled: boolean,
-  card: Button["card"],
   action: Button["action"] = { type: "nothing" },
 ): Button {
-  return { id: "", type, enabled, card, action, confirm: false } as Button;
+  return { id: newId(), type, enabled, action, confirm: false } as Button;
+}
+
+/** A new id for an item, so an entity action can point to a new button. */
+export function newId(): string {
+  return crypto.randomUUID().replace(/-/g, "");
+}
+
+/** A place for an entity action: a switched on button that runs one. */
+export interface ActionSlot {
+  id: string;
+  label: string;
+}
+
+const BUTTON_NAMES: Record<string, string> = {
+  tap: "Tap on the card",
+  done: "Done",
+  dismiss: "Dismiss",
+  snooze: "Snooze",
+  custom: "Button",
+};
+
+/**
+ * The buttons whose action is Entity action, in every step ("Step 1 ·
+ * Mute"; without the step when there is only one).
+ */
+export function entityActionSlots(draft: EditorNotification): ActionSlot[] {
+  const many = draft.steps.length > 1;
+  return draft.steps.flatMap((step, index) =>
+    step.buttons
+      .filter((button) => button.enabled && button.action?.type === "entity_action" && button.id)
+      .map((button) => {
+        const name = button.type === "tap" ? BUTTON_NAMES.tap : button.label || BUTTON_NAMES[button.type];
+        return { id: button.id, label: many ? `Step ${index + 1} · ${name}` : name };
+      }),
+  );
+}
+
+/** The buttons some entity or entity category has an action for. */
+export function buttonsWithEntityActions(draft: EditorNotification): Set<string> {
+  const ids = new Set<string>();
+  for (const item of [...draft.entities, ...draft.entity_groups]) {
+    for (const [id, actions] of Object.entries(item.actions ?? {})) {
+      if (Array.isArray(actions) && actions.length) ids.add(id);
+    }
+  }
+  return ids;
 }
 
 function clone<T>(value: T): T {
@@ -246,7 +291,8 @@ export function toEditor(
       triggers: triggers(step.done_when?.triggers),
       start_no_longer_true: step.done_when?.start_no_longer_true ?? false,
     };
-    // Buttons and channels stay as they are (phase 4.2 and 6).
+    // Every button has an id, so an entity action can point to it.
+    for (const button of step.buttons) button.id ||= newId();
   }
   for (const group of draft.entity_groups) {
     group.areas ??= [];

@@ -43,7 +43,9 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert [button["type"] for button in step["buttons"]] == list(BUILTIN_BUTTONS)
     done = next(button for button in step["buttons"] if button["type"] == "done")
     assert done["enabled"] is True
-    assert done["card"] == "done"
+    assert done["show_in_push"] is True
+    snooze = next(button for button in step["buttons"] if button["type"] == "snooze")
+    assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
 
 
 async def test_builtin_buttons_keep_their_settings(hass: HomeAssistant) -> None:
@@ -51,7 +53,7 @@ async def test_builtin_buttons_keep_their_settings(hass: HomeAssistant) -> None:
         hass,
         _with_notification(
             buttons=[
-                {"type": "dismiss", "label": "Mute", "card": "keep_silent"},
+                {"type": "dismiss", "label": "Close", "icon": "mdi:close-box"},
                 {"type": "custom", "label": "Disarm"},
             ]
         ),
@@ -61,10 +63,44 @@ async def test_builtin_buttons_keep_their_settings(hass: HomeAssistant) -> None:
         [*BUILTIN_BUTTONS, "custom"]
     )
     dismiss = next(button for button in buttons if button["type"] == "dismiss")
-    assert dismiss["label"] == "Mute"
-    assert dismiss["card"] == "keep_silent"
+    assert dismiss["label"] == "Close"
     custom = next(button for button in buttons if button["type"] == "custom")
-    assert custom["card"] == "keep"
+    assert custom["show_in_push"] is False
+    assert "card" not in custom
+
+
+async def test_earlier_buttons_and_snooze_are_upgraded(hass: HomeAssistant) -> None:
+    """Mute becomes an own button; the notification's Snooze moves to the button."""
+    data = _with_notification(
+        buttons=[
+            {"id": "mute", "type": "dismiss", "label": "Mute", "card": "keep_silent"},
+            {"type": "custom", "label": "Disarm", "card": "done"},
+            {"type": "snooze", "snooze": "ask"},
+        ]
+    )
+    data["notifications"][0]["snooze"] = {"type": "fixed", "duration": {"hours": 2}}
+    config = await async_validate_config(hass, data)
+    notification = config["notifications"][0]
+    assert "snooze" not in notification
+    buttons = notification["steps"][0]["buttons"]
+    mute = next(button for button in buttons if button["id"] == "mute")
+    assert (mute["type"], mute["label"]) == ("custom", "Mute")
+    assert all("card" not in button for button in buttons)
+    snooze = next(button for button in buttons if button["type"] == "snooze")
+    assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
+
+    data = _with_notification()
+    data["notifications"][0]["snooze"] = {"type": "not_allowed"}
+    config = await async_validate_config(hass, data)
+    buttons = config["notifications"][0]["steps"][0]["buttons"]
+    snooze = next(button for button in buttons if button["type"] == "snooze")
+    assert snooze["enabled"] is False
+
+    data = _with_notification(buttons=[{"type": "snooze", "snooze": {"minutes": 20}}])
+    config = await async_validate_config(hass, data)
+    buttons = config["notifications"][0]["steps"][0]["buttons"]
+    snooze = next(button for button in buttons if button["type"] == "snooze")
+    assert snooze["snooze"] == ["15m"]
 
 
 async def test_durations_times_and_dates_stay_plain(hass: HomeAssistant) -> None:

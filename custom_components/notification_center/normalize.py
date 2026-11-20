@@ -33,6 +33,7 @@ from .model import (
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
     new_id,
+    upgrade_buttons,
     upgrade_listed,
     upgrade_show_when,
 )
@@ -149,6 +150,7 @@ def normalize_notification(
     notification = copy.deepcopy(data)
     upgrade_listed(notification)
     upgrade_show_when(notification)
+    upgrade_buttons(notification)
     steps = notification.get("steps")
     for step in steps if isinstance(steps, list) else []:
         # A new step gets its id now, so a step number can point to it.
