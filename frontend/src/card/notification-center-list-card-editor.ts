@@ -12,12 +12,14 @@ const LABELS: Record<string, string> = {
   categories: "Categories",
   max_cards: "Maximum cards",
   ignore_audience: "Ignore audience",
+  show_empty: "Show empty state",
 };
 
 const HELPERS: Record<string, string> = {
   categories: "Leave empty for every category.",
   max_cards: "Leave empty to show every card. The rest opens the Notification Center.",
   ignore_audience: "Also show the cards meant for other people.",
+  show_empty: "While nothing is active, show the card with All done instead of hiding it.",
 };
 
 interface SchemaItem {
@@ -81,6 +83,7 @@ class NotificationCenterListCardEditor extends LitElement {
       },
       { name: "max_cards", selector: { number: { min: 1, mode: "box" } } },
       { name: "ignore_audience", selector: { boolean: {} } },
+      { name: "show_empty", selector: { boolean: {} } },
     ];
   }
 

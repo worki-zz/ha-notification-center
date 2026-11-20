@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Notification Center card: **Show empty state** (`show_empty`). While nothing is active, the card stays on the dashboard and says *All done* instead of hiding itself.
+
 ### Changed
 
 - Overview with nothing active: *All done* under a large icon in the text colour, centred, with more room above and below.

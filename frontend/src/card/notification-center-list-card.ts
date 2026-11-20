@@ -26,6 +26,8 @@ export interface NotificationCenterCardConfig {
   max_cards?: number;
   // Also the cards meant for other people.
   ignore_audience?: boolean;
+  // Stay on the dashboard while nothing is active, saying All done.
+  show_empty?: boolean;
 }
 
 // How often relative times are written again.
@@ -137,7 +139,7 @@ export class NotificationCenterListCard extends LitElement {
   }
 
   private _shouldHide(): boolean {
-    if (this.preview) return false;
+    if (this.preview || this._config?.show_empty) return false;
     const cards = this._cards();
     // Until the data is there, stay as it is.
     if (!cards) return this.hidden;
@@ -151,7 +153,7 @@ export class NotificationCenterListCard extends LitElement {
     }
     const cards = this._cards();
     if (!cards?.length) {
-      if (!this.preview) return nothing;
+      if (!this.preview && !this._config.show_empty) return nothing;
       return html`<notification-center-view
                 .hass=${this.hass}
         .view=${{
@@ -224,7 +226,7 @@ if (!window.customCards.some((card) => card.type === LIST_CARD_TYPE)) {
     type: LIST_CARD_TYPE,
     name: "Notification Center",
     description:
-      "Every active notification of the Notification Center, with its buttons. Hidden while nothing is active.",
+      "Every active notification of the Notification Center, with its buttons. Hidden while nothing is active, unless Show empty state is on.",
     preview: true,
     documentationURL: "https://github.com/worki-zz/ha-notification-center",
   });
