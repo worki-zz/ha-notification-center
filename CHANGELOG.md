@@ -1,10 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.4.13
+
+### Added
+
+- Message parameter **{Device class}**: the device class of the card's entity by its Home Assistant name (*Moisture*). Device classes are shown by these names in the editor too.
 
 ### Changed
 
+- Editor, step: the blocks are Message, Interactions, then Activation, Conditions and Done (*Done when* is now *Done*), then Audience, with more room between the groups and as much room between blocks as above the steps.
+- Editor: every switch is at the start of its row. Rows of buttons, entities and entity categories open their dialog anywhere on the row and have an edit button at the end. The entities of a category have their own icon, and their switches line up with the category's.
+- Editor, Activation and Done: the built-in rows (Notification entities, Done when activation conditions no longer true) are above the Triggers title; Notification entities has the background of the other built-in rows and even padding.
+- Editor, Message: the parameters sit closer to the message; with no Data, Info and Data share a row; the Data fields line up.
+- Editor, Interactions: no *Custom buttons* title over the own buttons.
+- Entity dialog: the entity cannot be changed there any more (its name is the title), only deleted. Entity category dialog: the number of matching entities is an info box, the *Add new matching entities* row is tighter, and *Entity actions* and the button names under it stand out more.
+- More info action: the entity picker works as Data's (empty is the card's entity).
+- Settings list: more room after the drag handle; the icon is formatted as the tile card's; the status chips use the entity badges' rounding. Audience pictures use Home Assistant's rounding.
 - Schedule: the section titles are *This week*, *This month*, *This year* and *Next year*; a date is written with its weekday in full, date first (*Nov 15, Wednesday*).
+
+### Fixed
+
+- Adding an action in a dialog (a button's Action, Entity actions) works again; the dialog no longer closes.
+- *Leave* on the unsaved changes question goes to the list again instead of staying in the editor.
 
 ## 0.4.12
 
