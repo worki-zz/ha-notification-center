@@ -1,6 +1,7 @@
 // The settings of the Notification Center: the Notifications list and the
 // General tab, in Home Assistant's own subpage layout.
 
+import { mdiBellOutline, mdiCogOutline, mdiShapeOutline } from "@mdi/js";
 import { LitElement, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
@@ -35,9 +36,6 @@ export class NcSettings extends LitElement {
 
   @property() public tab: SettingsTab = "notifications";
 
-  // A page of the General tab, such as "modes".
-  @property() public sub = "";
-
   // The panel's own path, such as /notification-center.
   @property() public base = "/notification-center";
 
@@ -65,9 +63,9 @@ export class NcSettings extends LitElement {
   protected override render() {
     const base = `${this.base}/settings`;
     const tabs = [
-      { path: `${base}/notifications`, name: "Notifications" },
-      { path: `${base}/categories`, name: "Categories" },
-      { path: `${base}/general`, name: "General" },
+      { path: `${base}/notifications`, name: "Notifications", iconPath: mdiBellOutline },
+      { path: `${base}/categories`, name: "Categories", iconPath: mdiShapeOutline },
+      { path: `${base}/general`, name: "General", iconPath: mdiCogOutline },
     ];
     const route = { prefix: "", path: `${base}/${this.tab}` };
     return html`
@@ -86,9 +84,7 @@ export class NcSettings extends LitElement {
             ? html`<nc-settings-general
                 .hass=${this.hass}
                 .config=${this.config}
-                .state=${this.state}
-                .hasData=${this.hasData}
-                .sub=${this.sub}
+                .narrow=${this.narrow}
                 .base=${this.base}
               ></nc-settings-general>`
             : this.tab === "categories"
@@ -133,10 +129,8 @@ export class NcSettings extends LitElement {
               <ha-icon .icon=${item.icon || "mdi:bell"}></ha-icon>
             </div>
             <span slot="headline">${item.name}</span>
-            <div slot="end" class="end count">
-              ${count === 1 ? "1 notification" : `${count} notifications`}
-              <ha-icon icon="mdi:chevron-right"></ha-icon>
-            </div>
+            <span slot="supporting-text">${count === 1 ? "1 notification" : `${count} notifications`}</span>
+            ${this.narrow ? nothing : html`<ha-icon-next slot="end"></ha-icon-next>`}
           </ha-list-item-button>`;
         })}
       </ha-list-base>
@@ -366,8 +360,8 @@ export class NcSettings extends LitElement {
     .content {
       max-width: 1040px;
       margin: 0 auto;
-      /* As much room under the header as on the overview. */
-      padding: 32px 16px 16px;
+      /* As much room at the sides as under the header. */
+      padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;

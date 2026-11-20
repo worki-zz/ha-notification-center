@@ -31,6 +31,7 @@ import { subscribeStore, type StoreData } from "../shared/store";
 import { isTemplate, replacePlaceholders } from "../shared/text";
 import type { HomeAssistant, PanelInfo } from "../shared/types";
 import "./category-editor";
+import "./general-page";
 import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";
 import "./settings-page";
@@ -474,6 +475,17 @@ export class NotificationCenterPanel extends LitElement {
         .base=${base}
       ></nc-category-editor>`;
     }
+    if (parts[1] === "general" && parts[2]) {
+      return html`<nc-general-page
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .config=${config}
+        .state=${state}
+        .hasData=${hasData ?? false}
+        .page=${parts[2]}
+        .base=${base}
+      ></nc-general-page>`;
+    }
     if (parts[1] === "notifications" && parts[2]) {
       return html`<nc-notification-editor
         .hass=${this.hass}
@@ -491,7 +503,6 @@ export class NotificationCenterPanel extends LitElement {
       .state=${state}
       .hasData=${hasData ?? false}
       .tab=${parts[1] === "general" || parts[1] === "categories" ? parts[1] : "notifications"}
-      .sub=${parts[1] === "general" ? (parts[2] ?? "") : ""}
       .base=${base}
     ></nc-settings>`;
   }
@@ -515,6 +526,7 @@ export class NotificationCenterPanel extends LitElement {
       color: var(--primary-text-color);
     }
     nc-settings,
+    nc-general-page,
     nc-category-editor,
     nc-notification-editor {
       flex: 1;
@@ -569,7 +581,7 @@ export class NotificationCenterPanel extends LitElement {
     .content {
       max-width: 640px;
       margin: 0 auto;
-      padding: 32px 16px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;

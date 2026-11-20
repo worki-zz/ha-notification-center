@@ -111,7 +111,6 @@ const CATEGORY_ENABLED: Record<string, boolean> = {
   dismiss: false,
   snooze: false,
 };
-const PUSH_BUTTONS = ["done", "snooze", "dismiss"];
 
 /** A category's buttons with every setting filled in. */
 export function categoryButtons(category: Category | undefined): CategoryButton[] {
@@ -135,7 +134,7 @@ export function categoryButtons(category: Category | undefined): CategoryButton[
             : DEFAULT_SNOOZE
           : undefined,
       show_in_push:
-        button.type === "tap" ? undefined : (button.show_in_push ?? PUSH_BUTTONS.includes(button.type)),
+        button.type === "tap" ? undefined : (button.show_in_push ?? true),
       push_tap: button.type === "tap" ? (button.push_tap ?? true) : undefined,
     }),
   );
@@ -180,7 +179,7 @@ export function effectiveButtons(
     result.push({
       ...entry,
       enabled: entry.enabled ?? true,
-      show_in_push: entry.show_in_push ?? false,
+      show_in_push: entry.show_in_push ?? true,
       category: false,
     });
   }

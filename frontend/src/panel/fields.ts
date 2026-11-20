@@ -11,6 +11,7 @@ export interface FieldOptions {
   className?: string;
   // A choice that can be emptied with a clear button.
   clearable?: boolean;
+  placeholder?: string;
 }
 
 interface SelectSelector {
@@ -52,6 +53,7 @@ export function field(
     .value=${value}
     .label=${label}
     .helper=${options.helper}
+    .placeholder=${options.placeholder}
     .required=${options.required ?? false}
     @value-changed=${(ev: CustomEvent<{ value: unknown }>) => {
       ev.stopPropagation();
