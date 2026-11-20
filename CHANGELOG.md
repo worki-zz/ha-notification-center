@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Button dialogs in a notification: a label that comes from the category can be changed in YAML only again (as before 0.5.1); a notification's own custom buttons keep their label field. In the category, a built-in button's label still has X to go back to the default.
+
 ## 0.5.1
 
 ### Changed

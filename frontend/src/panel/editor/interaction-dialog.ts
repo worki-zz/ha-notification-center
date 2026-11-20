@@ -136,10 +136,11 @@ export class NcInteractionDialog extends LitElement {
       button.type === "tap"
         ? defaults.label
         : button.label || inherited?.label || defaults.label;
-    // The label: every button but Tap behavior. A built-in or inherited
-    // label can be changed and cleared again (X); a custom button of its
-    // own needs one.
-    const labelled = button.type !== "tap";
+    // The label: every button of a category (a built-in one can be changed
+    // and cleared again with X), and a notification's own custom buttons.
+    // A label from the category is changed in a notification in YAML only.
+    const labelled =
+      button.type !== "tap" && (category || (button.type === "custom" && !inherited));
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
@@ -160,7 +161,9 @@ export class NcInteractionDialog extends LitElement {
           ? html`<div class="row">
               ${this._labelField(button)} ${this._iconField(button)}
             </div>`
-          : nothing}
+          : button.type === "tap"
+            ? nothing
+            : this._iconField(button)}
         ${inherited ? this._renderPushChoice(button, inherited) : this._renderPush(button)}
         ${button.type === "snooze" ? this._renderSnooze(button) : nothing}
         ${category ? nothing : this._renderActionPart(action)}
