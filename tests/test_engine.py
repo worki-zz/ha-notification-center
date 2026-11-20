@@ -1038,7 +1038,12 @@ async def test_button_press(
                         ],
                     },
                 },
-                {"type": "snooze", "id": "snooze", "snooze": ["30m", "2h"]},
+                {
+                    "type": "snooze",
+                    "id": "snooze",
+                    "enabled": True,
+                    "snooze": ["30m", "2h"],
+                },
             ]
         ),
         entities=[

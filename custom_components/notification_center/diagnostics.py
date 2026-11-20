@@ -42,7 +42,7 @@ async def async_get_config_entry_diagnostics(
     return {
         "version": runtime.version,
         "config": async_redact_data(runtime.manager.config, TO_REDACT),
-        "mode": engine.modes.current.get("id"),
+        "mode": engine.modes.current["id"] if engine.modes.current else None,
         "cards": [
             async_redact_data(card.as_dict(), TO_REDACT)
             for card in engine.cards.values()

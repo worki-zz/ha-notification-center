@@ -1,8 +1,10 @@
 """The current mode of the home.
 
 Modes are checked in their order; the first one whose condition is true is
-the current mode. Home has no condition and is always last, so it applies
-when no other mode does.
+the current mode. A mode without a condition (only Home can be one) is
+always true; it is kept last, so it applies when no other mode does. When
+Home has a condition too, there can be no current mode: then every channel
+sends, whatever its modes.
 """
 
 from __future__ import annotations
@@ -21,8 +23,6 @@ from homeassistant.helpers.event import (
     async_track_template_result,
 )
 from homeassistant.helpers.template import Template, result_as_boolean
-
-from .model import HOME_MODE_ID
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,13 +43,7 @@ class ModeTracker:
         self._unsub_states: CALLBACK_TYPE | None = None
         self._template_info: TrackTemplateResultInfo | None = None
         self._templates: dict[str, Template] = {}
-        self.current: dict[str, Any] = self._home()
-
-    def _home(self) -> dict[str, Any]:
-        for mode in self.modes:
-            if mode["id"] == HOME_MODE_ID:
-                return mode
-        return {"id": HOME_MODE_ID, "name": "Home"}
+        self.current: dict[str, Any] | None = None
 
     @callback
     def async_start(self) -> None:
@@ -91,20 +85,22 @@ class ModeTracker:
     @callback
     def _changed(self, *_: Any) -> None:
         mode = self._evaluate()
-        if mode["id"] != self.current["id"]:
+        if _mode_id(mode) != _mode_id(self.current):
             self.current = mode
             self._on_change()
 
-    def _evaluate(self) -> dict[str, Any]:
+    def _evaluate(self) -> dict[str, Any] | None:
         for mode in self.modes:
             condition = mode.get("condition")
-            if condition and self._is_true(mode["id"], condition):
+            if not condition or self._is_true(mode["id"], condition):
                 return mode
-        return self._home()
+        return None
 
     def _is_true(self, mode_id: str, condition: dict[str, Any]) -> bool:
         kind = condition["type"]
         if kind == "template":
+            if mode_id not in self._templates:
+                return False
             try:
                 return result_as_boolean(
                     self._templates[mode_id].async_render(parse_result=False)
@@ -118,3 +114,7 @@ class ModeTracker:
         if kind == "toggle":
             return state.state == STATE_ON
         return state.state == str(condition["state"])
+
+
+def _mode_id(mode: dict[str, Any] | None) -> str | None:
+    return mode["id"] if mode else None

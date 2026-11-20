@@ -91,6 +91,7 @@ from .model import (
     ENTITIES_KINDS,
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
+    effective_buttons,
     entities_references,
 )
 from .modes import ModeTracker
@@ -1851,7 +1852,7 @@ class Engine:
                 }
         return {
             "state": total,
-            "mode": self.modes.current.get("name"),
+            "mode": self.modes.current["name"] if self.modes.current else None,
             "categories": counts,
             "top_notification": top["notification"] if top else None,
             "top_message": top["message"] if top else None,
@@ -1860,7 +1861,7 @@ class Engine:
     def snapshot(self) -> dict[str, Any]:
         """Return every notification's state and cards for the websocket API."""
         return {
-            "mode": self.modes.current.get("id"),
+            "mode": self.modes.current["id"] if self.modes.current else None,
             "notifications": {
                 notification["id"]: {
                     "state": self.notification_state(notification["id"]),
@@ -1996,10 +1997,19 @@ class Engine:
     def button_of(self, card: Card, button_id: str) -> dict[str, Any] | None:
         """Return a switched on button of a card's step."""
         step = self._step_config(card.notification_id, card.step_id) or {}
+        notification = self.notification_config(card.notification_id) or {}
+        category = next(
+            (
+                item
+                for item in self._config["categories"]
+                if item["id"] == notification.get("category")
+            ),
+            None,
+        )
         return next(
             (
                 button
-                for button in step.get("buttons", [])
+                for button in effective_buttons(category, step)
                 if button["id"] == button_id and button.get("enabled", True)
             ),
             None,

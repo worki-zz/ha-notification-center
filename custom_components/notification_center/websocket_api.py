@@ -95,6 +95,7 @@ def async_register(hass: HomeAssistant) -> None:
         ws_set_enabled,
         ws_update_person,
         ws_update_general,
+        ws_set_mode_channels,
         ws_export,
         ws_import,
         ws_state_subscribe,
@@ -310,6 +311,27 @@ async def ws_update_general(
 ) -> None:
     """Save the general settings."""
     await manager.async_update_general(msg["data"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/mode/set_channels",
+        vol.Required("mode_id"): str,
+        vol.Required("channels"): [str],
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_set_mode_channels(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: ConfigManager,
+) -> None:
+    """Switch a new mode on for the chosen channels of every category."""
+    await manager.async_set_mode_channels(msg["mode_id"], msg["channels"])
     connection.send_result(msg["id"])
 
 
