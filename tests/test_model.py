@@ -38,8 +38,12 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert notification["enabled"] is True
     step = notification["steps"][0]
     assert step["enabled"] is True
-    assert step["start"] == {"type": "triggers", "triggers": []}
-    assert step["show_when"] == {"start": True, "hide": True, "conditions": []}
+    assert step["activation"] == {"type": "triggers", "triggers": []}
+    assert step["conditions"] == {
+        "activate_only_while_met": True,
+        "hide_while_not_met": True,
+        "conditions": [],
+    }
     assert [button["type"] for button in step["buttons"]] == list(BUILTIN_BUTTONS)
     done = next(button for button in step["buttons"] if button["type"] == "done")
     assert done["enabled"] is True
@@ -107,7 +111,7 @@ async def test_durations_times_and_dates_stay_plain(hass: HomeAssistant) -> None
     config = await async_validate_config(
         hass,
         _with_notification(
-            start={
+            activation={
                 "type": "schedule",
                 "schedule": {
                     "type": "calendar",
@@ -121,7 +125,7 @@ async def test_durations_times_and_dates_stay_plain(hass: HomeAssistant) -> None
             }
         ),
     )
-    schedule = config["notifications"][0]["steps"][0]["start"]["schedule"]
+    schedule = config["notifications"][0]["steps"][0]["activation"]["schedule"]
     assert schedule["at"] == "10:00"
     assert schedule["starting"] == "2026-11-01"
     assert schedule["expires"] == {"days": 1, "hours": 12}
@@ -132,7 +136,7 @@ async def test_interval_zero_and_entity(hass: HomeAssistant) -> None:
         config = await async_validate_config(
             hass,
             _with_notification(
-                start={
+                activation={
                     "type": "schedule",
                     "schedule": {
                         "type": "after_last_done",
@@ -143,7 +147,7 @@ async def test_interval_zero_and_entity(hass: HomeAssistant) -> None:
             ),
         )
         assert (
-            config["notifications"][0]["steps"][0]["start"]["schedule"]["every"]
+            config["notifications"][0]["steps"][0]["activation"]["schedule"]["every"]
             == every
         )
 
@@ -184,19 +188,19 @@ async def test_interval_zero_and_entity(hass: HomeAssistant) -> None:
         (lambda c: c["notifications"][0].update(colour="red"), "colour"),
         (
             lambda c: c["notifications"][0]["steps"][0].update(
-                start={"type": "triggers", "triggers": [{"trigger": "state"}]}
+                activation={"type": "triggers", "triggers": [{"trigger": "state"}]}
             ),
-            "start",
+            "activation",
         ),
         (
             lambda c: c["notifications"][0]["steps"][0].update(
-                show_when={"conditions": [{"condition": "state"}]}
+                conditions={"conditions": [{"condition": "state"}]}
             ),
-            "show when",
+            "conditions",
         ),
         (
             lambda c: c["notifications"][0]["steps"][0].update(
-                start={
+                activation={
                     "type": "triggers",
                     "triggers": [
                         {
@@ -256,17 +260,39 @@ async def test_start_conditions_and_hide_while_become_show_when(
     config = await async_validate_config(hass, data)
     steps = config["notifications"][0]["steps"]
     not_rain = {"condition": "not", "conditions": [rain]}
-    assert steps[0]["show_when"] == {"start": True, "hide": False, "conditions": [away]}
-    assert steps[1]["show_when"] == {
-        "start": False,
-        "hide": True,
-        "conditions": [not_rain],
+
+    def conditions(activate: bool, hide: bool, items: list[Any]) -> dict[str, Any]:
+        return {
+            "activate_only_while_met": activate,
+            "hide_while_not_met": hide,
+            "conditions": items,
+        }
+
+    assert steps[0]["conditions"] == conditions(True, False, [away])
+    assert steps[1]["conditions"] == conditions(False, True, [not_rain])
+    assert steps[2]["conditions"] == conditions(True, True, [away, not_rain])
+    assert steps[3]["conditions"] == conditions(True, True, [])
+    assert all("hide_while" not in step and "show_when" not in step for step in steps)
+    assert all("conditions" not in step["activation"] for step in steps)
+
+
+async def test_earlier_field_names_are_renamed(hass: HomeAssistant) -> None:
+    """Show when, start and Start condition no longer true get their new names."""
+    away = {"condition": "state", "entity_id": "input_boolean.away", "state": "off"}
+    data = _with_notification()
+    first = data["notifications"][0]["steps"][0]
+    first.pop("activation", None)
+    first["start"] = {"type": "triggers", "triggers": []}
+    first["show_when"] = {"start": False, "hide": True, "conditions": [away]}
+    first["done_when"] = {"start_no_longer_true": True}
+    config = await async_validate_config(hass, data)
+    step = config["notifications"][0]["steps"][0]
+    assert step["activation"] == {"type": "triggers", "triggers": []}
+    assert step["conditions"] == {
+        "activate_only_while_met": False,
+        "hide_while_not_met": True,
+        "conditions": [away],
     }
-    assert steps[2]["show_when"] == {
-        "start": True,
-        "hide": True,
-        "conditions": [away, not_rain],
-    }
-    assert steps[3]["show_when"] == {"start": True, "hide": True, "conditions": []}
-    assert all("hide_while" not in step for step in steps)
-    assert all("conditions" not in step["start"] for step in steps)
+    assert step["done_when"]["activation_conditions_no_longer_true"] is True
+    assert "show_when" not in step
+    assert "start" not in step

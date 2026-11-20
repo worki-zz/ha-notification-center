@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
+import "./dialog-back";
 import { loadDashboardElements } from "../card/elements";
 import {
   cssColor,

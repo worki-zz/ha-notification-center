@@ -36,6 +36,7 @@ from .model import (
     upgrade_buttons,
     upgrade_listed,
     upgrade_show_when,
+    upgrade_terms,
 )
 
 _GROUP_FILTER = ("domain", "device_class", "areas", "floors", "labels")
@@ -150,6 +151,7 @@ def normalize_notification(
     notification = copy.deepcopy(data)
     upgrade_listed(notification)
     upgrade_show_when(notification)
+    upgrade_terms(notification)
     upgrade_buttons(notification)
     steps = notification.get("steps")
     for step in steps if isinstance(steps, list) else []:
@@ -159,15 +161,15 @@ def normalize_notification(
     for step in steps if isinstance(steps, list) else []:
         if not isinstance(step, dict):
             continue
-        start = step.get("start")
+        start = step.get("activation")
         if isinstance(start, dict) and "triggers" in start:
             start["triggers"] = _items(
                 hass, config, notification, start["triggers"], "trigger"
             )
-        show_when = step.get("show_when")
-        if isinstance(show_when, dict) and "conditions" in show_when:
-            show_when["conditions"] = _items(
-                hass, config, notification, show_when["conditions"], "condition"
+        conditions = step.get("conditions")
+        if isinstance(conditions, dict) and "conditions" in conditions:
+            conditions["conditions"] = _items(
+                hass, config, notification, conditions["conditions"], "condition"
             )
         done_when = step.get("done_when")
         if isinstance(done_when, dict) and "triggers" in done_when:

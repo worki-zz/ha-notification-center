@@ -51,9 +51,10 @@ async def _move(hass: HomeAssistant, freezer: FrozenDateTimeFactory, when: str) 
 def _scheduled(schedule: dict[str, Any], **extra: Any) -> dict[str, Any]:
     return {
         "message": extra.pop("message", "Do it"),
-        "start": {
-            "type": "schedule",
-            "schedule": schedule,
+        "activation": {"type": "schedule", "schedule": schedule},
+        "conditions": {
+            "activate_only_while_met": True,
+            "hide_while_not_met": False,
             "conditions": extra.pop("conditions", []),
         },
         **extra,

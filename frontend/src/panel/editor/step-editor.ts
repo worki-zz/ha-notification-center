@@ -41,10 +41,10 @@ const HELP: Record<StartKind | "show" | "done" | "interactions", { title: string
   triggers: {
     title: "Triggers",
     text: [
-      "The step starts when one of its triggers fires, like an automation.",
+      "The step is activated when one of its triggers fires, like an automation.",
       "Notification entities, at the top, watches the entities of the Entities block: every entity gets its own card when it starts to match, for example when a leak sensor turns on. State tests the state or an attribute; Numeric state tests a number against a limit. Left empty, it is not used.",
-      "The Notification entities triggers in the list do the same with the entities of any notification, and Notification state starts the step when this or another notification (or one of its steps) reaches a state, for example when step 1 is snoozed.",
-      "Without triggers, only the Trigger action (or Run now) starts the step.",
+      "The Notification entities triggers in the list do the same with the entities of any notification, and Notification state activates the step when this or another notification (or one of its steps) reaches a state, for example when step 1 is snoozed.",
+      "Without triggers, only the Trigger action (or Run now) activates the step.",
     ],
   },
   schedule: {
@@ -63,11 +63,11 @@ const HELP: Record<StartKind | "show" | "done" | "interactions", { title: string
     ],
   },
   show: {
-    title: "Show when",
+    title: "Conditions",
     text: [
       "One set of conditions, used as switched on above them.",
-      "Start while conditions are met: the step starts only when they are all true at that moment, for example the door card only while the alarm is armed. A scheduled card waits for them, hidden, until it expires.",
-      "Hide while conditions are not met: an open card is hidden while any of them is false, and shows again when they are all true, for example the window card only while the heating is on. Push and light come again when it shows.",
+      "Activate only while conditions are met: the step is activated only when they are all true at that moment, for example the door card only while the alarm is armed. A scheduled card waits for them, hidden, until it expires.",
+      "Hide active notification while conditions are not met: an active card is hidden while any of them is false, and shows again when they are all true, for example the window card only while the heating is on. Push and light come again when it shows.",
     ],
   },
   interactions: {
@@ -82,7 +82,7 @@ const HELP: Record<StartKind | "show" | "done" | "interactions", { title: string
     title: "Done when",
     text: [
       "The card closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
-      "Start condition no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Start (the leak is dry again), and a card closes when the Show when conditions it started with are no longer met (with Start while conditions are met switched on).",
+      "Done when activation conditions no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a card closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
     ],
   },
 };
@@ -188,17 +188,17 @@ export class NcStepEditor extends LitElement {
     const kind = this._kind(step);
     const doneCount =
       step.done_when.triggers.length +
-      (step.done_when.start_no_longer_true && this._startCanEnd(step) ? 1 : 0);
+      (step.done_when.activation_conditions_no_longer_true && this._startCanEnd(step) ? 1 : 0);
     return html`
       ${this._panel("message", "mdi:message-text-outline", "Message", undefined, this._renderMessage(step))}
       ${this._panel(
         "start",
         "mdi:play-circle-outline",
-        "Start",
-        kind === "triggers" ? this._startCount(step) : undefined,
+        "Activation",
+        kind === "triggers" ? this._startCount(step) : kind === "repeat" ? "Repeat" : "Schedule",
         this._renderStart(step),
       )}
-      ${this._panel("show", "mdi:eye-outline", "Show when", step.show_when.conditions.length, this._renderShow(step))}
+      ${this._panel("show", "mdi:eye-outline", "Conditions", step.conditions.conditions.length, this._renderShow(step))}
       ${this._panel("done", "mdi:check-circle-outline", "Done when", doneCount, this._renderDone(step))}
       ${this._panel(
         "interactions",
@@ -214,14 +214,14 @@ export class NcStepEditor extends LitElement {
   }
 
   private _startCount(step: EditorStep): number {
-    const triggers = step.start.triggers ?? [];
+    const triggers = step.activation.triggers ?? [];
     const pinned = pinnedEntities(step);
     return pinned && !entitiesFilled(pinned.kind, pinned.options) ? triggers.length - 1 : triggers.length;
   }
 
   private _kind(step: EditorStep): StartKind {
-    if (step.start.type === "triggers") return "triggers";
-    return step.start.schedule?.type === "after_last_done" ? "repeat" : "schedule";
+    if (step.activation.type === "triggers") return "triggers";
+    return step.activation.schedule?.type === "after_last_done" ? "repeat" : "schedule";
   }
 
   // -- Message -------------------------------------------------------------
@@ -231,7 +231,6 @@ export class NcStepEditor extends LitElement {
     return html`<div class="block">
       ${this._text("message", "Message", step.message, (value) => this._change({ message: value }))}
       <div class="chips">
-        <span class="chips-label">Entity parameters</span>
         ${PLACEHOLDERS.filter(
           (name) => name !== "Floor" || Object.keys(this.hass?.floors ?? {}).length > 0,
         ).map(
@@ -440,18 +439,18 @@ export class NcStepEditor extends LitElement {
               ev.stopPropagation();
               const pinned = pinnedEntities(step);
               const triggers = pinned ? [pinned.item, ...ev.detail.value] : ev.detail.value;
-              this._change({ start: { ...step.start, triggers } });
+              this._change({ activation: { ...step.activation, triggers } });
             }}
           ></ha-automation-trigger>`
         : html`<nc-schedule-editor
             .hass=${this.hass}
-            .schedule=${step.start.schedule}
+            .schedule=${step.activation.schedule}
             .notificationId=${this.notificationId}
             .stepId=${step.id}
             .saved=${this.saved}
             @value-changed=${(ev: CustomEvent<{ value: Schedule }>) => {
               ev.stopPropagation();
-              this._change({ start: { ...step.start, schedule: ev.detail.value } });
+              this._change({ activation: { ...step.activation, schedule: ev.detail.value } });
             }}
           ></nc-schedule-editor>`}
     </div>`;
@@ -459,7 +458,7 @@ export class NcStepEditor extends LitElement {
 
   // The triggers of the list: all but the one at the top.
   private _listTriggers(step: EditorStep): Obj[] {
-    const triggers = step.start.triggers ?? [];
+    const triggers = step.activation.triggers ?? [];
     return pinnedEntities(step) ? triggers.slice(1) : triggers;
   }
 
@@ -524,22 +523,22 @@ export class NcStepEditor extends LitElement {
       [PINNED]: true,
     };
     const rest = this._listTriggers(step);
-    this._change({ start: { ...step.start, triggers: [item, ...rest] } });
+    this._change({ activation: { ...step.activation, triggers: [item, ...rest] } });
   }
 
   private _kindChanged(kind: StartKind): void {
     const step = this.step!;
     if (kind === this._kind(step)) return;
     if (kind === "triggers") {
-      this._change({ start: { ...step.start, type: "triggers", triggers: step.start.triggers ?? [] } });
+      this._change({ activation: { ...step.activation, type: "triggers", triggers: step.activation.triggers ?? [] } });
       return;
     }
     const type: Schedule["type"] = kind === "schedule" ? "calendar" : "after_last_done";
     this._change({
       start: {
-        ...step.start,
+        ...step.activation,
         type: "schedule",
-        schedule: defaultSchedule(type, step.start.schedule),
+        schedule: defaultSchedule(type, step.activation.schedule),
       },
     });
   }
@@ -553,29 +552,26 @@ export class NcStepEditor extends LitElement {
     </div>`;
   }
 
-  // -- Show when and Done when ------------------------------------------
+  // -- Conditions and Done when -----------------------------------------
 
   private _renderShow(step: EditorStep) {
-    const show = step.show_when;
-    const toggle = (key: "start" | "hide") => (ev: Event) =>
-      this._change({ show_when: { ...show, [key]: (ev.target as HTMLInputElement).checked } });
+    const show = step.conditions;
+    const toggle = (key: "activate_only_while_met" | "hide_while_not_met") => (ev: Event) =>
+      this._change({ conditions: { ...show, [key]: (ev.target as HTMLInputElement).checked } });
     return html`<div class="block">
       <div class="show-switches">
         <ha-card outlined class="own-row">
           <ha-icon class="builtin" icon="mdi:play-circle-outline"></ha-icon>
-          <div class="own-text">
-            <div>Start while conditions are met</div>
-            <div class="secondary">The step starts only when they are true.</div>
-          </div>
-          <ha-switch .checked=${show.start} @change=${toggle("start")}></ha-switch>
+          <div class="own-text">Activate only while conditions are met</div>
+          <ha-switch
+            .checked=${show.activate_only_while_met}
+            @change=${toggle("activate_only_while_met")}
+          ></ha-switch>
         </ha-card>
         <ha-card outlined class="own-row">
           <ha-icon class="builtin" icon="mdi:eye-off-outline"></ha-icon>
-          <div class="own-text">
-            <div>Hide while conditions are not met</div>
-            <div class="secondary">An open card shows only while they are true.</div>
-          </div>
-          <ha-switch .checked=${show.hide} @change=${toggle("hide")}></ha-switch>
+          <div class="own-text">Hide active notification while conditions are not met</div>
+          <ha-switch .checked=${show.hide_while_not_met} @change=${toggle("hide_while_not_met")}></ha-switch>
         </ha-card>
       </div>
       ${this._title("Conditions", "show")}
@@ -585,18 +581,20 @@ export class NcStepEditor extends LitElement {
         .conditions=${show.conditions}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
-          this._change({ show_when: { ...show, conditions: ev.detail.value } });
+          this._change({ conditions: { ...show, conditions: ev.detail.value } });
         }}
       ></ha-automation-condition>
     </div>`;
   }
 
-  // Start condition no longer true has something to watch: Notification
-  // entities, or Show when used at the start of a triggered step.
+  // Done when activation conditions no longer true has something to watch:
+  // Notification entities, or Conditions used at the activation of a
+  // triggered step.
   private _startCanEnd(step: EditorStep): boolean {
-    const show = step.show_when;
+    const show = step.conditions;
     return (
-      pinnedFilled(step) || (step.start.type === "triggers" && show.start && show.conditions.length > 0)
+      pinnedFilled(step) ||
+      (step.activation.type === "triggers" && show.activate_only_while_met && show.conditions.length > 0)
     );
   }
 
@@ -607,20 +605,14 @@ export class NcStepEditor extends LitElement {
       ${listed
         ? html`<ha-card outlined class="own-row">
             <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
-            <div class="own-text">
-              <div>Start condition no longer true</div>
-              <div class="secondary">
-                The card closes when what started it is no longer true: its entity no longer matches
-                Notification entities, or Show when is no longer met.
-              </div>
-            </div>
+            <div class="own-text">Done when activation conditions no longer true</div>
             <ha-switch
-              .checked=${step.done_when.start_no_longer_true}
+              .checked=${step.done_when.activation_conditions_no_longer_true}
               @change=${(ev: Event) =>
                 this._change({
                   done_when: {
                     ...step.done_when,
-                    start_no_longer_true: (ev.target as HTMLInputElement).checked,
+                    activation_conditions_no_longer_true: (ev.target as HTMLInputElement).checked,
                   },
                 })}
             ></ha-switch>
@@ -687,9 +679,6 @@ export class NcStepEditor extends LitElement {
       this._change({ audience: all ? [] : people.map((person) => person.id).filter((item) => chosen.has(item)) });
     };
     return html`<div class="block">
-      <div class="secondary">
-        Who sees the card (and, later, gets the push). With everyone on, people added later see it too.
-      </div>
       <ha-card outlined class="interactions">
         ${people.map((person) => {
           const on = everyone || audience.includes(person.id);
@@ -712,49 +701,20 @@ export class NcStepEditor extends LitElement {
   }
 
   private _renderInteractions(step: EditorStep) {
+    const rows = this._sortedButtons(step);
+    const tap = rows.filter(({ button }) => button.type === "tap");
+    const builtin = rows.filter(({ button }) => button.type !== "tap" && button.type !== "custom");
+    const custom = rows.filter(({ button }) => button.type === "custom");
+    const card = (items: typeof rows) =>
+      html`<ha-card outlined class="interactions">
+        ${items.map(({ button, index }) => this._interactionRow(step, button, index))}
+      </ha-card>`;
     return html`<div class="block">
+      ${tap.length ? card(tap) : nothing}
       ${this._title("Buttons", "interactions")}
-      <ha-card outlined class="interactions">
-        ${this._sortedButtons(step).map(({ button, index }) => {
-          const defaults = INTERACTION_DEFAULTS[button.type];
-          const label = button.type === "tap" ? defaults.label : button.label || defaults.label;
-          const parts: string[] = [];
-          if (button.type === "snooze") {
-            parts.push(snoozeChoices(button).map((choice) => choice.text).join(", "));
-          }
-          if (button.type !== "snooze" || (button.action?.type ?? "nothing") !== "nothing") {
-            parts.push(actionText(this.hass, button.action));
-          }
-          const open = () => (this._interaction = { index, button });
-          return html`<div
-            class="interaction ${button.enabled ? "" : "off"}"
-            role="button"
-            tabindex="0"
-            @click=${open}
-            @keydown=${(ev: KeyboardEvent) => {
-              if (ev.key === "Enter") open();
-            }}
-          >
-            <ha-icon
-              class=${button.type === "custom" ? "" : "builtin"}
-              .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}
-            ></ha-icon>
-            <div class="own-text">
-              <div>${label}</div>
-              <div class="secondary">${parts.join(" · ")}</div>
-            </div>
-            <ha-switch
-              .checked=${button.enabled}
-              @click=${(ev: Event) => ev.stopPropagation()}
-              @change=${(ev: Event) => {
-                const buttons = [...step.buttons];
-                buttons[index] = { ...button, enabled: (ev.target as HTMLInputElement).checked };
-                this._change({ buttons });
-              }}
-            ></ha-switch>
-          </div>`;
-        })}
-      </ha-card>
+      ${card(builtin)}
+      ${custom.length ? html`<div class="title"><span>Custom buttons</span></div>
+            ${card(custom)}` : nothing}
       <div>
         <ha-button appearance="filled" size="s" @click=${this._addButton}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -763,6 +723,47 @@ export class NcStepEditor extends LitElement {
       </div>
     </div>`;
   }
+
+  private _interactionRow(step: EditorStep, button: Button, index: number) {
+    const defaults = INTERACTION_DEFAULTS[button.type];
+    const label = button.type === "tap" ? defaults.label : button.label || defaults.label;
+    const parts: string[] = [];
+    if (button.type === "snooze") {
+      parts.push(snoozeChoices(button).map((choice) => choice.text).join(", "));
+    }
+    if (button.type !== "snooze" || (button.action?.type ?? "nothing") !== "nothing") {
+      parts.push(actionText(this.hass, button.action));
+    }
+    const open = () => (this._interaction = { index, button });
+    return html`<div
+      class="interaction ${button.enabled ? "" : "off"}"
+      role="button"
+      tabindex="0"
+      @click=${open}
+      @keydown=${(ev: KeyboardEvent) => {
+        if (ev.key === "Enter") open();
+      }}
+    >
+      <ha-icon
+        class=${button.type === "custom" ? "" : "builtin"}
+        .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}
+      ></ha-icon>
+      <div class="own-text">
+        <div>${label}</div>
+        <div class="secondary">${parts.join(" · ")}</div>
+      </div>
+      <ha-switch
+        .checked=${button.enabled}
+        @click=${(ev: Event) => ev.stopPropagation()}
+        @change=${(ev: Event) => {
+          const buttons = [...step.buttons];
+          buttons[index] = { ...button, enabled: (ev.target as HTMLInputElement).checked };
+          this._change({ buttons });
+        }}
+      ></ha-switch>
+    </div>`;
+  }
+
 
   private _addButton(): void {
     this._interaction = {
@@ -887,6 +888,7 @@ export class NcStepEditor extends LitElement {
       margin-inline-end: 4px;
     }
     .title {
+      min-height: 32px;
       display: flex;
       align-items: center;
       gap: 4px;

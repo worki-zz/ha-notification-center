@@ -63,7 +63,7 @@ async def test_own_triggers_in_editor_form(
             "steps": [
                 {
                     "message": "Start",
-                    "start": {
+                    "activation": {
                         "type": "triggers",
                         "triggers": [
                             {
@@ -76,7 +76,7 @@ async def test_own_triggers_in_editor_form(
                 },
                 {
                     "message": "Again",
-                    "start": {
+                    "activation": {
                         "type": "triggers",
                         "triggers": [
                             {
@@ -99,14 +99,14 @@ async def test_own_triggers_in_editor_form(
     )
     steps = item["steps"]
     # An earlier Listed entities trigger becomes Notification entities state.
-    assert steps[0]["start"]["triggers"] == [
+    assert steps[0]["activation"]["triggers"] == [
         {
             "trigger": f"{DOMAIN}.entities_state",
             "notification": item["id"],
             "to": ["on"],
         }
     ]
-    own, washer = steps[1]["start"]["triggers"]
+    own, washer = steps[1]["activation"]["triggers"]
     assert own == {
         "trigger": f"{DOMAIN}.notification_state",
         "notification": item["id"],
@@ -201,7 +201,10 @@ async def test_schedule_preview_and_set_next(
     repeat = {"type": "after_last_done", "every": 2, "unit": "weeks", "at": "10:00"}
     await center.add(
         "Filter",
-        {"message": "Change it", "start": {"type": "schedule", "schedule": repeat}},
+        {
+            "message": "Change it",
+            "activation": {"type": "schedule", "schedule": repeat},
+        },
     )
     notification = center.manager.config["notifications"][0]
     ids = {
