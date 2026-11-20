@@ -364,7 +364,7 @@ export class NotificationCenterPanel extends LitElement {
                 </ha-button>`
               : nothing}
             ${later
-              ? html`<ha-button class="schedule" appearance="plain" @click=${() => this._go("schedule")}>
+              ? html`<ha-button appearance="plain" @click=${() => this._go("schedule")}>
                   <ha-icon slot="start" icon="mdi:calendar"></ha-icon>
                   Schedule
                 </ha-button>`
@@ -567,15 +567,13 @@ export class NotificationCenterPanel extends LitElement {
     h2.section:not(:first-child) {
       margin-top: 24px;
     }
-    /* Done at the left edge of the cards, Schedule at the right. */
+    /* Done and Schedule side by side in the middle. */
     .pages {
       display: flex;
+      justify-content: center;
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 8px;
-    }
-    .pages .schedule {
-      margin-inline-start: auto;
     }
     .empty {
       padding: 32px 16px;
