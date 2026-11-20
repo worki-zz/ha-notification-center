@@ -97,13 +97,14 @@ The card itself reacts to a tap when its Tap button is switched on. The buttons 
 
 ## The Notification Center card
 
-Every active card of the Notification Center on a dashboard, in list order, with working buttons. It hides itself while nothing is active and leaves no gap; in the dashboard editor it shows a *Notification Center* placeholder instead.
+Every active card of the Notification Center on a dashboard, in list order, with working buttons. It hides itself while nothing is active and leaves no gap (unless `show_empty` is on); in the dashboard editor it shows a *Notification Center* placeholder instead.
 
 | Option | Description |
 | --- | --- |
 | `categories` | Only these categories (their ids). Default: all. |
 | `max_cards` | At most this many cards; an "N more" row opens the Notification Center. Default: all. |
 | `ignore_audience` | Also show the cards meant for other people. Default: `false`, only the cards whose audience includes the logged in user's person (or is empty). |
+| `show_empty` | While nothing is active, show the card with *All done* instead of hiding it. Default: `false`. |
 
 ```yaml
 type: custom:notification-center
