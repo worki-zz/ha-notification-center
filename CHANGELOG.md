@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.9
+
+### Changed
+
+- Start conditions and Hide while are now one block, **Show when**, with one set of conditions and two switches: *Start while conditions are met* (the step starts only when they are true; a scheduled card waits for them) and *Hide while conditions are not met* (an open card shows only while they are true). Both are on for a new step. Start no longer has conditions of its own.
+- Saved steps are turned into Show when by themselves: Start conditions alone switch on the start only; Hide while alone becomes its opposite (a Not condition) with the hiding only; with both, the card needs the Start conditions and not Hide while, at the start and while open.
+- Done when, *Start condition no longer true*: also closes a card when the Show when conditions it started with are no longer met (with *Start while conditions are met* on, for a triggered step).
+
 ## 0.4.8
 
 ### Changed

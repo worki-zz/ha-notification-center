@@ -424,23 +424,33 @@ START_SCHEMA = vol.Any(
             vol.Required("type"): "triggers",
             # No triggers: the step starts only with the trigger action.
             vol.Optional("triggers", default=list): TRIGGERS,
-            vol.Optional("conditions", default=list): CONDITIONS,
         }
     ),
     vol.Schema(
         {
             vol.Required("type"): "schedule",
             vol.Required("schedule"): SCHEDULE_SCHEMA,
-            vol.Optional("conditions", default=list): CONDITIONS,
         }
     ),
+)
+
+# Show when: one set of conditions, used at the start (a card starts only
+# while they are met; a scheduled card waits for them) and while a card is
+# open (it is hidden while they are not met), as switched on.
+SHOW_WHEN_SCHEMA = vol.Schema(
+    {
+        vol.Optional("start", default=True): cv.boolean,
+        vol.Optional("hide", default=True): cv.boolean,
+        vol.Optional("conditions", default=list): CONDITIONS,
+    }
 )
 
 DONE_WHEN_SCHEMA = vol.Schema(
     {
         vol.Optional("triggers", default=list): TRIGGERS,
-        # With Listed entities: close an entity's card when the start
-        # condition is no longer true for it.
+        # Close a card when what started it is no longer true: its entity
+        # no longer matches Notification entities, or the Show when
+        # conditions (with Start switched on) are no longer met.
         vol.Optional("start_no_longer_true", default=False): cv.boolean,
     }
 )
@@ -601,7 +611,7 @@ STEP_SCHEMA = _with_id(
         vol.Optional("info"): _optional(cv.string),
         vol.Optional("data"): _optional(DATA_SCHEMA),
         vol.Optional("start", default={"type": "triggers"}): START_SCHEMA,
-        vol.Optional("hide_while", default=list): CONDITIONS,
+        vol.Optional("show_when", default=dict): SHOW_WHEN_SCHEMA,
         vol.Optional("done_when", default=dict): DONE_WHEN_SCHEMA,
         vol.Optional("buttons", default=list): _buttons,
         # People who see the card and get the push; empty means everyone.
@@ -858,10 +868,39 @@ def upgrade_listed(notification: dict[str, Any]) -> None:
             (done_when.get("triggers"), "trigger"),
             (start.get("conditions"), "condition"),
             (step.get("hide_while"), "condition"),
+            ((step.get("show_when") or {}).get("conditions"), "condition"),
         ):
             for item in items if isinstance(items, list) else []:
                 if isinstance(item, dict) and item.get(key) == TRIGGER_LISTED_ENTITIES:
                     _upgrade_listed_item(item, key, notification.get("id"))
+
+
+def upgrade_show_when(notification: dict[str, Any]) -> None:
+    """Turn the Start conditions and Hide while of earlier steps into Show when.
+
+    Start conditions alone are used at the start only; Hide while alone
+    becomes its opposite (Not), used while a card is open. With both, the
+    card needs the Start conditions and not Hide while, at the start and
+    while it is open.
+    """
+    for step in notification.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        start = step.get("start")
+        conditions = start.pop("conditions", None) if isinstance(start, dict) else None
+        hide_while = step.pop("hide_while", None)
+        conditions = conditions if isinstance(conditions, list) else []
+        hide_while = hide_while if isinstance(hide_while, list) else []
+        if "show_when" in step or not (conditions or hide_while):
+            continue
+        items = list(conditions)
+        if hide_while:
+            items.append({"condition": "not", "conditions": hide_while})
+        step["show_when"] = {
+            "start": bool(conditions),
+            "hide": bool(hide_while),
+            "conditions": items,
+        }
 
 
 def _upgrade_listed_item(item: dict[str, Any], key: str, own_id: Any) -> None:
@@ -946,7 +985,7 @@ def _trigger_lists(step: dict[str, Any]) -> list[list[dict[str, Any]]]:
 
 
 def _condition_lists(step: dict[str, Any]) -> list[list[dict[str, Any]]]:
-    return [step["start"]["conditions"], step["hide_while"]]
+    return [step["show_when"]["conditions"]]
 
 
 def _own_items(step: dict[str, Any], kind: str) -> list[dict[str, Any]]:
@@ -1019,8 +1058,9 @@ async def _validate_step_automation(
     start = step["start"]
     if start["type"] == "triggers":
         await _validate_triggers(hass, start["triggers"], _path(where, "start"))
-    await _validate_conditions(hass, start["conditions"], _path(where, "conditions"))
-    await _validate_conditions(hass, step["hide_while"], _path(where, "hide while"))
+    await _validate_conditions(
+        hass, step["show_when"]["conditions"], _path(where, "show when")
+    )
     await _validate_triggers(
         hass, step["done_when"]["triggers"], _path(where, "done when")
     )
@@ -1059,6 +1099,10 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     """
     if not isinstance(data, dict):
         raise ConfigValidationError("the configuration must be a mapping")
+    for notification in data.get("notifications") or []:
+        # Before the structure check: the earlier fields are not in it.
+        if isinstance(notification, dict):
+            upgrade_show_when(notification)
     config: ConfigData = _structure(CONFIG_SCHEMA, data, "configuration")
     for notification in config["notifications"]:
         upgrade_listed(notification)

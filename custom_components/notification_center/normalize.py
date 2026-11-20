@@ -34,6 +34,7 @@ from .model import (
     ConfigData,
     new_id,
     upgrade_listed,
+    upgrade_show_when,
 )
 
 _GROUP_FILTER = ("domain", "device_class", "areas", "floors", "labels")
@@ -147,6 +148,7 @@ def normalize_notification(
     """
     notification = copy.deepcopy(data)
     upgrade_listed(notification)
+    upgrade_show_when(notification)
     steps = notification.get("steps")
     for step in steps if isinstance(steps, list) else []:
         # A new step gets its id now, so a step number can point to it.
@@ -156,18 +158,14 @@ def normalize_notification(
         if not isinstance(step, dict):
             continue
         start = step.get("start")
-        if isinstance(start, dict):
-            if "triggers" in start:
-                start["triggers"] = _items(
-                    hass, config, notification, start["triggers"], "trigger"
-                )
-            if "conditions" in start:
-                start["conditions"] = _items(
-                    hass, config, notification, start["conditions"], "condition"
-                )
-        if "hide_while" in step:
-            step["hide_while"] = _items(
-                hass, config, notification, step["hide_while"], "condition"
+        if isinstance(start, dict) and "triggers" in start:
+            start["triggers"] = _items(
+                hass, config, notification, start["triggers"], "trigger"
+            )
+        show_when = step.get("show_when")
+        if isinstance(show_when, dict) and "conditions" in show_when:
+            show_when["conditions"] = _items(
+                hass, config, notification, show_when["conditions"], "condition"
             )
         done_when = step.get("done_when")
         if isinstance(done_when, dict) and "triggers" in done_when:

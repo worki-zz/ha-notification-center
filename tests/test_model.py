@@ -38,7 +38,8 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert notification["enabled"] is True
     step = notification["steps"][0]
     assert step["enabled"] is True
-    assert step["start"] == {"type": "triggers", "triggers": [], "conditions": []}
+    assert step["start"] == {"type": "triggers", "triggers": []}
+    assert step["show_when"] == {"start": True, "hide": True, "conditions": []}
     assert [button["type"] for button in step["buttons"]] == list(BUILTIN_BUTTONS)
     done = next(button for button in step["buttons"] if button["type"] == "done")
     assert done["enabled"] is True
@@ -153,9 +154,9 @@ async def test_interval_zero_and_entity(hass: HomeAssistant) -> None:
         ),
         (
             lambda c: c["notifications"][0]["steps"][0].update(
-                hide_while=[{"condition": "state"}]
+                show_when={"conditions": [{"condition": "state"}]}
             ),
-            "hide while",
+            "show when",
         ),
         (
             lambda c: c["notifications"][0]["steps"][0].update(
@@ -196,3 +197,40 @@ async def test_step_channels_store_only_changes(hass: HomeAssistant) -> None:
     }
     category = config["categories"][0]["channels"]["notification_center"]
     assert category == {"modes": ["home"], "when": {"type": "immediately"}}
+
+
+async def test_start_conditions_and_hide_while_become_show_when(
+    hass: HomeAssistant,
+) -> None:
+    """Earlier steps get one Show when, with the switches set to match."""
+    away = {"condition": "state", "entity_id": "input_boolean.away", "state": "off"}
+    rain = {"condition": "state", "entity_id": "input_boolean.rain", "state": "on"}
+    data = _with_notification()
+    first = data["notifications"][0]["steps"][0]
+    data["notifications"][0]["steps"] = [
+        {**first, "start": {"type": "triggers", "conditions": [away]}},
+        {**first, "hide_while": [rain]},
+        {
+            **first,
+            "start": {"type": "triggers", "conditions": [away]},
+            "hide_while": [rain],
+        },
+        dict(first),
+    ]
+    config = await async_validate_config(hass, data)
+    steps = config["notifications"][0]["steps"]
+    not_rain = {"condition": "not", "conditions": [rain]}
+    assert steps[0]["show_when"] == {"start": True, "hide": False, "conditions": [away]}
+    assert steps[1]["show_when"] == {
+        "start": False,
+        "hide": True,
+        "conditions": [not_rain],
+    }
+    assert steps[2]["show_when"] == {
+        "start": True,
+        "hide": True,
+        "conditions": [away, not_rain],
+    }
+    assert steps[3]["show_when"] == {"start": True, "hide": True, "conditions": []}
+    assert all("hide_while" not in step for step in steps)
+    assert all("conditions" not in step["start"] for step in steps)

@@ -45,6 +45,12 @@ export interface Start {
   type: "triggers" | "schedule";
   triggers?: Obj[];
   schedule?: Schedule;
+}
+
+/** Show when: conditions used at the start and to hide an open card. */
+export interface ShowWhen {
+  start: boolean;
+  hide: boolean;
   conditions: Obj[];
 }
 
@@ -55,7 +61,7 @@ export interface EditorStep {
   info?: string | null;
   data?: StepData | null;
   start: Start;
-  hide_while: Obj[];
+  show_when: ShowWhen;
   done_when: { triggers: Obj[]; start_no_longer_true: boolean };
   buttons: Button[];
   audience?: string[];
@@ -119,8 +125,8 @@ export function newStep(): EditorStep {
   return {
     enabled: true,
     message: "",
-    start: { type: "triggers", triggers: [], conditions: [] },
-    hide_while: [],
+    start: { type: "triggers", triggers: [] },
+    show_when: { start: true, hide: true, conditions: [] },
     done_when: { triggers: [], start_no_longer_true: false },
     buttons: [
       builtin("tap", false, "keep", { type: "more_info" }),
@@ -215,7 +221,6 @@ export function toEditor(
     (items ?? []).map((item) => toEditorItem(item, "condition", draft.id, numbers, state));
   const selfSensor = sensorOf(state, draft.id);
   for (const step of draft.steps) {
-    step.start.conditions = conditions(step.start.conditions);
     if (step.start.type === "triggers") {
       step.start.triggers = triggers(step.start.triggers);
       // The first trigger on this notification's own entities is the one
@@ -232,7 +237,11 @@ export function toEditor(
         first[PINNED] = true;
       }
     }
-    step.hide_while = conditions(step.hide_while);
+    step.show_when = {
+      start: step.show_when?.start ?? true,
+      hide: step.show_when?.hide ?? true,
+      conditions: conditions(step.show_when?.conditions),
+    };
     step.done_when = {
       triggers: triggers(step.done_when?.triggers),
       start_no_longer_true: step.done_when?.start_no_longer_true ?? false,
@@ -271,8 +280,8 @@ export function toSaved(draft: EditorNotification): EditorNotification {
       });
     step.start =
       start.type === "schedule"
-        ? { type: "schedule", schedule: start.schedule!, conditions: start.conditions }
-        : { type: "triggers", triggers, conditions: start.conditions };
+        ? { type: "schedule", schedule: start.schedule! }
+        : { type: "triggers", triggers };
     if (step.data && step.data.type === "none") step.data = null;
     if (!step.info) delete step.info;
     // A new step's buttons get their ids from Home Assistant.
