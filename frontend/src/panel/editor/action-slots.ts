@@ -1,4 +1,4 @@
-// The entity actions of an entity or an entity category: one Home Assistant
+// The entity actions of an entity or an entity group: one Home Assistant
 // action editor for every switched on button whose action is Entity action.
 // An action written for a button that is now off stays, it only is not shown.
 

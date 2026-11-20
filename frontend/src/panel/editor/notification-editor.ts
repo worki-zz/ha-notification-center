@@ -704,7 +704,7 @@ export class NcNotificationEditor extends LitElement {
           @click=${() => (this._group = { index: -1, group: newGroup() })}
         >
           <ha-icon slot="start" icon="mdi:shape-plus-outline"></ha-icon>
-          Add entity category
+          Add entity group
         </ha-button>
       </div>
     </div>`;

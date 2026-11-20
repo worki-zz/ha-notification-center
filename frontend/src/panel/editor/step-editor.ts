@@ -148,7 +148,7 @@ export class NcStepEditor extends LitElement {
   // The entities of the notification's Entities block, switched on.
   @property({ attribute: false }) public entities: string[] = [];
 
-  // The buttons some entity or entity category has an action for.
+  // The buttons some entity or entity group has an action for.
   @property({ attribute: false }) public entityActions: Set<string> = new Set();
 
   // The interaction whose dialog is open (index -1: a new button).

@@ -1,4 +1,4 @@
-// The dialog of an entity category: a domain with an optional device class,
+// The dialog of an entity group: a domain with an optional device class,
 // areas, floors and labels.
 
 import { LitElement, css, html, nothing } from "lit";
@@ -93,7 +93,7 @@ export class NcGroupDialog extends LitElement {
     const classes = this._deviceClasses(group.domain);
     return html`<ha-dialog
       .open=${this._open}
-      header-title=${this.isNew ? "Add entity category" : "Entity category"}
+      header-title=${this.isNew ? "Add entity group" : "Entity group"}
       @closed=${this._closed}
     >
       ${this.isNew

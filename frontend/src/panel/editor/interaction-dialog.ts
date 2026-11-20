@@ -76,7 +76,7 @@ export class NcInteractionDialog extends LitElement {
 
   @property({ type: Boolean }) public isNew = false;
 
-  // Some entity (or entity category) has an action for this button.
+  // Some entity (or entity group) has an action for this button.
   @property({ type: Boolean, attribute: false }) public entityActionSet = false;
 
   // How many other buttons are shown in the push notification.

@@ -66,7 +66,7 @@ The settings use Home Assistant's own layout and elements, with the tabs in the 
 Laid out like the automation editor: the name and status in the header, Undo and Redo (Ctrl+Z, Ctrl+Y), the Enabled switch (saved at once) and the menu: *Information* (the sensor's dialog, where its entity id can be changed), *Run now* (the selected step, like the Trigger action), *Clear notifications*, *Duplicate* (a disabled copy), *Edit in YAML* (the whole notification in Home Assistant's YAML editor, as it is saved; *Edit in visual editor* goes back, and Undo and Redo work in both), *Disable* and *Delete*. Under the header a preview of the selected step's card, with the templates rendered for the first listed entity. Save appears when something changed; leaving asks first.
 
 - **Settings:** name, category, icon and card colour. Left empty, the icon and the colour come from the category (shown in the fields). The light colour moves to the light channel settings (phase 6).
-- **Entities:** single entities and entity categories (a domain with an optional device class, floors, areas and labels). Entities are named as in Home Assistant's pickers, with their area and device; the pencil edits or deletes. Each category is its own list, always open, and each of its entities can be switched off on its own; *Add new matching entities* off keeps the entities that matched when it was saved. A category that matches nothing yet is fine.
+- **Entities:** single entities and entity groups (a domain with an optional device class, floors, areas and labels). Entities are named as in Home Assistant's pickers, with their area and device; the pencil edits or deletes. Each group is its own list, always open, and each of its entities can be switched off on its own; *Add new matching entities* off keeps the entities that matched when it was saved. A category that matches nothing yet is fine.
 Back (the browser's or the phone's) closes an open dialog first.
 
 - **Steps**, as tabs, with Add step and a menu (Run this step, Duplicate, Move left or right, Disable, Delete). Each step has (in this order: Message and Interactions, then Activation, Conditions and Done, then Audience):
@@ -84,7 +84,7 @@ Inside a notification, the Notification state trigger with no notification means
 A card's buttons work the same in the panel and on both cards. What a built-in button does to the card is fixed: **Done** closes it, **Dismiss** dismisses it, **Snooze** snoozes it. **Tap behavior** and own buttons leave the card as it is (to close it when something happens, use Done when). Each button can also run an **Action**:
 
 - **Nothing**.
-- **Entity action**: the listed entity's own action for that button, set in the entity's (or entity category's) dialog under *Entity actions*, which lists the switched-on buttons that use it.
+- **Entity action**: the listed entity's own action for that button, set in the entity's (or entity group's) dialog under *Entity actions*, which lists the switched-on buttons that use it.
 - **More info** opens the entity's dialog (the button's entity, else the card's entity, else the notification's sensor).
 - **Action** (Home Assistant's action editor) and Entity action run in Home Assistant, as the user who pressed the button.
 - **Navigate** opens a page.

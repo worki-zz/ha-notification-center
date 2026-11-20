@@ -181,7 +181,7 @@ export function entityActionSlots(draft: EditorNotification): ActionSlot[] {
   );
 }
 
-/** The buttons some entity or entity category has an action for. */
+/** The buttons some entity or entity group has an action for. */
 export function buttonsWithEntityActions(draft: EditorNotification): Set<string> {
   const ids = new Set<string>();
   for (const item of [...draft.entities, ...draft.entity_groups]) {

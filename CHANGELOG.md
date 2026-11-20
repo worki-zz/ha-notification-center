@@ -10,7 +10,7 @@
 
 - Overview and Schedule: as much room under a section title as between two cards.
 - Button dialogs: no explanations; the built-in buttons' labels are set only in YAML; *Show button in the push notification* comes right after the icon (for Snooze with more times it says which time the push uses); the Snooze times are a compact grid of checkboxes; a line above the Action, which is empty for nothing and can be cleared. A button whose action is Nothing shows no action in the list.
-- Entity category dialog: *Entity actions* and *Settings* tabs (it opens on the actions; a new category has only the settings); "N matching entities"; no explanation under *Add new matching entities*.
+- *Entity category* is now *Entity group* (as `entity_groups` in YAML). Its dialog: *Entity actions* and *Settings* tabs (it opens on the actions; a new group has only the settings); "N matching entities"; no explanation under *Add new matching entities*.
 - The Notification entities panel of Activation is a card like the trigger rows.
 
 ### Fixed
