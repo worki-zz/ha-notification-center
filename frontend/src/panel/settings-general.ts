@@ -118,7 +118,7 @@ export class NcSettingsGeneral extends LitElement {
         this._snooze = undefined;
       }}
     >
-      ${field(this.hass, { time: {} }, this._snooze, "Tomorrow at", (value) => {
+      ${field(this.hass, { time: { no_second: true } }, this._snooze, "Tomorrow at", (value) => {
         this._snooze = (value as string) || "08:00";
       })}
       <ha-dialog-footer slot="footer">
