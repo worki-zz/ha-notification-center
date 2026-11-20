@@ -148,7 +148,7 @@ export class NcStepEditor extends LitElement {
   // The entities of the notification's Entities block, switched on.
   @property({ attribute: false }) public entities: string[] = [];
 
-  // The buttons some entity or entity category has an action for.
+  // The buttons some entity or entity group has an action for.
   @property({ attribute: false }) public entityActions: Set<string> = new Set();
 
   // The interaction whose dialog is open (index -1: a new button).
@@ -479,8 +479,8 @@ export class NcStepEditor extends LitElement {
     // Left empty, Numeric state when every listed entity has a number.
     const kind: EntitiesKind = pinned?.kind ?? (this._allNumeric() ? "numeric" : "state");
     const options = pinned?.options ?? {};
-    return html`<ha-expansion-panel
-      outlined
+    // In a card, as Home Assistant's trigger rows, so it has their background.
+    return html`<ha-card outlined class="pinned-card"><ha-expansion-panel
       class="pinned"
       .expanded=${this._pinnedOpen}
       @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
@@ -507,7 +507,7 @@ export class NcStepEditor extends LitElement {
           this._pinnedChanged(step, kind, ev.detail.value);
         }}
       ></nc-entities-form>
-    </ha-expansion-panel>`;
+    </ha-expansion-panel></ha-card>`;
   }
 
   private _allNumeric(): boolean {
@@ -738,7 +738,7 @@ export class NcStepEditor extends LitElement {
     if (button.type === "snooze") {
       parts.push(snoozeChoices(button).map((choice) => choice.text).join(", "));
     }
-    if (button.type !== "snooze" || (button.action?.type ?? "nothing") !== "nothing") {
+    if ((button.action?.type ?? "nothing") !== "nothing") {
       parts.push(actionText(this.hass, button.action));
     }
     const open = () => (this._interaction = { index, button });
@@ -923,11 +923,11 @@ export class NcStepEditor extends LitElement {
       margin: 4px -16px 0;
     }
     /* Like a trigger row of Home Assistant's list. */
+    ha-card.pinned-card {
+      overflow: hidden;
+    }
     ha-expansion-panel.pinned {
       display: block;
-      /* As the other built-in rows, which are cards. */
-      background: var(--ha-card-background, var(--card-background-color, white));
-      border-radius: var(--ha-card-border-radius, 12px);
       --expansion-panel-summary-padding: 0 8px 0 16px;
       /* The panel pads its content even while closed, so the form does. */
       --expansion-panel-content-padding: 0;

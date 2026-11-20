@@ -48,6 +48,10 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     done = next(button for button in step["buttons"] if button["type"] == "done")
     assert done["enabled"] is True
     assert done["show_in_push"] is True
+    assert "push_tap" not in done
+    tap = next(button for button in step["buttons"] if button["type"] == "tap")
+    assert tap["push_tap"] is True
+    assert "show_in_push" not in tap
     snooze = next(button for button in step["buttons"] if button["type"] == "snooze")
     assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
 
