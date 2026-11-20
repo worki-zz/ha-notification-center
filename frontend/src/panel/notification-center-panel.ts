@@ -30,6 +30,7 @@ import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
 import { isTemplate, replacePlaceholders } from "../shared/text";
 import type { HomeAssistant, PanelInfo } from "../shared/types";
+import "./category-editor";
 import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";
 import "./settings-page";
@@ -464,6 +465,15 @@ export class NotificationCenterPanel extends LitElement {
     const { config, state, hasData } = this._store;
     const base = `/${this.panel?.url_path ?? "notification-center"}`;
     const parts = this._parts();
+    if (parts[1] === "categories" && parts[2]) {
+      return html`<nc-category-editor
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .config=${config}
+        .categoryId=${parts[2]}
+        .base=${base}
+      ></nc-category-editor>`;
+    }
     if (parts[1] === "notifications" && parts[2]) {
       return html`<nc-notification-editor
         .hass=${this.hass}
@@ -480,7 +490,8 @@ export class NotificationCenterPanel extends LitElement {
       .config=${config}
       .state=${state}
       .hasData=${hasData ?? false}
-      .tab=${parts[1] === "general" ? "general" : "notifications"}
+      .tab=${parts[1] === "general" || parts[1] === "categories" ? parts[1] : "notifications"}
+      .sub=${parts[1] === "general" ? (parts[2] ?? "") : ""}
       .base=${base}
     ></nc-settings>`;
   }
@@ -504,6 +515,7 @@ export class NotificationCenterPanel extends LitElement {
       color: var(--primary-text-color);
     }
     nc-settings,
+    nc-category-editor,
     nc-notification-editor {
       flex: 1;
       min-height: 0;

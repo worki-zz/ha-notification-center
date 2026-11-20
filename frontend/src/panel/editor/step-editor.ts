@@ -702,9 +702,14 @@ export class NcStepEditor extends LitElement {
               .checked=${on}
               @change=${(ev: Event) => set(person.id, (ev.target as HTMLInputElement).checked)}
             ></ha-switch>
-            ${person.picture
-              ? html`<img class="avatar" src=${person.picture} alt="" />`
-              : html`<span class="avatar">${initials(person.name)}</span>`}
+            ${customElements.get("ha-person-badge")
+              ? html`<ha-person-badge
+                  class="avatar"
+                  .person=${{ id: person.id, name: person.name, picture: person.picture }}
+                ></ha-person-badge>`
+              : person.picture
+                ? html`<img class="avatar" src=${person.picture} alt="" />`
+                : html`<span class="avatar">${initials(person.name)}</span>`}
             <div class="own-text">${person.name}</div>
           </div>`;
         })}

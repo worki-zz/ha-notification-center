@@ -320,13 +320,14 @@ export async function pressButton(
 }
 
 /** Go to a page of Home Assistant, as its own links do. */
-export function navigate(path: string): void {
+export function navigate(path: string, replace = false): void {
   if (/^https?:\/\//.test(path)) {
     window.open(path, "_blank", "noopener");
     return;
   }
-  history.pushState(null, "", path);
-  window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  if (replace) history.replaceState(null, "", path);
+  else history.pushState(null, "", path);
+  window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace } }));
 }
 
 /** Mark a scheduled step done before it is due. */
