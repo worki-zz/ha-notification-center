@@ -2,7 +2,7 @@
 
 A text is a Home Assistant template. It can also hold short placeholders
 that come from the card's entity: ``{Floor}``, ``{Area}``, ``{Device}``,
-``{Entity}``, ``{Device class}`` and ``{State}``. The template is rendered first; the
+``{Device class}``, ``{Entity}`` and ``{State}``. The template is rendered first; the
 placeholders are replaced in its result, so they never clash with Jinja.
 
 While a card is open its text follows the changes of the entities the
@@ -34,7 +34,7 @@ from homeassistant.helpers.template import Template, is_template_string
 
 _LOGGER = logging.getLogger(__name__)
 
-PLACEHOLDERS: Final = ("Floor", "Area", "Device", "Entity", "Device class", "State")
+PLACEHOLDERS: Final = ("Floor", "Area", "Device", "Device class", "Entity", "State")
 
 
 @callback

@@ -1,5 +1,5 @@
 // Texts of a card: plain text, a Home Assistant template, and the
-// placeholders {Floor}, {Area}, {Device}, {Entity}, {Device class} and {State}.
+// placeholders {Floor}, {Area}, {Device}, {Device class}, {Entity} and {State}.
 //
 // The same rules as the backend (render.py): the template is rendered
 // first, then the placeholders are replaced in its result, so they never
@@ -8,7 +8,7 @@
 import { entityState } from "./format";
 import type { HomeAssistant } from "./types";
 
-export const PLACEHOLDERS = ["Floor", "Area", "Device", "Entity", "Device class", "State"] as const;
+export const PLACEHOLDERS = ["Floor", "Area", "Device", "Device class", "Entity", "State"] as const;
 
 /** The name Home Assistant shows for a device class ("Moisture"). */
 export function deviceClassName(hass: HomeAssistant | undefined, domain: string, deviceClass: string): string {
