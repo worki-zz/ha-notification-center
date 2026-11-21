@@ -1,9 +1,18 @@
 {
   "domain": "notification_center",
   "name": "Notification Center",
-  "codeowners": ["@worki-zz"],
+  "after_dependencies": [
+    "person"
+  ],
+  "codeowners": [
+    "@worki-zz"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "websocket_api"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/worki-zz/ha-notification-center",
   "integration_type": "service",
   "iot_class": "calculated",

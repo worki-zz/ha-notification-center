@@ -67,6 +67,17 @@
             "name": "Top message"
           }
         }
+      },
+      "dashboard_channel": {
+        "name": "Dashboard channel",
+        "state_attributes": {
+          "held_back": {
+            "name": "Held back"
+          },
+          "waiting": {
+            "name": "Waiting"
+          }
+        }
       }
     }
   },

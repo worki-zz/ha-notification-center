@@ -225,10 +225,7 @@ class ConfigManager:
             for key in set(settings) | set(channels):
                 channel = settings.get(key)
                 if channel is None:
-                    settings[key] = {
-                        "modes": [mode_id],
-                        "when": {"type": "immediately"},
-                    }
+                    settings[key] = {"modes": [mode_id]}
                     continue
                 modes = channel.setdefault("modes", [])
                 if key in channels and mode_id not in modes:

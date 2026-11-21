@@ -36,6 +36,8 @@ PLATFORMS: Final = ("calendar", "sensor")
 # notification's id.
 UNIQUE_ID_NOTIFICATION_PREFIX: Final = "notification-"
 UNIQUE_ID_SUMMARY: Final = "summary"
+# The diagnostic sensor of a channel uses the prefix and the channel key.
+UNIQUE_ID_CHANNEL_PREFIX: Final = "channel-"
 # The event entity of 0.2.x, removed: only its registry entry is cleaned up.
 UNIQUE_ID_EVENT: Final = "event"
 UNIQUE_ID_CALENDAR: Final = "calendar"
