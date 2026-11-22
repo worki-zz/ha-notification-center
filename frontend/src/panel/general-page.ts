@@ -33,7 +33,7 @@ const PAGES: Record<string, { title: string; intro: string[] }> = {
   snooze: {
     title: "Snooze",
     intro: [
-      "Snoozing for minutes or hours counts from the press. Tomorrow and the longer times bring the card back on that day at the time below; a scheduled step comes back at its own time instead.",
+      "The default time when a notification is snoozed to another day.",
     ],
   },
   import: {
@@ -120,7 +120,7 @@ export class NcGeneralPage extends LitElement {
           this.hass,
           { time: { no_second: true } },
           value,
-          "Tomorrow at",
+          "Default time",
           (time) => {
             this._snooze = (time as string) || "08:00";
           },

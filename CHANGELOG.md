@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- General, Snooze: the list shows only the time; the field is *Default time*, and the page says it is the default time when a notification is snoozed to another day.
+
 ## 0.6.0
 
 Phase 6.0: the channel basics and the Dashboard channel.
