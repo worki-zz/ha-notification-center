@@ -161,6 +161,8 @@ export interface GeneralSettings {
   snooze_tomorrow_at: string;
   // Read the message: the text-to-speech entity and its language.
   read_the_message?: { tts_service?: string | null; language?: string | null; volume?: number | null };
+  // The order of the chimes (ids); the others follow by name.
+  chime_order?: string[];
   [key: string]: unknown;
 }
 
@@ -224,6 +226,23 @@ export const BUILTIN_CHIMES: { id: string; name: string }[] = [
   { id: "nc_alarm_indoor", name: "Indoor alarm" },
 ];
 
+/**
+ * Every chime, built-in and own, in the order of the Chimes page: as the
+ * user ordered them, then the others by name.
+ */
+export function orderedChimes(config: NotificationCenterConfig | undefined): { id: string; name: string; builtin: boolean }[] {
+  const all = [
+    ...BUILTIN_CHIMES.map((chime) => ({ ...chime, builtin: true })),
+    ...(config?.chimes ?? []).map((chime) => ({ id: chime.id, name: chime.name, builtin: false })),
+  ];
+  const order = config?.general?.chime_order ?? [];
+  const rank = (id: string) => {
+    const index = order.indexOf(id);
+    return index < 0 ? order.length : index;
+  };
+  return all.sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
+}
+
 /** The RGB of the system colours, as the lights show them by default. */
 export const SYSTEM_COLORS: Record<string, [number, number, number]> = {
   primary: [3, 169, 244],
@@ -251,6 +270,14 @@ export const SYSTEM_COLORS: Record<string, [number, number, number]> = {
   "blue-grey": [96, 125, 139],
   black: [0, 0, 0],
   white: [255, 255, 255],
+};
+
+/** The system colours as a light shows them by default: a lamp has no grey, so the greys are white. */
+export const LIGHT_DEFAULTS: Record<string, [number, number, number]> = {
+  ...SYSTEM_COLORS,
+  "light-grey": [255, 255, 255],
+  grey: [255, 255, 255],
+  "dark-grey": [255, 255, 255],
 };
 
 /** "#rrggbb" of an RGB. */

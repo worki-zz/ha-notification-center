@@ -1,22 +1,24 @@
 // The Sound page of the General settings: the speakers and the sirens of
-// the Sound channels, the chimes a speaker can play (the built-in ones and
-// your own media), and the text-to-speech that reads the message. A
-// device's dialog shows what its entity can do; a new one then asks for
-// the modes it sends in, in every category.
+// the Sound channels in one list, with an Add button for each that picks the
+// entity at once (its settings take their defaults, a row opens them). Below,
+// Chimes opens its own page (the chimes in the lists' order, draggable) and
+// Read the message a dialog (the text-to-speech that reads the message).
+// A new device then asks for the home modes it sends in, in every category.
 
-import { LitElement, html, nothing } from "lit";
+import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 
 import {
-  BUILTIN_CHIMES,
   type Chime,
   DOMAIN,
   type GeneralSettings,
   type NotificationCenterConfig,
   type Siren,
   type Speaker,
+  orderedChimes,
 } from "../shared/config";
-import { errorText } from "../shared/live";
+import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
 import "./devices";
@@ -26,32 +28,57 @@ import {
   SIREN_DURATION,
   SIREN_TONES,
   SIREN_VOLUME_SET,
+  addEntityButton,
   channelIcon,
   entityName,
   entityState,
   features,
+  openEntityPicker,
   testButton,
   testChannel,
 } from "./devices";
 import { field } from "./fields";
 import { DEVICE_PAGE_STYLES } from "./settings-lights";
 
-type Section = "speakers" | "sirens" | "chimes";
-
 type Edit =
   | { section: "speakers"; item: Partial<Speaker> }
   | { section: "sirens"; item: Partial<Siren> }
   | { section: "chimes"; item: Partial<Chime> };
 
-const KIND: Record<"speakers" | "sirens", "speaker" | "siren"> = { speakers: "speaker", sirens: "siren" };
+type DeviceSection = "speakers" | "sirens";
 
-const TITLES: Record<Section, string> = { speakers: "speaker", sirens: "siren", chimes: "chime" };
+const KIND: Record<DeviceSection, "speaker" | "siren"> = { speakers: "speaker", sirens: "siren" };
+
+const DOMAINS: Record<DeviceSection, string[]> = {
+  speakers: ["media_player"],
+  sirens: ["siren", "switch", "select"],
+};
+
+interface Reading {
+  tts_service?: string | null;
+  language?: string | null;
+}
+
+/** "hu-HU" → "Hungarian (Hungary)", as the browser names it. */
+function languageName(code: string): string {
+  try {
+    const names = new Intl.DisplayNames([navigator.language || "en"], { type: "language" });
+    return names.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
 
 @customElement("nc-settings-sound")
 export class NcSettingsSound extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
   @property({ attribute: false }) public config?: NotificationCenterConfig;
+
+  // The Sound page, or its Chimes page.
+  @property() public view: "sound" | "chimes" = "sound";
+
+  @property() public base = "/notification-center";
 
   @state() private _edit?: Edit;
 
@@ -63,27 +90,27 @@ export class NcSettingsSound extends LitElement {
 
   @state() private _busy = false;
 
-  // Read the message, being edited; undefined while unchanged.
-  @state() private _reading?: { tts_service?: string | null; language?: string | null };
+  // The Add button whose entity picker is open.
+  @state() private _adding?: DeviceSection;
+
+  @state() private _sirenInfo = false;
+
+  // The Read the message dialog, while open.
+  @state() private _reading?: Reading;
+
+  // The languages of the chosen text-to-speech, by its entity.
+  @state() private _languages: Record<string, string[]> = {};
 
   protected override render() {
-    const config = this.config;
     return html`
       ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
-      <div class="block-title">Speakers</div>
-      ${this._devices("speakers", config?.speakers ?? [], "mdi:speaker")}
-      <div class="block-title">Sirens</div>
-      <p class="hint">A siren, a switch, or a select whose option sounds the siren (such as a smoke alarm's).</p>
-      ${this._devices("sirens", config?.sirens ?? [], "mdi:alarm-light-outline")}
-      <div class="block-title">Chimes</div>
-      ${this._renderChimes(config?.chimes ?? [])}
-      <div class="block-title">Read the message</div>
-      ${this._renderReading()}
+      ${this.view === "chimes" ? this._renderChimes() : this._renderSound()}
       ${this._edit ? this._renderDialog(this._edit) : nothing}
+      ${this._reading ? this._renderReading(this._reading) : nothing}
       ${this._modesFor
         ? html`<nc-device-modes-dialog
             .hass=${this.hass}
-            .modes=${config?.modes ?? []}
+            .modes=${this.config?.modes ?? []}
             .channel=${this._modesFor.key}
             .name=${this._modesFor.name}
             @closed-dialog=${() => (this._modesFor = undefined)}
@@ -92,38 +119,135 @@ export class NcSettingsSound extends LitElement {
     `;
   }
 
-  private _devices(section: "speakers" | "sirens", items: (Speaker | Siren)[], icon: string) {
-    return html`${items.length
+  // -- The Sound page --------------------------------------------------------
+
+  private _renderSound() {
+    const config = this.config;
+    const speakers = config?.speakers ?? [];
+    const sirens = config?.sirens ?? [];
+    const reading = config?.general?.read_the_message ?? {};
+    const chimes = orderedChimes(config);
+    return html`
+      ${speakers.length || sirens.length
         ? html`<ha-card outlined>
-            <div class="rows">
-              ${items.map((item) => {
-                const name = entityName(this.hass, item.entity_id);
-                return html`<div
-                  class="row"
-                  role="button"
-                  tabindex="0"
-                  @click=${() => this._open({ section, item: structuredClone(item) } as Edit)}
-                >
-                  ${channelIcon(this.hass, { key: `${KIND[section]}:${item.id}`, name, icon, entity_id: item.entity_id })}
-                  <div class="text">
-                    <div>${name}</div>
-                    <div class="secondary">${this._summary(section, item)}</div>
-                  </div>
-                  <ha-icon-next></ha-icon-next>
-                </div>`;
-              })}
-            </div>
+            ${speakers.length
+              ? html`<div class="group-header">Speakers</div>
+                  <div class="rows">${speakers.map((item) => this._deviceRow("speakers", item))}</div>`
+              : nothing}
+            ${sirens.length
+              ? html`${this._sirenHeader()}
+                  <div class="rows">${sirens.map((item) => this._deviceRow("sirens", item))}</div>`
+              : nothing}
           </ha-card>`
-        : nothing}
-      <div>
-        <ha-button appearance="filled" size="s" @click=${() => this._open({ section, item: { entity_id: "" } } as Edit)}>
-          <ha-icon slot="start" icon="mdi:plus"></ha-icon>
-          Add ${TITLES[section]}
-        </ha-button>
-      </div>`;
+        : html`<ha-alert alert-type="info">No speakers or sirens yet.</ha-alert>`}
+      <div class="buttons">
+        ${this._addButton("speakers", "Add speaker", "mdi:speaker")}
+        ${this._addButton("sirens", "Add siren", "mdi:alarm-light-outline")}
+      </div>
+      <ha-card outlined>
+        <ha-list-base>
+          <ha-list-item-button @click=${() => navigate(`${this.base}/settings/general/chimes`)}>
+            <ha-icon slot="start" class="nav-icon" icon="mdi:music-note-outline"></ha-icon>
+            <span slot="headline">Chimes</span>
+            <span slot="supporting-text">${chimes.map((chime) => chime.name).join(", ")}</span>
+            <ha-icon-next slot="end"></ha-icon-next>
+          </ha-list-item-button>
+          <ha-list-item-button @click=${this._openReading}>
+            <ha-icon slot="start" class="nav-icon" icon="mdi:account-voice"></ha-icon>
+            <span slot="headline">Read the message</span>
+            <span slot="supporting-text"
+              >${reading.tts_service
+                ? [entityName(this.hass, reading.tts_service), reading.language ? languageName(reading.language) : ""]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "No text-to-speech chosen"}</span
+            >
+          </ha-list-item-button>
+        </ha-list-base>
+      </ha-card>
+    `;
   }
 
-  private _summary(section: "speakers" | "sirens", item: Speaker | Siren): string {
+  private _sirenHeader() {
+    return html`<div class="group-header">
+        Sirens
+        <ha-icon-button
+          class="info"
+          .label=${"What can be a siren"}
+          @click=${() => (this._sirenInfo = !this._sirenInfo)}
+        >
+          <ha-icon icon="mdi:information-outline"></ha-icon>
+        </ha-icon-button>
+      </div>
+      ${this._sirenInfo
+        ? html`<p class="hint group-hint">A siren, a switch, or a select whose option sounds the siren.</p>`
+        : nothing}`;
+  }
+
+  private _deviceRow(section: DeviceSection, item: Speaker | Siren) {
+    const name = entityName(this.hass, item.entity_id);
+    const icon = section === "speakers" ? "mdi:speaker" : "mdi:alarm-light-outline";
+    return html`<div
+      class="row"
+      role="button"
+      tabindex="0"
+      @click=${() => this._open({ section, item: structuredClone(item) } as Edit)}
+    >
+      ${channelIcon(this.hass, { key: `${KIND[section]}:${item.id}`, name, icon, entity_id: item.entity_id })}
+      <div class="text">
+        <div>${name}</div>
+        <div class="secondary">${this._summary(section, item)}</div>
+      </div>
+      <ha-icon-next></ha-icon-next>
+    </div>`;
+  }
+
+  private _addButton(section: DeviceSection, label: string, icon: string) {
+    const used = [...(this.config?.speakers ?? []), ...(this.config?.sirens ?? [])].map((item) => item.entity_id);
+    return addEntityButton({
+      hass: this.hass,
+      adding: this._adding === section,
+      label,
+      icon,
+      className: `add-${section}`,
+      domains: DOMAINS[section],
+      exclude: used,
+      start: () => {
+        this._adding = section;
+        void openEntityPicker(this, `add-${section}`);
+      },
+      picked: (entityId) => {
+        this._adding = undefined;
+        if (entityId) void this._add(section, entityId);
+      },
+    });
+  }
+
+  // A new speaker or siren with its defaults; a select first asks which
+  // option sounds the siren.
+  private async _add(section: DeviceSection, entityId: string): Promise<void> {
+    if (section === "sirens" && entityId.startsWith("select.")) {
+      this._open({ section, item: { entity_id: entityId } });
+      return;
+    }
+    this._error = undefined;
+    try {
+      await this._create(section, { entity_id: entityId });
+    } catch (err) {
+      this._error = errorText(err);
+    }
+  }
+
+  private async _create(section: DeviceSection, data: Record<string, unknown>): Promise<void> {
+    const item = await this.hass!.callWS<{ id: string; entity_id: string }>({
+      type: `${DOMAIN}/item/create`,
+      section,
+      data,
+    });
+    this._modesFor = { key: `${KIND[section]}:${item.id}`, name: entityName(this.hass, item.entity_id) };
+  }
+
+  private _summary(section: DeviceSection, item: Speaker | Siren): string {
     const parts: string[] = [];
     if (item.volume !== undefined && item.volume !== null) parts.push(`Volume ${Math.round(item.volume * 100)}%`);
     if (section === "speakers") {
@@ -137,34 +261,41 @@ export class NcSettingsSound extends LitElement {
     return parts.join(" · ") || item.entity_id;
   }
 
-  private _renderChimes(chimes: Chime[]) {
+  // -- The Chimes page -------------------------------------------------------
+
+  private _renderChimes() {
+    const own = new Map((this.config?.chimes ?? []).map((chime) => [chime.id, chime]));
+    const chimes = orderedChimes(this.config);
     return html`<ha-card outlined>
-        <div class="rows">
-          ${BUILTIN_CHIMES.map(
-            (chime) => html`<div class="row static">
-              <ha-icon icon="mdi:music-note"></ha-icon>
-              <div class="text">
-                <div>${chime.name}</div>
-                <div class="secondary">Built-in</div>
-              </div>
-            </div>`,
-          )}
-          ${chimes.map(
-            (chime) => html`<div
-              class="row"
-              role="button"
-              tabindex="0"
-              @click=${() => this._open({ section: "chimes", item: structuredClone(chime) })}
-            >
-              <ha-icon icon="mdi:music-note-outline"></ha-icon>
-              <div class="text">
-                <div>${chime.name}</div>
-                <div class="secondary">${chime.media?.media_content_id ?? ""}</div>
-              </div>
-              <ha-icon-next></ha-icon-next>
-            </div>`,
-          )}
-        </div>
+        <ha-sortable handle-selector=".handle" @item-moved=${this._chimeMoved}>
+          <div class="rows">
+            ${repeat(
+              chimes,
+              (chime) => chime.id,
+              (chime) => {
+                const item = own.get(chime.id);
+                return html`<div
+                  class=${item ? "row" : "row static"}
+                  role=${item ? "button" : nothing}
+                  tabindex=${item ? "0" : nothing}
+                  @click=${() => {
+                    if (item) this._open({ section: "chimes", item: structuredClone(item) });
+                  }}
+                >
+                  <div class="handle" title="Drag to reorder" @click=${(ev: Event) => ev.stopPropagation()}>
+                    <ha-icon icon="mdi:drag-horizontal-variant"></ha-icon>
+                  </div>
+                  <ha-icon .icon=${item ? "mdi:music-note-outline" : "mdi:music-note"}></ha-icon>
+                  <div class="text">
+                    <div>${chime.name}</div>
+                    <div class="secondary">${item ? (item.media?.media_content_id ?? "") : "Built-in"}</div>
+                  </div>
+                  ${item ? html`<ha-icon-next></ha-icon-next>` : nothing}
+                </div>`;
+              },
+            )}
+          </div>
+        </ha-sortable>
       </ha-card>
       <div>
         <ha-button appearance="filled" size="s" @click=${() => this._open({ section: "chimes", item: { name: "" } })}>
@@ -174,55 +305,120 @@ export class NcSettingsSound extends LitElement {
       </div>`;
   }
 
-  private _renderReading() {
-    const saved = this.config?.general?.read_the_message ?? {};
-    const value = this._reading ?? saved;
-    const changed = this._reading !== undefined;
-    return html`<ha-card outlined>
-      <div class="card-content form">
-        <p class="hint">
-          A speaker channel can read the message after the chime. It is read with this text-to-speech.
-        </p>
-        ${field(
-          this.hass,
-          { entity: { filter: [{ domain: "tts" }] } },
-          value.tts_service ?? undefined,
-          "Text-to-speech",
-          (tts) => (this._reading = { ...value, tts_service: (tts as string) || null }),
-        )}
-        ${field(
-          this.hass,
-          { text: {} },
-          value.language ?? "",
-          "Language",
-          (language) => (this._reading = { ...value, language: (language as string) || null }),
-          { helper: "Empty: the text-to-speech's own, for example en-US or hu-HU." },
-        )}
-      </div>
-      <div class="card-actions">
-        <ha-button .disabled=${this._busy || !changed} @click=${this._saveReading}>Save</ha-button>
-      </div>
-    </ha-card>`;
+  private async _chimeMoved(ev: CustomEvent<{ oldIndex: number; newIndex: number }>): Promise<void> {
+    ev.stopPropagation();
+    const ids = orderedChimes(this.config).map((chime) => chime.id);
+    const [moved] = ids.splice(ev.detail.oldIndex, 1);
+    ids.splice(ev.detail.newIndex, 0, moved);
+    this._error = undefined;
+    await this._updateGeneral({ chime_order: ids }, (err) => (this._error = err));
   }
 
-  private async _saveReading(): Promise<void> {
-    const reading = this._reading;
-    if (!reading || !this.hass) return;
+  private async _updateGeneral(changes: Partial<GeneralSettings>, failed: (error: string) => void): Promise<boolean> {
+    if (!this.hass) return false;
     this._busy = true;
-    this._error = undefined;
     try {
       const general: Partial<GeneralSettings> = this.config?.general ?? {};
-      await this.hass.callWS({
-        type: `${DOMAIN}/general/update`,
-        data: { ...general, read_the_message: { ...(general.read_the_message ?? {}), ...reading } },
-      });
-      this._reading = undefined;
+      await this.hass.callWS({ type: `${DOMAIN}/general/update`, data: { ...general, ...changes } });
+      return true;
     } catch (err) {
-      this._error = errorText(err);
+      failed(errorText(err));
+      return false;
     } finally {
       this._busy = false;
     }
   }
+
+  // -- Read the message ------------------------------------------------------
+
+  private _openReading(): void {
+    const saved = this.config?.general?.read_the_message ?? {};
+    this._dialogError = undefined;
+    this._reading = { tts_service: saved.tts_service ?? null, language: saved.language ?? null };
+    if (saved.tts_service) void this._loadLanguages(saved.tts_service);
+  }
+
+  private async _loadLanguages(entityId: string): Promise<void> {
+    if (!this.hass || this._languages[entityId]) return;
+    try {
+      const result = await this.hass.callWS<{ provider?: { supported_languages?: string[] } }>({
+        type: "tts/engine/get",
+        engine_id: entityId,
+      });
+      this._languages = { ...this._languages, [entityId]: result.provider?.supported_languages ?? [] };
+    } catch {
+      this._languages = { ...this._languages, [entityId]: [] };
+    }
+  }
+
+  private _renderReading(reading: Reading) {
+    const languages = reading.tts_service ? (this._languages[reading.tts_service] ?? []) : [];
+    const options = languages
+      .map((code) => ({ value: code, label: `${languageName(code)} (${code})` }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (reading.language && !languages.includes(reading.language)) {
+      options.unshift({ value: reading.language, label: `${languageName(reading.language)} (${reading.language})` });
+    }
+    return html`<ha-dialog
+      open
+      width="medium"
+      header-title="Read the message"
+      @closed=${(ev: Event) => {
+        if (ev.target !== ev.currentTarget) return;
+        ev.stopPropagation();
+        this._reading = undefined;
+      }}
+    >
+      <div class="form">
+        <p class="hint">Choose the text-to-speech service that reads the message aloud on the speakers.</p>
+        ${this._dialogError ? html`<ha-alert alert-type="error">${this._dialogError}</ha-alert>` : nothing}
+        ${field(
+          this.hass,
+          { entity: { filter: [{ domain: "tts" }] } },
+          reading.tts_service ?? undefined,
+          "Text-to-speech",
+          (tts) => {
+            const entityId = (tts as string) || null;
+            this._reading = {
+              tts_service: entityId,
+              language: entityId === reading.tts_service ? reading.language : null,
+            };
+            if (entityId) void this._loadLanguages(entityId);
+          },
+        )}
+        ${reading.tts_service
+          ? field(
+              this.hass,
+              { select: { mode: "dropdown", options } },
+              reading.language ?? "",
+              "Language",
+              (language) => (this._reading = { ...reading, language: (language as string) || null }),
+              { clearable: true },
+            )
+          : nothing}
+      </div>
+      <ha-dialog-footer slot="footer">
+        <ha-button slot="secondaryAction" appearance="plain" @click=${() => (this._reading = undefined)}>
+          Cancel
+        </ha-button>
+        <ha-button slot="primaryAction" .disabled=${this._busy} @click=${this._saveReading}>Save</ha-button>
+      </ha-dialog-footer>
+    </ha-dialog>`;
+  }
+
+  private async _saveReading(): Promise<void> {
+    const reading = this._reading;
+    if (!reading) return;
+    this._dialogError = undefined;
+    const saved = this.config?.general?.read_the_message ?? {};
+    const done = await this._updateGeneral(
+      { read_the_message: { ...saved, ...reading } },
+      (err) => (this._dialogError = err),
+    );
+    if (done) this._reading = undefined;
+  }
+
+  // -- The dialog of a speaker, a siren or a chime ---------------------------
 
   private _open(edit: Edit): void {
     this._dialogError = undefined;
@@ -248,9 +444,7 @@ export class NcSettingsSound extends LitElement {
         ? id
           ? (edit.item.name ?? "Chime")
           : "Add chime"
-        : id
-          ? entityName(this.hass, edit.item.entity_id ?? "")
-          : `Add ${TITLES[edit.section]}`;
+        : entityName(this.hass, edit.item.entity_id ?? "");
     return html`<ha-dialog
       open
       width="medium"
@@ -261,9 +455,7 @@ export class NcSettingsSound extends LitElement {
         this._edit = undefined;
       }}
     >
-      ${edit.section !== "chimes"
-        ? testButton("Test", () => void this._test(edit), !edit.item.entity_id)
-        : nothing}
+      ${edit.section !== "chimes" ? testButton("Test", () => void this._test(edit), !this._valid(edit)) : nothing}
       ${id
         ? html`<ha-icon-button slot="headerActionItems" .label=${"Delete"} @click=${() => void this._delete(edit)}>
             <ha-icon icon="mdi:delete"></ha-icon>
@@ -304,13 +496,6 @@ export class NcSettingsSound extends LitElement {
     const state = entityState(this.hass, item.entity_id);
     const supported = features(state);
     return html`
-      ${field(
-        this.hass,
-        { entity: { filter: [{ domain: "media_player" }] } },
-        item.entity_id || undefined,
-        "Entity",
-        (value) => this._set({ entity_id: (value as string) ?? "" }),
-      )}
       ${state && supported & MEDIA_VOLUME_SET
         ? this._volume(item.volume, "Empty: the speaker's volume stays as it is.")
         : nothing}
@@ -318,7 +503,7 @@ export class NcSettingsSound extends LitElement {
         ? html`<ha-alert alert-type="info">
             ${supported & MEDIA_ANNOUNCE
               ? "This speaker announces: what it plays is lowered and comes back after the chime."
-              : "This speaker does not announce: what it plays stops for the chime. The volume is set back after it."}
+              : "This speaker does not announce: what it plays stops for the chime."}
           </ha-alert>`
         : nothing}
     `;
@@ -336,14 +521,9 @@ export class NcSettingsSound extends LitElement {
     const toneOptions = Array.isArray(tones)
       ? tones.map((tone) => ({ value: tone, label: tone }))
       : Object.entries(tones ?? {}).map(([value, label]) => ({ value, label: String(label) }));
+    const sirenFields =
+      domain === "siren" && [SIREN_TONES, SIREN_VOLUME_SET, SIREN_DURATION].some((bit) => supported & bit);
     return html`
-      ${field(
-        this.hass,
-        { entity: { filter: [{ domain: "siren" }, { domain: "switch" }, { domain: "select" }] } },
-        item.entity_id || undefined,
-        "Entity",
-        (value) => this._set({ entity_id: (value as string) ?? "", option: null, stop_option: null, tone: null }),
-      )}
       ${domain === "select"
         ? html`<div class="row-fields">
             ${field(
@@ -389,7 +569,9 @@ export class NcSettingsSound extends LitElement {
         : nothing}
       ${domain === "switch"
         ? html`<p class="hint">The switch is on while the notification sends.</p>`
-        : nothing}
+        : domain === "siren" && !sirenFields
+          ? html`<p class="hint">The siren sounds while the notification sends.</p>`
+          : nothing}
     `;
   }
 
@@ -450,18 +632,10 @@ export class NcSettingsSound extends LitElement {
     try {
       if (id) {
         await this.hass.callWS({ type: `${DOMAIN}/item/update`, section: edit.section, item_id: id, data });
+      } else if (edit.section === "chimes") {
+        await this.hass.callWS({ type: `${DOMAIN}/item/create`, section: edit.section, data });
       } else {
-        const item = await this.hass.callWS<{ id: string; entity_id?: string }>({
-          type: `${DOMAIN}/item/create`,
-          section: edit.section,
-          data,
-        });
-        if (edit.section !== "chimes") {
-          this._modesFor = {
-            key: `${KIND[edit.section]}:${item.id}`,
-            name: entityName(this.hass, item.entity_id ?? ""),
-          };
-        }
+        await this._create(edit.section, data);
       }
       this._edit = undefined;
     } catch (err) {
@@ -497,7 +671,20 @@ export class NcSettingsSound extends LitElement {
     }
   }
 
-  static override styles = DEVICE_PAGE_STYLES();
+  static override styles = [
+    DEVICE_PAGE_STYLES(),
+    css`
+      .handle {
+        cursor: grab;
+        display: flex;
+        color: var(--secondary-text-color);
+        margin-inline-end: -4px;
+      }
+      .nav-icon {
+        color: var(--secondary-text-color);
+      }
+    `,
+  ];
 }
 
 declare global {

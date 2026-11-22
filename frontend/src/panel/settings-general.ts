@@ -1,14 +1,15 @@
 // The General tab of the settings: a list of pages like Home Assistant's
-// System settings (Modes, People, Light, Sound, Snooze, and Import and export in its own block),
+// System settings (Home modes, People, Light, Sound; Snooze and Import and export in a second block),
 // and the version. Each page opens on its own (nc-general-page).
 
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 
-import type { NotificationCenterConfig } from "../shared/config";
-import { navigate } from "../shared/live";
+import { DOMAIN, type NotificationCenterConfig } from "../shared/config";
+import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { VERSION } from "../shared/version";
+import { field } from "./fields";
 
 interface GeneralPage {
   key: string;
@@ -19,6 +20,16 @@ interface GeneralPage {
 }
 
 const count = (amount: number, one: string, more: string) => `${amount} ${amount === 1 ? one : more}`;
+
+/** The speakers and the sirens, leaving out what there is none of. */
+function soundSummary(config: NotificationCenterConfig): string {
+  const parts = [
+    [config.speakers?.length ?? 0, "speaker", "speakers"],
+    [config.sirens?.length ?? 0, "siren", "sirens"],
+  ] as const;
+  const shown = parts.filter(([amount]) => amount > 0).map(([amount, one, more]) => count(amount, one, more));
+  return shown.length ? shown.join(", ") : "No speakers or sirens";
+}
 
 // The colours of Home Assistant's System settings icons.
 @customElement("nc-settings-general")
@@ -31,6 +42,13 @@ export class NcSettingsGeneral extends LitElement {
 
   @property() public base = "/notification-center";
 
+  // The Snooze dialog's time while it is open.
+  @state() private _snooze?: string;
+
+  @state() private _error?: string;
+
+  @state() private _busy = false;
+
   protected override render() {
     const config = this.config;
     if (!config) return nothing;
@@ -39,35 +57,34 @@ export class NcSettingsGeneral extends LitElement {
     const settings: GeneralPage[] = [
       {
         key: "modes",
-        name: "Modes",
-        description: `${config.modes.length} ${config.modes.length === 1 ? "mode" : "modes"}`,
+        name: "Home modes",
+        description: count(config.modes.length, "home mode", "home modes"),
         icon: "mdi:home-switch-outline",
-        color: "#5C6BC0",
+        color: "#43A047",
       },
       {
         key: "people",
         name: "People",
         description: `${config.people.length} ${config.people.length === 1 ? "person" : "people"}`,
         icon: "mdi:account-multiple",
-        color: "#E68D0D",
+        color: "#5A87FA",
       },
       {
         key: "light",
         name: "Light",
         description: count(config.lights?.length ?? 0, "light", "lights"),
         icon: "mdi:lightbulb-on-outline",
-        color: "#F9A825",
+        color: "#FFB300",
       },
       {
         key: "sound",
         name: "Sound",
-        description: [
-          count(config.speakers?.length ?? 0, "speaker", "speakers"),
-          count(config.sirens?.length ?? 0, "siren", "sirens"),
-        ].join(", "),
+        description: soundSummary(config),
         icon: "mdi:volume-high",
         color: "#7E57C2",
       },
+    ];
+    const data: GeneralPage[] = [
       {
         key: "snooze",
         name: "Snooze",
@@ -75,8 +92,6 @@ export class NcSettingsGeneral extends LitElement {
         icon: "mdi:alarm-snooze",
         color: "#26A69A",
       },
-    ];
-    const data: GeneralPage[] = [
       {
         key: "import",
         name: "Import and export",
@@ -88,7 +103,60 @@ export class NcSettingsGeneral extends LitElement {
     return html`
       ${this._card(settings)} ${this._card(data)}
       <p class="version">Notification Center ${VERSION}</p>
+      ${this._snooze !== undefined ? this._renderSnooze(this._snooze) : nothing}
     `;
+  }
+
+  private _openPage(key: string): void {
+    if (key === "snooze") {
+      this._error = undefined;
+      this._snooze = this.config?.general?.snooze_tomorrow_at ?? "08:00";
+      return;
+    }
+    navigate(`${this.base}/settings/general/${key}`);
+  }
+
+  // Snooze: the default time when a notification is snoozed to another day.
+  private _renderSnooze(value: string) {
+    return html`<ha-dialog
+      open
+      width="small"
+      header-title="Snooze"
+      @closed=${(ev: Event) => {
+        if (ev.target !== ev.currentTarget) return;
+        this._snooze = undefined;
+      }}
+    >
+      <p class="hint">The default time when a notification is snoozed to another day.</p>
+      ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
+      ${field(this.hass, { time: { no_second: true } }, value, "Default time", (time) => {
+        this._snooze = (time as string) || "08:00";
+      })}
+      <ha-dialog-footer slot="footer">
+        <ha-button slot="secondaryAction" appearance="plain" @click=${() => (this._snooze = undefined)}>
+          Cancel
+        </ha-button>
+        <ha-button slot="primaryAction" .disabled=${this._busy} @click=${this._saveSnooze}>Save</ha-button>
+      </ha-dialog-footer>
+    </ha-dialog>`;
+  }
+
+  private async _saveSnooze(): Promise<void> {
+    const time = this._snooze;
+    if (!time || !this.hass) return;
+    this._busy = true;
+    this._error = undefined;
+    try {
+      await this.hass.callWS({
+        type: `${DOMAIN}/general/update`,
+        data: { ...(this.config?.general ?? {}), snooze_tomorrow_at: time },
+      });
+      this._snooze = undefined;
+    } catch (err) {
+      this._error = errorText(err);
+    } finally {
+      this._busy = false;
+    }
   }
 
   // As Home Assistant's navigation list of the System settings.
@@ -96,7 +164,7 @@ export class NcSettingsGeneral extends LitElement {
     return html`<ha-card outlined>
       <ha-list-base>
         ${pages.map(
-          (page) => html`<ha-list-item-button @click=${() => navigate(`${this.base}/settings/general/${page.key}`)}>
+          (page) => html`<ha-list-item-button @click=${() => this._openPage(page.key)}>
             <div slot="start" class="page-icon" style=${`background-color: ${page.color}`}>
               <ha-icon .icon=${page.icon}></ha-icon>
             </div>
@@ -127,6 +195,10 @@ export class NcSettingsGeneral extends LitElement {
       --mdc-icon-size: 24px;
     }
     ha-icon-next {
+      color: var(--secondary-text-color);
+    }
+    .hint {
+      margin: 0 0 16px;
       color: var(--secondary-text-color);
     }
     .version {

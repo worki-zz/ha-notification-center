@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.3
+
+Fixes and changes after testing 0.6.2.
+
+### Changed
+
+- **Modes** are now **Home modes** everywhere in the panel (the General list, the page, *Add home mode*, the channel tables and dialogs). YAML and the code keep `modes`.
+- General list: Home modes have a green icon, People blue, Light amber. **Snooze** moved to the second block with Import and export, and opens a dialog instead of a page. Sound leaves out what there is none of (*1 speaker*, not *1 speaker, 0 sirens*).
+- **People:** the state now shows as a chip like a home mode's *Active*: Home green, Sleep deep purple, Away grey. The line under the name says *Sleep when …*.
+- **Light:** *Add light* picks the entity at once (Home Assistant's entity picker in place of the button), with the default settings; the dialog edits the rest and no longer changes the entity. A row reads *Brightness 70% · Dim: 30% · Highlight: Blink*. *Dim below* sits beside the illuminance sensor, *Dim brightness* below them in full width. *Measure illuminance continuously* is on by default for new lights. Light grey, Grey and Dark grey are white on a light by default (a lamp has no grey), also on the Colors tab. Shorter page intro.
+- A new light, speaker or siren asks for its home modes without a *Skip* button; closing the dialog saves the ticks shown.
+- **Sound:** speakers and sirens are one list with *Speakers* and *Sirens* headers (an info icon tells what can be a siren), with *Add speaker* and *Add siren* below that pick the entity at once (a select first asks for its sound option). The device dialog no longer changes the entity. **Chimes** moved to a page of its own, where the rows can be dragged to set the order of the chime lists (alphabetical by default). **Read the message** opens a dialog; its *Language* is a list of the service's languages, empty by default, with X to clear it.
+
+### Fixed
+
+- Pressing a light colour's Test several times left the light in the test colour; it now goes back to how it was before the first test.
+
 ## 0.6.2
 
 Phase 6.1: lights, speakers and sirens.

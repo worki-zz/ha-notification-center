@@ -1,9 +1,10 @@
 // The Light page of the General settings: the lights (and switches) of the
-// Light channel. A light's dialog has two tabs: Settings (brightness, the
-// effect of a highlighted notification, dimming when dark) and, for a
-// colour light, Colors (each system colour as this light shows it). The
-// fields follow what the light can do. A new light then asks for the modes
-// it sends in, in every category.
+// Light channel. Add light picks the entity at once, with the default
+// settings, then asks for the home modes it sends in, in every category.
+// A light's dialog has two tabs: Settings (brightness, the effect of a
+// highlighted notification, dimming when dark) and, for a colour light,
+// Colors (each system colour as this light shows it). The fields follow
+// what the light can do; the entity stays.
 
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -11,15 +12,23 @@ import { customElement, property, state } from "lit/decorators.js";
 import {
   DOMAIN,
   type Light,
+  LIGHT_DEFAULTS,
   type NotificationCenterConfig,
-  SYSTEM_COLORS,
   rgbToHex,
 } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HassEntity, HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
 import "./devices";
-import { channelIcon, entityName, entityState, testButton, testChannel } from "./devices";
+import {
+  addEntityButton,
+  channelIcon,
+  entityName,
+  entityState,
+  openEntityPicker,
+  testButton,
+  testChannel,
+} from "./devices";
 import { field } from "./fields";
 
 const RGB_MODES = ["hs", "xy", "rgb", "rgbw", "rgbww"];
@@ -55,15 +64,14 @@ export function colorName(name: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-type Draft = Omit<Light, "id"> & { id?: string };
+type Draft = Light;
 
-const NEW_LIGHT: Draft = {
-  entity_id: "",
+const NEW_LIGHT: Omit<Light, "id" | "entity_id"> = {
   brightness: 70,
   illuminance_sensor: null,
   dim_below: 30,
   dim_brightness: 30,
-  dim_continuously: false,
+  dim_continuously: true,
   effect: BLINK,
   colors: {},
 };
@@ -87,6 +95,9 @@ export class NcSettingsLights extends LitElement {
 
   @state() private _busy = false;
 
+  // The Add light picker is open.
+  @state() private _adding = false;
+
   protected override render() {
     const lights = this.config?.lights ?? [];
     return html`
@@ -96,11 +107,23 @@ export class NcSettingsLights extends LitElement {
             <div class="rows">${lights.map((light) => this._row(light))}</div>
           </ha-card>`
         : html`<ha-alert alert-type="info">No lights yet.</ha-alert>`}
-      <div>
-        <ha-button appearance="filled" size="s" @click=${() => this._open()}>
-          <ha-icon slot="start" icon="mdi:plus"></ha-icon>
-          Add light
-        </ha-button>
+      <div class="buttons">
+        ${addEntityButton({
+          hass: this.hass,
+          adding: this._adding,
+          label: "Add light",
+          className: "add-light",
+          domains: ["light", "switch"],
+          exclude: lights.map((light) => light.entity_id),
+          start: () => {
+            this._adding = true;
+            void openEntityPicker(this, "add-light");
+          },
+          picked: (entityId) => {
+            this._adding = false;
+            if (entityId) void this._add(entityId);
+          },
+        })}
       </div>
       ${this._edit ? this._renderDialog(this._edit) : nothing}
       ${this._modesFor
@@ -119,9 +142,9 @@ export class NcSettingsLights extends LitElement {
     const name = entityName(this.hass, light.entity_id);
     const can = capabilities(entityState(this.hass, light.entity_id));
     const parts: string[] = [];
-    if (can.dims && light.brightness) parts.push(`${light.brightness}%`);
-    parts.push(light.effect && light.effect !== BLINK ? light.effect : "Blink");
-    if (light.illuminance_sensor) parts.push("Dims when dark");
+    if (can.dims && light.brightness) parts.push(`Brightness ${light.brightness}%`);
+    if (can.dims && light.illuminance_sensor) parts.push(`Dim: ${light.dim_brightness ?? 30}%`);
+    parts.push(`Highlight: ${light.effect && light.effect !== BLINK ? light.effect : "Blink"}`);
     return html`<div class="row" role="button" tabindex="0" @click=${() => this._open(light)}>
       ${channelIcon(this.hass, { key: `light:${light.id}`, name, icon: "mdi:lightbulb-outline", entity_id: light.entity_id })}
       <div class="text">
@@ -132,10 +155,23 @@ export class NcSettingsLights extends LitElement {
     </div>`;
   }
 
-  private _open(light?: Light): void {
+  private _open(light: Light): void {
     this._tab = "settings";
     this._dialogError = undefined;
-    this._edit = light ? structuredClone(light) : structuredClone(NEW_LIGHT);
+    this._edit = structuredClone(light);
+  }
+
+  // A new light with the default settings; a row opens them later.
+  private async _add(entityId: string): Promise<void> {
+    if (!this.hass) return;
+    this._error = undefined;
+    try {
+      const data = this._data({ id: "", entity_id: entityId, ...structuredClone(NEW_LIGHT) });
+      const item = await this.hass.callWS<Light>({ type: `${DOMAIN}/item/create`, section: "lights", data });
+      this._modesFor = { key: `light:${item.id}`, name: entityName(this.hass, item.entity_id) };
+    } catch (err) {
+      this._error = errorText(err);
+    }
   }
 
   private _set(changes: Partial<Draft>): void {
@@ -143,7 +179,7 @@ export class NcSettingsLights extends LitElement {
   }
 
   private _key(edit: Draft): string {
-    return `light:${edit.id ?? "new"}`;
+    return `light:${edit.id}`;
   }
 
   private async _test(edit: Draft, color?: string): Promise<void> {
@@ -165,7 +201,7 @@ export class NcSettingsLights extends LitElement {
       { label: "Settings", value: "settings" },
       { label: "Colors", value: "colors" },
     ];
-    const title = edit.id ? entityName(this.hass, edit.entity_id) : "Add light";
+    const title = entityName(this.hass, edit.entity_id);
     return html`<ha-dialog
       open
       width="medium"
@@ -176,12 +212,10 @@ export class NcSettingsLights extends LitElement {
         this._edit = undefined;
       }}
     >
-      ${testButton("Test", () => void this._test(edit), !edit.entity_id)}
-      ${edit.id
-        ? html`<ha-icon-button slot="headerActionItems" .label=${"Delete"} @click=${() => void this._delete(edit)}>
-            <ha-icon icon="mdi:delete"></ha-icon>
-          </ha-icon-button>`
-        : nothing}
+      ${testButton("Test", () => void this._test(edit))}
+      <ha-icon-button slot="headerActionItems" .label=${"Delete"} @click=${() => void this._delete(edit)}>
+        <ha-icon icon="mdi:delete"></ha-icon>
+      </ha-icon-button>
       <div class="form">
         ${this._dialogError ? html`<ha-alert alert-type="error">${this._dialogError}</ha-alert>` : nothing}
         ${can.rgb
@@ -201,7 +235,7 @@ export class NcSettingsLights extends LitElement {
         <ha-button slot="secondaryAction" appearance="plain" @click=${() => (this._edit = undefined)}>
           Cancel
         </ha-button>
-        <ha-button slot="primaryAction" .disabled=${this._busy || !edit.entity_id} @click=${this._save}>
+        <ha-button slot="primaryAction" .disabled=${this._busy} @click=${this._save}>
           Save
         </ha-button>
       </ha-dialog-footer>
@@ -214,14 +248,9 @@ export class NcSettingsLights extends LitElement {
       ...can.effects.map((effect) => ({ value: effect, label: effect })),
     ];
     return html`
-      ${field(
-        this.hass,
-        { entity: { filter: [{ domain: "light" }, { domain: "switch" }] } },
-        edit.entity_id || undefined,
-        "Entity",
-        (value) => this._set({ entity_id: (value as string) ?? "" }),
-        { helper: "A light, or a switch (a lamp on a plug): on, or blinking." },
-      )}
+      ${!can.dims && !can.effects.length
+        ? html`<p class="hint">A switch (a lamp on a plug) turns on, or blinks for a highlighted notification.</p>`
+        : nothing}
       ${can.dims
         ? field(
             this.hass,
@@ -264,47 +293,42 @@ export class NcSettingsLights extends LitElement {
   }
 
   private _renderDim(edit: Draft) {
-    const sensor = !!edit.illuminance_sensor;
+    const sensor = field(
+      this.hass,
+      { entity: { filter: [{ domain: "sensor", device_class: "illuminance" }] } },
+      edit.illuminance_sensor ?? undefined,
+      "Illuminance sensor",
+      (value) => this._set({ illuminance_sensor: (value as string) || null }),
+    );
+    if (!edit.illuminance_sensor) return html`<div class="title">Dim when dark</div>${sensor}`;
     return html`<div class="title">Dim when dark</div>
+      <div class="row-fields">
+        ${sensor}
+        ${field(
+          this.hass,
+          { number: { min: 0, mode: "box", unit_of_measurement: "lx" } },
+          edit.dim_below ?? 30,
+          "Dim below",
+          (value) => this._set({ dim_below: Number(value ?? 30) }),
+        )}
+      </div>
       ${field(
         this.hass,
-        { entity: { filter: [{ domain: "sensor", device_class: "illuminance" }] } },
-        edit.illuminance_sensor ?? undefined,
-        "Illuminance sensor",
-        (value) => this._set({ illuminance_sensor: (value as string) || null }),
-        { helper: "Empty: the light does not dim." },
+        { number: { min: 1, max: 100, mode: "slider", unit_of_measurement: "%" } },
+        edit.dim_brightness ?? 30,
+        "Dim brightness",
+        (value) => this._set({ dim_brightness: Number(value) || 30 }),
       )}
-      ${sensor
-        ? html`<div class="row-fields">
-              ${field(
-                this.hass,
-                { number: { min: 0, mode: "box", unit_of_measurement: "lx" } },
-                edit.dim_below ?? 30,
-                "Dim below",
-                (value) => this._set({ dim_below: Number(value ?? 30) }),
-              )}
-              ${field(
-                this.hass,
-                { number: { min: 1, max: 100, mode: "slider", unit_of_measurement: "%" } },
-                edit.dim_brightness ?? 30,
-                "Dim brightness",
-                (value) => this._set({ dim_brightness: Number(value) || 30 }),
-              )}
-            </div>
-            <div class="switch-row">
-              <div>
-                <div>Measure continuously</div>
-                <div class="secondary">
-                  Follow the sensor while the light is on. Off: measured when the light turns on (a sensor the
-                  light shines on).
-                </div>
-              </div>
-              <ha-switch
-                .checked=${!!edit.dim_continuously}
-                @change=${(ev: Event) => this._set({ dim_continuously: (ev.target as HTMLInputElement).checked })}
-              ></ha-switch>
-            </div>`
-        : nothing}`;
+      <div class="switch-row">
+        <div>
+          <div>Measure illuminance continuously</div>
+          <div class="secondary">Follow the illuminance sensor while the light is on.</div>
+        </div>
+        <ha-switch
+          .checked=${edit.dim_continuously ?? true}
+          @change=${(ev: Event) => this._set({ dim_continuously: (ev.target as HTMLInputElement).checked })}
+        ></ha-switch>
+      </div>`;
   }
 
   // Each system colour as this light shows it: changed ones have a reset.
@@ -314,7 +338,7 @@ export class NcSettingsLights extends LitElement {
         How this light shows each system color. Lights show colors differently: set the ones that look wrong.
       </p>
       <ha-card outlined class="colors">
-        ${Object.entries(SYSTEM_COLORS).map(([name, rgb]) => {
+        ${Object.entries(LIGHT_DEFAULTS).map(([name, rgb]) => {
           const value = own[name] ?? rgb;
           const changed = !!own[name];
           return html`<div class="color-row">
@@ -350,7 +374,6 @@ export class NcSettingsLights extends LitElement {
               : nothing}
             <ha-icon-button
               .label=${"Test"}
-              .disabled=${!edit.entity_id}
               @click=${() => void this._test(edit, name)}
             >
               <ha-icon icon="mdi:play"></ha-icon>
@@ -375,12 +398,7 @@ export class NcSettingsLights extends LitElement {
     this._dialogError = undefined;
     try {
       const data = this._data(edit);
-      if (edit.id) {
-        await this.hass.callWS({ type: `${DOMAIN}/item/update`, section: "lights", item_id: edit.id, data });
-      } else {
-        const item = await this.hass.callWS<Light>({ type: `${DOMAIN}/item/create`, section: "lights", data });
-        this._modesFor = { key: `light:${item.id}`, name: entityName(this.hass, item.entity_id) };
-      }
+      await this.hass.callWS({ type: `${DOMAIN}/item/update`, section: "lights", item_id: edit.id, data });
       this._edit = undefined;
     } catch (err) {
       this._dialogError = errorText(err);
@@ -390,7 +408,7 @@ export class NcSettingsLights extends LitElement {
   }
 
   private async _delete(edit: Draft): Promise<void> {
-    if (!edit.id || !this.hass) return;
+    if (!this.hass) return;
     const name = entityName(this.hass, edit.entity_id);
     if (
       !(await confirmDialog(this, {
@@ -496,6 +514,46 @@ export function DEVICE_PAGE_STYLES() {
     }
     ha-button-toggle-group {
       align-self: flex-start;
+    }
+    /* A group of a list, as Home Assistant's list subheaders. */
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 48px;
+      padding: 0 8px 0 16px;
+      font-size: var(--ha-font-size-s, 14px);
+      font-weight: var(--ha-font-weight-medium, 500);
+      color: var(--secondary-text-color);
+      background-color: var(--secondary-background-color, transparent);
+      border-bottom: 1px solid var(--divider-color);
+    }
+    .rows + .group-header {
+      border-top: 1px solid var(--divider-color);
+    }
+    .group-header .info {
+      --mdc-icon-button-size: 36px;
+      --mdc-icon-size: 20px;
+    }
+    .group-hint {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--divider-color);
+      font-size: var(--ha-font-size-s, 12px);
+    }
+    .buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .buttons ha-entity-picker {
+      flex: 1 1 280px;
+    }
+    .row.static {
+      cursor: default;
+    }
+    .row.static:hover {
+      background-color: transparent;
     }
     .swatch {
       flex: none;

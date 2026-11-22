@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -403,3 +404,40 @@ async def test_channel_test_light(
     await hass.async_block_till_done(wait_background_tasks=True)
     assert on[-1].data["rgb_color"] == RED
     assert off, "back to off"
+
+
+async def test_channel_test_light_several_times(
+    center: Center, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tests one after the other: the light goes back to how it was before the first."""
+    monkeypatch.setattr(devices_module, "TEST_SECONDS", 0.05)
+    await center.set("light.strip", "off", supported_color_modes=["hs"])
+    on = async_mock_service(hass, "light", "turn_on")
+    off = async_mock_service(hass, "light", "turn_off")
+    key = await _light(center)
+    devices = center.entry.runtime_data.devices
+
+    first = hass.async_create_task(devices.async_test(key, {"color": "red"}))
+    await asyncio.sleep(0.01)
+    assert on[-1].data["rgb_color"] == RED
+    # The light follows the first test, as a real one does.
+    hass.states.async_set(
+        "light.strip", "on", {"supported_color_modes": ["hs"], "hs_color": [4, 78]}
+    )
+    second = hass.async_create_task(devices.async_test(key, {"color": "green"}))
+    await first
+    await second
+    await hass.async_block_till_done()
+    assert off, "back to off, as before the first test"
+    assert on[-1].data["rgb_color"] == [76, 175, 80]
+    assert len(on) == 2, "nothing turned on after the last test"
+
+
+def test_greys_are_white_on_a_light() -> None:
+    """A lamp has no grey: the greys show white unless the light sets its own."""
+    assert light_rgb({}, "grey", None) == (255, 255, 255)
+    assert light_rgb({"colors": {"grey": [100, 100, 100]}}, "grey", None) == (
+        100,
+        100,
+        100,
+    )
