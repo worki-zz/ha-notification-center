@@ -1,0 +1,527 @@
+// The Light page of the General settings: the lights (and switches) of the
+// Light channel. A light's dialog has two tabs: Settings (brightness, the
+// effect of a highlighted notification, dimming when dark) and, for a
+// colour light, Colors (each system colour as this light shows it). The
+// fields follow what the light can do. A new light then asks for the modes
+// it sends in, in every category.
+
+import { LitElement, css, html, nothing } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
+
+import {
+  DOMAIN,
+  type Light,
+  type NotificationCenterConfig,
+  SYSTEM_COLORS,
+  rgbToHex,
+} from "../shared/config";
+import { errorText } from "../shared/live";
+import type { HassEntity, HomeAssistant } from "../shared/types";
+import { confirmDialog } from "./confirm";
+import "./devices";
+import { channelIcon, entityName, entityState, testButton, testChannel } from "./devices";
+import { field } from "./fields";
+
+const RGB_MODES = ["hs", "xy", "rgb", "rgbw", "rgbww"];
+const DIM_MODES = [...RGB_MODES, "color_temp", "brightness", "white"];
+
+export const BLINK = "blink";
+
+interface Capabilities {
+  dims: boolean;
+  rgb: boolean;
+  temperature: boolean;
+  effects: string[];
+  minKelvin?: number;
+  maxKelvin?: number;
+}
+
+/** What a light can do, from its state (a switch: on and off only). */
+export function capabilities(state: HassEntity | undefined): Capabilities {
+  const modes = (state?.attributes.supported_color_modes as string[] | undefined) ?? [];
+  return {
+    dims: modes.some((mode) => DIM_MODES.includes(mode)),
+    rgb: modes.some((mode) => RGB_MODES.includes(mode)),
+    temperature: modes.includes("color_temp"),
+    effects: (state?.attributes.effect_list as string[] | undefined) ?? [],
+    minKelvin: state?.attributes.min_color_temp_kelvin as number | undefined,
+    maxKelvin: state?.attributes.max_color_temp_kelvin as number | undefined,
+  };
+}
+
+/** "dark-grey" → "Dark grey". */
+export function colorName(name: string): string {
+  const text = name.replace(/-/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+type Draft = Omit<Light, "id"> & { id?: string };
+
+const NEW_LIGHT: Draft = {
+  entity_id: "",
+  brightness: 70,
+  illuminance_sensor: null,
+  dim_below: 30,
+  dim_brightness: 30,
+  dim_continuously: false,
+  effect: BLINK,
+  colors: {},
+};
+
+@customElement("nc-settings-lights")
+export class NcSettingsLights extends LitElement {
+  @property({ attribute: false }) public hass?: HomeAssistant;
+
+  @property({ attribute: false }) public config?: NotificationCenterConfig;
+
+  @state() private _edit?: Draft;
+
+  @state() private _tab: "settings" | "colors" = "settings";
+
+  // A new light, saved: the modes it sends in.
+  @state() private _modesFor?: { key: string; name: string };
+
+  @state() private _error?: string;
+
+  @state() private _dialogError?: string;
+
+  @state() private _busy = false;
+
+  protected override render() {
+    const lights = this.config?.lights ?? [];
+    return html`
+      ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
+      ${lights.length
+        ? html`<ha-card outlined>
+            <div class="rows">${lights.map((light) => this._row(light))}</div>
+          </ha-card>`
+        : html`<ha-alert alert-type="info">No lights yet.</ha-alert>`}
+      <div>
+        <ha-button appearance="filled" size="s" @click=${() => this._open()}>
+          <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+          Add light
+        </ha-button>
+      </div>
+      ${this._edit ? this._renderDialog(this._edit) : nothing}
+      ${this._modesFor
+        ? html`<nc-device-modes-dialog
+            .hass=${this.hass}
+            .modes=${this.config?.modes ?? []}
+            .channel=${this._modesFor.key}
+            .name=${this._modesFor.name}
+            @closed-dialog=${() => (this._modesFor = undefined)}
+          ></nc-device-modes-dialog>`
+        : nothing}
+    `;
+  }
+
+  private _row(light: Light) {
+    const name = entityName(this.hass, light.entity_id);
+    const can = capabilities(entityState(this.hass, light.entity_id));
+    const parts: string[] = [];
+    if (can.dims && light.brightness) parts.push(`${light.brightness}%`);
+    parts.push(light.effect && light.effect !== BLINK ? light.effect : "Blink");
+    if (light.illuminance_sensor) parts.push("Dims when dark");
+    return html`<div class="row" role="button" tabindex="0" @click=${() => this._open(light)}>
+      ${channelIcon(this.hass, { key: `light:${light.id}`, name, icon: "mdi:lightbulb-outline", entity_id: light.entity_id })}
+      <div class="text">
+        <div>${name}</div>
+        <div class="secondary">${parts.join(" · ")}</div>
+      </div>
+      <ha-icon-next></ha-icon-next>
+    </div>`;
+  }
+
+  private _open(light?: Light): void {
+    this._tab = "settings";
+    this._dialogError = undefined;
+    this._edit = light ? structuredClone(light) : structuredClone(NEW_LIGHT);
+  }
+
+  private _set(changes: Partial<Draft>): void {
+    this._edit = { ...this._edit!, ...changes };
+  }
+
+  private _key(edit: Draft): string {
+    return `light:${edit.id ?? "new"}`;
+  }
+
+  private async _test(edit: Draft, color?: string): Promise<void> {
+    this._dialogError = undefined;
+    try {
+      await testChannel(this.hass, this._key(edit), {
+        device: this._data(edit),
+        ...(color ? { color, highlight: false } : {}),
+      });
+    } catch (err) {
+      this._dialogError = errorText(err);
+    }
+  }
+
+  private _renderDialog(edit: Draft) {
+    const state = entityState(this.hass, edit.entity_id);
+    const can = capabilities(state);
+    const tabs = [
+      { label: "Settings", value: "settings" },
+      { label: "Colors", value: "colors" },
+    ];
+    const title = edit.id ? entityName(this.hass, edit.entity_id) : "Add light";
+    return html`<ha-dialog
+      open
+      width="medium"
+      header-title=${title}
+      @closed=${(ev: Event) => {
+        if (ev.target !== ev.currentTarget) return;
+        ev.stopPropagation();
+        this._edit = undefined;
+      }}
+    >
+      ${testButton("Test", () => void this._test(edit), !edit.entity_id)}
+      ${edit.id
+        ? html`<ha-icon-button slot="headerActionItems" .label=${"Delete"} @click=${() => void this._delete(edit)}>
+            <ha-icon icon="mdi:delete"></ha-icon>
+          </ha-icon-button>`
+        : nothing}
+      <div class="form">
+        ${this._dialogError ? html`<ha-alert alert-type="error">${this._dialogError}</ha-alert>` : nothing}
+        ${can.rgb
+          ? html`<ha-button-toggle-group
+              size="s"
+              .buttons=${tabs}
+              .active=${this._tab}
+              @value-changed=${(ev: CustomEvent<{ value: "settings" | "colors" }>) => {
+                ev.stopPropagation();
+                this._tab = ev.detail.value;
+              }}
+            ></ha-button-toggle-group>`
+          : nothing}
+        ${can.rgb && this._tab === "colors" ? this._renderColors(edit) : this._renderSettings(edit, can)}
+      </div>
+      <ha-dialog-footer slot="footer">
+        <ha-button slot="secondaryAction" appearance="plain" @click=${() => (this._edit = undefined)}>
+          Cancel
+        </ha-button>
+        <ha-button slot="primaryAction" .disabled=${this._busy || !edit.entity_id} @click=${this._save}>
+          Save
+        </ha-button>
+      </ha-dialog-footer>
+    </ha-dialog>`;
+  }
+
+  private _renderSettings(edit: Draft, can: Capabilities) {
+    const effects = [
+      { value: BLINK, label: "Blink (1 second on, 1 second off)" },
+      ...can.effects.map((effect) => ({ value: effect, label: effect })),
+    ];
+    return html`
+      ${field(
+        this.hass,
+        { entity: { filter: [{ domain: "light" }, { domain: "switch" }] } },
+        edit.entity_id || undefined,
+        "Entity",
+        (value) => this._set({ entity_id: (value as string) ?? "" }),
+        { helper: "A light, or a switch (a lamp on a plug): on, or blinking." },
+      )}
+      ${can.dims
+        ? field(
+            this.hass,
+            { number: { min: 1, max: 100, mode: "slider", unit_of_measurement: "%" } },
+            edit.brightness ?? 70,
+            "Brightness",
+            (value) => this._set({ brightness: Number(value) || 70 }),
+          )
+        : nothing}
+      ${can.temperature && !can.rgb
+        ? field(
+            this.hass,
+            {
+              number: {
+                min: can.minKelvin ?? 2000,
+                max: can.maxKelvin ?? 6500,
+                step: 100,
+                mode: "box",
+                unit_of_measurement: "K",
+              },
+            },
+            edit.color_temp_kelvin ?? undefined,
+            "Color temperature",
+            (value) => this._set({ color_temp_kelvin: value === undefined || value === "" ? null : Number(value) }),
+            { helper: "Empty: the light's own." },
+          )
+        : nothing}
+      ${can.effects.length
+        ? field(
+            this.hass,
+            { select: { mode: "dropdown", options: effects } },
+            edit.effect ?? BLINK,
+            "Highlight effect",
+            (value) => this._set({ effect: (value as string) || BLINK }),
+            { helper: "How a highlighted notification shows." },
+          )
+        : nothing}
+      ${can.dims ? this._renderDim(edit) : nothing}
+    `;
+  }
+
+  private _renderDim(edit: Draft) {
+    const sensor = !!edit.illuminance_sensor;
+    return html`<div class="title">Dim when dark</div>
+      ${field(
+        this.hass,
+        { entity: { filter: [{ domain: "sensor", device_class: "illuminance" }] } },
+        edit.illuminance_sensor ?? undefined,
+        "Illuminance sensor",
+        (value) => this._set({ illuminance_sensor: (value as string) || null }),
+        { helper: "Empty: the light does not dim." },
+      )}
+      ${sensor
+        ? html`<div class="row-fields">
+              ${field(
+                this.hass,
+                { number: { min: 0, mode: "box", unit_of_measurement: "lx" } },
+                edit.dim_below ?? 30,
+                "Dim below",
+                (value) => this._set({ dim_below: Number(value ?? 30) }),
+              )}
+              ${field(
+                this.hass,
+                { number: { min: 1, max: 100, mode: "slider", unit_of_measurement: "%" } },
+                edit.dim_brightness ?? 30,
+                "Dim brightness",
+                (value) => this._set({ dim_brightness: Number(value) || 30 }),
+              )}
+            </div>
+            <div class="switch-row">
+              <div>
+                <div>Measure continuously</div>
+                <div class="secondary">
+                  Follow the sensor while the light is on. Off: measured when the light turns on (a sensor the
+                  light shines on).
+                </div>
+              </div>
+              <ha-switch
+                .checked=${!!edit.dim_continuously}
+                @change=${(ev: Event) => this._set({ dim_continuously: (ev.target as HTMLInputElement).checked })}
+              ></ha-switch>
+            </div>`
+        : nothing}`;
+  }
+
+  // Each system colour as this light shows it: changed ones have a reset.
+  private _renderColors(edit: Draft) {
+    const own = edit.colors ?? {};
+    return html`<p class="hint">
+        How this light shows each system color. Lights show colors differently: set the ones that look wrong.
+      </p>
+      <ha-card outlined class="colors">
+        ${Object.entries(SYSTEM_COLORS).map(([name, rgb]) => {
+          const value = own[name] ?? rgb;
+          const changed = !!own[name];
+          return html`<div class="color-row">
+            <label class="swatch" style=${`background-color: ${rgbToHex(value)}`} title="Choose a color">
+              <input
+                type="color"
+                .value=${rgbToHex(value)}
+                @change=${(ev: Event) => {
+                  const hex = (ev.target as HTMLInputElement).value;
+                  const next = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16));
+                  const colors = { ...own };
+                  if (next.every((part, index) => part === rgb[index])) delete colors[name];
+                  else colors[name] = next;
+                  this._set({ colors });
+                }}
+              />
+            </label>
+            <div class="text">
+              <div>${colorName(name)}</div>
+              <div class="secondary">${value.join(", ")}${changed ? "" : " (default)"}</div>
+            </div>
+            ${changed
+              ? html`<ha-icon-button
+                  .label=${"Reset to the default"}
+                  @click=${() => {
+                    const colors = { ...own };
+                    delete colors[name];
+                    this._set({ colors });
+                  }}
+                >
+                  <ha-icon icon="mdi:restore"></ha-icon>
+                </ha-icon-button>`
+              : nothing}
+            <ha-icon-button
+              .label=${"Test"}
+              .disabled=${!edit.entity_id}
+              @click=${() => void this._test(edit, name)}
+            >
+              <ha-icon icon="mdi:play"></ha-icon>
+            </ha-icon-button>
+          </div>`;
+        })}
+      </ha-card>`;
+  }
+
+  private _data(edit: Draft): Record<string, unknown> {
+    const { id: _id, ...data } = edit;
+    void _id;
+    const can = capabilities(entityState(this.hass, edit.entity_id));
+    if (!can.effects.includes(data.effect ?? "")) data.effect = BLINK;
+    return data;
+  }
+
+  private async _save(): Promise<void> {
+    const edit = this._edit;
+    if (!edit || !this.hass) return;
+    this._busy = true;
+    this._dialogError = undefined;
+    try {
+      const data = this._data(edit);
+      if (edit.id) {
+        await this.hass.callWS({ type: `${DOMAIN}/item/update`, section: "lights", item_id: edit.id, data });
+      } else {
+        const item = await this.hass.callWS<Light>({ type: `${DOMAIN}/item/create`, section: "lights", data });
+        this._modesFor = { key: `light:${item.id}`, name: entityName(this.hass, item.entity_id) };
+      }
+      this._edit = undefined;
+    } catch (err) {
+      this._dialogError = errorText(err);
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  private async _delete(edit: Draft): Promise<void> {
+    if (!edit.id || !this.hass) return;
+    const name = entityName(this.hass, edit.entity_id);
+    if (
+      !(await confirmDialog(this, {
+        title: `Delete ${name}?`,
+        text: "The light leaves the Light channel of every category and notification.",
+        confirm: "Delete",
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
+    try {
+      await this.hass.callWS({ type: `${DOMAIN}/item/delete`, section: "lights", item_id: edit.id });
+      this._edit = undefined;
+    } catch (err) {
+      this._dialogError = errorText(err);
+    }
+  }
+
+  static override styles = DEVICE_PAGE_STYLES();
+}
+
+/** The styles of the device pages (Light and Sound). */
+export function DEVICE_PAGE_STYLES() {
+  return css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    ha-card {
+      overflow: hidden;
+    }
+    .row,
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 8px 8px 16px;
+      min-height: 56px;
+      box-sizing: border-box;
+    }
+    .row {
+      cursor: pointer;
+    }
+    .row:hover,
+    .row:focus-visible {
+      background-color: var(--secondary-background-color);
+      outline: none;
+    }
+    .rows > .row + .row,
+    .color-row + .color-row {
+      border-top: 1px solid var(--divider-color);
+    }
+    .channel-icon,
+    .row > ha-icon {
+      flex: none;
+      color: var(--secondary-text-color);
+    }
+    ha-icon-next {
+      color: var(--secondary-text-color);
+    }
+    .text {
+      flex: 1;
+      min-width: 0;
+    }
+    .secondary {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
+    }
+    .form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .title,
+    .block-title {
+      font-weight: var(--ha-font-weight-medium, 500);
+      margin-bottom: -8px;
+    }
+    .block-title {
+      margin: 8px 0 -4px;
+      font-size: var(--ha-font-size-l, 16px);
+    }
+    .hint {
+      margin: 0;
+      color: var(--secondary-text-color);
+    }
+    .row-fields {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .row-fields > * {
+      flex: 1 1 200px;
+      min-width: 0;
+    }
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    ha-button-toggle-group {
+      align-self: flex-start;
+    }
+    .swatch {
+      flex: none;
+      width: 32px;
+      height: 32px;
+      border-radius: var(--ha-border-radius-circle, 50%);
+      border: 1px solid var(--divider-color);
+      cursor: pointer;
+      overflow: hidden;
+      position: relative;
+    }
+    .swatch input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+      border: none;
+      padding: 0;
+    }
+  `;
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "nc-settings-lights": NcSettingsLights;
+  }
+}

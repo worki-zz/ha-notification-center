@@ -34,9 +34,10 @@ import type {
   ChannelSettings,
   EffectiveButton,
   Mode,
+  NotificationCenterConfig,
 } from "../../shared/config";
 import "../channel-tables";
-import { CHANNELS, audienceCount } from "../channel-tables";
+import { audienceCount, channelsOf } from "../channel-tables";
 import {
   categoryButtons,
   effectiveButtons,
@@ -188,6 +189,12 @@ export class NcStepEditor extends LitElement {
 
   // The modes, for the Channels table.
   @property({ attribute: false }) public modes: Mode[] = [];
+
+  // The configuration (the device channels) and the notification being
+  // edited (the Test button uses its colour and highlight).
+  @property({ attribute: false }) public config?: NotificationCenterConfig;
+
+  @property({ attribute: false }) public notification?: Record<string, unknown>;
 
   // The people with a sleep condition (the Audience's Sleep ticks).
   @property({ attribute: false }) public sleepers: string[] = [];
@@ -877,7 +884,15 @@ export class NcStepEditor extends LitElement {
         .hass=${this.hass}
         .narrow=${this.narrow}
         .modes=${this.modes}
-        .channels=${CHANNELS}
+        .channels=${channelsOf(this.hass, this.config)}
+        .config=${this.config}
+        .testContext=${{
+          category: this.category,
+          notification: this.notification,
+          name: this.notification?.name,
+          message: step.message,
+          info: step.info ?? null,
+        }}
         .base=${this.category?.channels ?? {}}
         .value=${step.channels ?? {}}
         @value-changed=${(

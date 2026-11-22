@@ -29,8 +29,9 @@ import type { NotificationViewData } from "../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../shared/text";
 import type { HomeAssistant } from "../shared/types";
 import "./channel-tables";
-import { CHANNELS, audienceCount, sleepersOf } from "./channel-tables";
+import { audienceCount, channelsOf, chimeOptions, sleepersOf } from "./channel-tables";
 import { confirmDialog } from "./confirm";
+import { colorField } from "./color-field";
 import { field } from "./fields";
 import { BLOCK_STYLES, block } from "./editor/block";
 import { INTERACTION_DEFAULTS } from "./editor/interaction-dialog";
@@ -154,6 +155,9 @@ export class NcCategoryEditor extends LitElement {
         name: "",
         icon: general?.icon ?? null,
         card_color: general?.card_color ?? null,
+        light_color: general?.light_color ?? null,
+        highlight: general?.highlight ?? false,
+        chime: general?.chime ?? null,
         buttons: categoryButtons(undefined),
         // And General's channels and audience.
         channels: structuredClone(general?.channels ?? {}),
@@ -355,7 +359,9 @@ export class NcCategoryEditor extends LitElement {
             .hass=${this.hass}
             .narrow=${this.narrow}
             .modes=${this.config?.modes ?? []}
-            .channels=${CHANNELS}
+            .channels=${channelsOf(this.hass, this.config)}
+            .config=${this.config}
+            .testContext=${{ category: draft }}
             .value=${draft.channels ?? {}}
             @value-changed=${(
               ev: CustomEvent<{ value: Category["channels"] }>,
@@ -414,13 +420,34 @@ export class NcCategoryEditor extends LitElement {
           "Icon",
           (value) => this._change({ icon: (value as string) || null }),
         )}
+        ${colorField(
+          this.hass,
+          { card_color: draft.card_color, light_color: draft.light_color },
+          (value) => this._change(value),
+        )}
         ${field(
           this.hass,
-          { ui_color: { include_none: false, default_color: "primary" } },
-          draft.card_color ?? undefined,
-          "Card color",
-          (value) => this._change({ card_color: (value as string) || null }),
+          {
+            select: {
+              mode: "dropdown",
+              options: [{ value: "none", label: "None" }, ...chimeOptions(this.config)],
+            },
+          },
+          draft.chime ?? "none",
+          "Chime",
+          (value) => this._change({ chime: value === "none" ? null : (value as string) }),
+          { helper: "What the speakers play. A speaker channel can change it." },
         )}
+        <div class="switch-row">
+          <div>
+            <div>Highlight</div>
+            <div class="secondary">The lights blink, or show their effect.</div>
+          </div>
+          <ha-switch
+            .checked=${!!draft.highlight}
+            @change=${(ev: Event) => this._change({ highlight: (ev.target as HTMLInputElement).checked })}
+          ></ha-switch>
+        </div>
       </div>
     </div>`;
   }
@@ -722,6 +749,12 @@ export class NcCategoryEditor extends LitElement {
     .secondary {
       color: var(--secondary-text-color);
       font-size: var(--ha-font-size-s, 12px);
+    }
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
     }
     .fab {
       position: fixed;

@@ -21,6 +21,7 @@ import "../../shared/notification-view";
 import type { NotificationViewData } from "../../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
+import { colorField } from "../color-field";
 import { confirmDialog } from "../confirm";
 import { type FieldOptions, field, iconSelect } from "../fields";
 import { STATUS_STYLES, renderStatus, statusOf } from "../status";
@@ -619,16 +620,29 @@ export class NcNotificationEditor extends LitElement {
           "Icon",
           (value) => this._change({ icon: (value as string) || null }),
         )}
+        ${colorField(
+          this.hass,
+          { card_color: draft.card_color, light_color: draft.light_color },
+          (value) => this._change({ ...value }),
+          { defaultColor: category?.card_color ?? "primary" },
+        )}
+      </div>
+      <div class="row">
         ${this._selector(
           {
-            ui_color: {
-              include_none: false,
-              default_color: category?.card_color ?? "primary",
+            select: {
+              mode: "dropdown",
+              options: [
+                { value: "category", label: `Same as the category (${category?.highlight ? "On" : "Off"})` },
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ],
             },
           },
-          draft.card_color ?? undefined,
-          "Card color",
-          (value) => this._change({ card_color: (value as string) || null }),
+          draft.highlight === undefined || draft.highlight === null ? "category" : draft.highlight ? "on" : "off",
+          "Highlight",
+          (value) => this._change({ highlight: value === "category" ? null : value === "on" }),
+          { helper: "The lights blink, or show their effect." },
         )}
       </div>
     </div>`;
@@ -1065,6 +1079,8 @@ export class NcNotificationEditor extends LitElement {
           .entityActions=${buttonsWithEntityActions(draft)}
           .category=${this._category()}
           .modes=${this.config?.modes ?? []}
+          .config=${this.config}
+          .notification=${draft}
           .sleepers=${sleepersOf(this.config?.people)}
           @value-changed=${(ev: CustomEvent<{ value: EditorStep }>) => {
             ev.stopPropagation();

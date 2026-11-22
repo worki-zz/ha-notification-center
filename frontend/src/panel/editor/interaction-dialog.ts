@@ -40,6 +40,7 @@ const ACTIONS: { value: ButtonAction["type"]; label: string }[] = [
   { value: "more_info", label: "More info" },
   { value: "ha_action", label: "Action" },
   { value: "navigate", label: "Navigate" },
+  { value: "silence", label: "Silence" },
 ];
 
 /** What an interaction does, in a few words (the row's second line). */
@@ -67,6 +68,8 @@ export function actionText(
     }
     case "navigate":
       return action.path ? `Navigate: ${action.path}` : "Navigate";
+    case "silence":
+      return "Silence";
     default:
       return "Nothing";
   }
@@ -305,6 +308,10 @@ export class NcInteractionDialog extends LitElement {
             action: { type: "navigate", path: (value as string) ?? "" },
           }),
         );
+      case "silence":
+        return html`<ha-alert alert-type="info"
+          >Stops the lights, the speakers and the sirens of the notification. The card stays.</ha-alert
+        >`;
       case "ha_action":
         return html`<ha-automation-action
           .hass=${hass}

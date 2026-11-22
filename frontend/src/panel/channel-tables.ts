@@ -16,16 +16,22 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import {
   AUDIENCE_STATES,
-  CHANNEL_DASHBOARD,
+  BUILTIN_CHIMES,
   type AudienceEntry,
   type AudienceState,
   type ChannelSettings,
   type Duration,
   type Mode,
+  type NotificationCenterConfig,
 } from "../shared/config";
+import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
+import { type ChannelInfo, channelIcon, testButton, testChannel } from "./devices";
 import { field } from "./fields";
+
+export type { ChannelInfo } from "./devices";
+export { channelsOf } from "./devices";
 
 export const STATE_NAMES: Record<AudienceState, string> = {
   home: "Home",
@@ -39,26 +45,11 @@ const STATE_HELP: Record<AudienceState, string> = {
   away: "Not at home",
 };
 
-export interface ChannelInfo {
-  key: string;
-  name: string;
-  icon: string;
-}
-
 export interface PersonInfo {
   id: string;
   name: string;
   picture?: string;
 }
-
-// The channels of 6.0: the lights, the speakers and Push join later.
-export const CHANNELS: ChannelInfo[] = [
-  {
-    key: CHANNEL_DASHBOARD,
-    name: "Dashboard",
-    icon: "mdi:view-dashboard-outline",
-  },
-];
 
 /** Every person of Home Assistant, by name. */
 export function haPeople(hass: HomeAssistant | undefined): PersonInfo[] {
@@ -166,6 +157,14 @@ export function durationText(delay: Duration | null | undefined): string {
   return parts.join(" ");
 }
 
+/** The chimes a speaker can play: the built-in ones, then the Chimes list. */
+export function chimeOptions(config: NotificationCenterConfig | undefined): { value: string; label: string }[] {
+  return [
+    ...BUILTIN_CHIMES.map((chime) => ({ value: chime.id, label: chime.name })),
+    ...(config?.chimes ?? []).map((chime) => ({ value: chime.id, label: chime.name })),
+  ];
+}
+
 function hasDelay(delay: Duration | null | undefined): boolean {
   return !!delay && Object.values(delay).some((amount) => Number(amount) > 0);
 }
@@ -252,7 +251,8 @@ const TABLE_STYLES = css`
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .name ha-icon {
+  .name ha-icon,
+  .channel-icon {
     flex: none;
     color: var(--secondary-text-color);
   }
@@ -437,6 +437,15 @@ export class NcChannelTable extends LitElement {
 
   @property({ attribute: false }) public channels: ChannelInfo[] = [];
 
+  // The configuration: the chimes a speaker can play.
+  @property({ attribute: false }) public config?: NotificationCenterConfig;
+
+  // What the Test button runs with: the category or the notification being
+  // edited (its colour and highlight), and a step's texts.
+  @property({ attribute: false }) public testContext: Record<string, unknown> = {};
+
+  @state() private _testError?: string;
+
   // The category's channels (a step's table only): the step changes them.
   @property({ attribute: false }) public base?: Record<string, ChannelSettings>;
 
@@ -557,7 +566,7 @@ export class NcChannelTable extends LitElement {
           : "Immediately";
         return html`<div class="row">
           <div class="cell name">
-            <ha-icon .icon=${channel.icon}></ha-icon>
+            ${channelIcon(this.hass, channel)}
             <div class="name-text">
               <div>${channel.name}</div>
               <div class="secondary">
@@ -618,7 +627,7 @@ export class NcChannelTable extends LitElement {
             if (ev.key === "Enter") open();
           }}
         >
-          <ha-icon .icon=${channel.icon}></ha-icon>
+          ${channelIcon(this.hass, channel)}
           <div class="name-text">
             <div>${channel.name}</div>
             <div class="secondary">${channelSummary(settings, modes)}</div>
@@ -658,6 +667,7 @@ export class NcChannelTable extends LitElement {
             </ha-button>`
           : nothing}
       </div>`;
+    const device = channel.kind && channel.kind !== "dashboard";
     return html`<ha-dialog
       open
       width="medium"
@@ -666,8 +676,11 @@ export class NcChannelTable extends LitElement {
         if (ev.target !== ev.currentTarget) return;
         ev.stopPropagation();
         this._open = undefined;
+        this._testError = undefined;
       }}
     >
+      ${device ? testButton("Test", () => void this._test(key, settings)) : nothing}
+      ${this._testError ? html`<ha-alert alert-type="error">${this._testError}</ha-alert>` : nothing}
       ${section("Modes", ownModes, "modes")}
       <p class="hint secondary">
         The modes the channel sends in. With no tick the channel is off.
@@ -725,6 +738,7 @@ export class NcChannelTable extends LitElement {
                 }),
             )
           : nothing}
+        ${channel.kind === "speaker" ? this._renderSpeaker(key, settings) : nothing}
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button slot="primaryAction" @click=${() => (this._open = undefined)}
@@ -732,6 +746,89 @@ export class NcChannelTable extends LitElement {
         >
       </ha-dialog-footer>
     </ha-dialog>`;
+  }
+
+  private async _test(key: string, settings: ChannelSettings): Promise<void> {
+    this._testError = undefined;
+    try {
+      await testChannel(this.hass, key, { ...this.testContext, settings });
+    } catch (err) {
+      this._testError = errorText(err);
+    }
+  }
+
+  // A speaker: the chime (the category's unless changed), its repeat, and
+  // whether the message is read out (with the name and the Info line).
+  private _renderSpeaker(key: string, settings: ChannelSettings) {
+    const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
+    const chime = "chime" in settings ? (settings.chime === null ? "none" : String(settings.chime)) : "category";
+    const categoryChime = this._chimeName(this.testContext.category as { chime?: string | null } | undefined);
+    const options = [
+      { value: "category", label: `Same as the category${categoryChime ? ` (${categoryChime})` : ""}` },
+      { value: "none", label: "None" },
+      ...chimeOptions(this.config),
+    ];
+    const repeat = (settings.repeat as { type: string; every?: Duration } | undefined) ?? { type: "once" };
+    const reading = !!settings.read_the_message;
+    const check = (label: string, name: "read_name" | "read_info") =>
+      html`<label class="check">
+        <ha-checkbox
+          .checked=${!!settings[name]}
+          .disabled=${!reading}
+          @change=${(ev: Event) => set({ [name]: (ev.target as HTMLInputElement).checked })}
+        ></ha-checkbox>
+        ${label}
+      </label>`;
+    return html`
+      ${field(this.hass, { select: { mode: "dropdown", options } }, chime, "Chime", (value) => {
+        const own = { ...this._own(key) };
+        if (value === "category") delete own.chime;
+        else own.chime = value === "none" ? null : value;
+        this._store(key, own);
+      })}
+      ${field(
+        this.hass,
+        {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "once", label: "Once" },
+              { value: "until_muted", label: "Again and again" },
+            ],
+          },
+        },
+        repeat.type,
+        "Repeat",
+        (value) => set({ repeat: value === "until_muted" ? { type: "until_muted", every: { minutes: 1 } } : { type: "once" } }),
+        { helper: "Again and again: until the notification is done or silenced." },
+      )}
+      ${repeat.type === "until_muted"
+        ? field(this.hass, { duration: {} }, repeat.every ?? { minutes: 1 }, "Every", (value) =>
+            set({ repeat: { type: "until_muted", every: (value as Duration | undefined) ?? { minutes: 1 } } }),
+          )
+        : nothing}
+      <div class="switch-row">
+        <div>
+          <div>Read the message</div>
+          <div class="secondary">After the chime, with the text-to-speech of the Sound settings.</div>
+        </div>
+        <ha-switch
+          .checked=${reading}
+          @change=${(ev: Event) => set({ read_the_message: (ev.target as HTMLInputElement).checked })}
+        ></ha-switch>
+      </div>
+      <div class="checks">
+        ${check("Name", "read_name")}
+        <label class="check"><ha-checkbox checked disabled></ha-checkbox>Message</label>
+        ${check("Info", "read_info")}
+      </div>
+    `;
+  }
+
+  private _chimeName(category: { chime?: string | null } | undefined): string | undefined {
+    const id = category?.chime;
+    if (!id) return category ? "None" : undefined;
+    return chimeOptions(this.config).find((option) => option.value === id)?.label ?? id;
   }
 
   static override styles = [
@@ -779,6 +876,24 @@ export class NcChannelTable extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 16px;
+      }
+      .switch-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 24px;
+        margin-top: -8px;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
       }
     `,
   ];

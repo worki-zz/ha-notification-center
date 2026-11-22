@@ -15,6 +15,7 @@ from homeassistant.loader import async_get_integration
 
 from . import websocket_api
 from .const import DOMAIN, PLATFORMS, STORAGE_KEYS, UNIQUE_ID_EVENT
+from .devices import DeviceManager
 from .engine import Engine
 from .frontend_setup import async_register_frontend, async_unregister_frontend
 from .services import async_setup_services
@@ -32,6 +33,7 @@ class RuntimeData:
     version: str
     manager: ConfigManager
     engine: Engine
+    devices: DeviceManager
 
 
 type NotificationCenterConfigEntry = ConfigEntry[RuntimeData]
@@ -54,7 +56,12 @@ async def async_setup_entry(
     await manager.async_load()
     engine = Engine(hass, manager)
     await engine.async_load()
-    entry.runtime_data = RuntimeData(version=version, manager=manager, engine=engine)
+    devices = DeviceManager(engine)
+    await devices.async_start()
+    engine.devices = devices
+    entry.runtime_data = RuntimeData(
+        version=version, manager=manager, engine=engine, devices=devices
+    )
     hass.data[DOMAIN] = manager
 
     # Websocket commands cannot be removed, so they are registered once and
@@ -82,6 +89,7 @@ async def async_unload_entry(
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
     async_unregister_frontend(hass, entry.runtime_data.version)
+    await entry.runtime_data.devices.async_stop()
     await entry.runtime_data.engine.async_unload()
     entry.runtime_data.manager.async_unload()
     hass.data.pop(DOMAIN, None)

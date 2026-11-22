@@ -6,7 +6,9 @@ like any Home Assistant entity. The summary sensor
 ``sensor.notification_center`` counts the active cards and shows the mode.
 
 Every channel has a diagnostic sensor, ``sensor.nc_channel_<channel>``: the
-Dashboard's counts the cards it shows now.
+Dashboard's counts the cards it shows now. A light, speaker or siren's is
+named after its entity (``sensor.nc_channel_light_kitchen_strip``) and counts
+the cards it sends now.
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ from .const import (
     UNIQUE_ID_SUMMARY,
 )
 from .entity import device_info
-from .model import ConfigData
+from .model import DEVICE_PREFIXES, ConfigData
 
 if TYPE_CHECKING:
     from . import NotificationCenterConfigEntry
@@ -77,24 +79,62 @@ async def async_setup_entry(
             else:
                 sensors[nid].config_changed(wanted[nid])
 
+    channels: dict[str, DeviceChannelSensor] = {}
+
+    @callback
+    def sync_devices(config: ConfigData) -> None:
+        wanted = {
+            prefix + item["id"]: item
+            for section, prefix in DEVICE_PREFIXES.items()
+            for item in config.get(section, [])
+        }
+        new = [
+            DeviceChannelSensor(engine, key, item, info)
+            for key, item in wanted.items()
+            if key not in channels
+        ]
+        for sensor in new:
+            channels[sensor.key] = sensor
+        if new:
+            async_add_entities(new)
+        registry = er.async_get(hass)
+        for key in list(channels):
+            if key not in wanted:
+                sensor = channels.pop(key)
+                if sensor.registry_entry is not None:
+                    registry.async_remove(sensor.entity_id)
+                else:
+                    hass.async_create_task(sensor.async_remove())
+
     async_add_entities(
         [SummarySensor(engine, info), DashboardChannelSensor(engine, info)]
     )
     sync(runtime.manager.config)
+    sync_devices(runtime.manager.config)
     entry.async_on_unload(runtime.manager.async_add_listener(sync))
-    _remove_orphans(hass, entry, set(sensors))
+    entry.async_on_unload(runtime.manager.async_add_listener(sync_devices))
+    _remove_orphans(hass, entry, set(sensors), set(channels))
 
 
 def _remove_orphans(
-    hass: HomeAssistant, entry: NotificationCenterConfigEntry, ids: set[str]
+    hass: HomeAssistant,
+    entry: NotificationCenterConfigEntry,
+    ids: set[str],
+    channels: set[str],
 ) -> None:
-    """Remove the sensors of notifications deleted while unloaded."""
+    """Remove the sensors of notifications and devices deleted while unloaded."""
     registry = er.async_get(hass)
     for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if entity.domain != "sensor":
+            continue
+        unique_id = entity.unique_id
         if (
-            entity.domain == "sensor"
-            and entity.unique_id.startswith(UNIQUE_ID_NOTIFICATION_PREFIX)
-            and entity.unique_id.removeprefix(UNIQUE_ID_NOTIFICATION_PREFIX) not in ids
+            unique_id.startswith(UNIQUE_ID_NOTIFICATION_PREFIX)
+            and unique_id.removeprefix(UNIQUE_ID_NOTIFICATION_PREFIX) not in ids
+        ) or (
+            unique_id.startswith(UNIQUE_ID_CHANNEL_PREFIX)
+            and ":" in unique_id
+            and unique_id.removeprefix(UNIQUE_ID_CHANNEL_PREFIX) not in channels
         ):
             registry.async_remove(entity.entity_id)
 
@@ -243,5 +283,66 @@ class DashboardChannelSensor(SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the cards held back (upcoming, by what they wait for) and off."""
         summary = self._engine.dashboard_summary()
+        summary.pop("state")
+        return summary
+
+
+_DEVICE_ICONS = {
+    "light": "mdi:lightbulb-outline",
+    "speaker": "mdi:speaker",
+    "siren": "mdi:alarm-light-outline",
+}
+
+
+class DeviceChannelSensor(SensorEntity):
+    """The cards a light, speaker or siren sends now."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, engine: Engine, key: str, item: dict[str, Any], info: Any
+    ) -> None:
+        """Set up the sensor of a device channel."""
+        self._engine = engine
+        self.key = key
+        kind = key.split(":", 1)[0]
+        entity_id = str(item["entity_id"])
+        object_id = entity_id.split(".", 1)[-1]
+        self._attr_unique_id = f"{UNIQUE_ID_CHANNEL_PREFIX}{key}"
+        self._attr_device_info = info
+        self._attr_icon = _DEVICE_ICONS.get(kind)
+        self._attr_name = f"{kind.capitalize()} channel {object_id.replace('_', ' ')}"
+        self.entity_id = f"sensor.nc_channel_{kind}_{object_id}"
+
+    async def async_added_to_hass(self) -> None:
+        """Follow the engine and the device."""
+        self.async_on_remove(self._engine.async_add_listener(self._changed, late=True))
+        if self._engine.devices is not None:
+            self.async_on_remove(self._engine.devices.add_listener(self._changed))
+
+    @callback
+    def _changed(self) -> None:
+        if (context := self._engine.summary_context) is not None:
+            self.async_set_context(context)
+        self.async_write_ha_state()
+
+    def _summary(self) -> dict[str, Any]:
+        summary = self._engine.dashboard_summary(self.key)
+        if self._engine.devices is not None:
+            summary.update(self._engine.devices.summary(self.key))
+        return summary
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of cards the device sends."""
+        return int(self._summary()["state"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return what the device does, and the cards it holds back."""
+        summary = self._summary()
         summary.pop("state")
         return summary

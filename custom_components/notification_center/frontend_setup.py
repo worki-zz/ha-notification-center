@@ -16,10 +16,12 @@ from .const import (
     PANEL_ICON,
     PANEL_TITLE,
     PANEL_URL_PATH,
+    SOUNDS_URL_BASE,
     STATIC_URL_BASE,
 )
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
+SOUNDS_DIR = Path(__file__).parent / "sounds"
 _STATIC_REGISTERED = f"{DOMAIN}_static_registered"
 
 
@@ -33,7 +35,12 @@ async def async_register_frontend(hass: HomeAssistant, version: str) -> None:
     # Static paths cannot be unregistered, so register them once per run.
     if not hass.data.get(_STATIC_REGISTERED):
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(STATIC_URL_BASE, str(FRONTEND_DIR), cache_headers=False)]
+            [
+                StaticPathConfig(
+                    STATIC_URL_BASE, str(FRONTEND_DIR), cache_headers=False
+                ),
+                StaticPathConfig(SOUNDS_URL_BASE, str(SOUNDS_DIR), cache_headers=True),
+            ]
         )
         hass.data[_STATIC_REGISTERED] = True
 

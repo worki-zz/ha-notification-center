@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.2
+
+Phase 6.1: lights, speakers and sirens.
+
+### Added
+
+- **Light** page (General): lights and switches of the Light channel. A light's dialog follows what it can do: *Brightness* (70%), *Color temperature* for white-only lights, *Highlight effect* (Blink, 1 second on and 1 off, or an effect of the light) when it has effects, and **Dim when dark** (illuminance sensor, *Dim below* 30 lx, *Dim brightness* 30%, *Measure continuously*). Colour lights have a **Colors** tab: each system colour as this light shows it, with a reset and a Test per row.
+- A light shows the colour of the first notification it sends (in the Notifications list's order), blinks or shows its effect for a highlighted one, and goes back to how it was when no notification sends, also after several colours. A change you make meanwhile stays. A switch turns on, or blinks.
+- **Sound** page (General): **Speakers** (media players, optional volume; a speaker that can announce plays over what it plays, another one gets its volume back), **Sirens** (a siren with tone, volume and duration when it has them, a switch, or a select with a sound and a stop option), **Chimes** (built-in and your own media) and **Read the message** (text-to-speech entity and language).
+- Built-in sounds: **Chime**, **Attention**, **Doorbell**, **Alarm** and **Indoor alarm**, also in Home Assistant's media browser.
+- A new light, speaker or siren asks which modes it sends in, the same in every category.
+- The channel tables list the Dashboard, then every light, speaker and siren with its entity's icon. A device channel's dialog has **Test** (a play icon in its header) that runs it once with the settings shown. A speaker channel has *Chime* (the category's unless changed), *Repeat* (Once, or again and again every so often) and *Read the message* with Name, Message and Info ticks.
+- Category: **Color** (a system colour, or *Custom* with *Card color* and *Light color*), **Chime** and **Highlight**. A notification has Color and Highlight (the category's, On or Off) too.
+- Button action **Silence**: stops the lights, speakers and sirens of the notification; the card stays.
+- A diagnostic sensor per light, speaker and siren: `sensor.nc_channel_<light|speaker|siren>_<object id>`.
+
+### Changed
+
+- *Card color* is now *Color*.
+- Data: a light's `transition` and `highlight_effect`, and a speaker's `resume_playback`, are dropped; lights and sirens get their new settings (upgraded once on load).
+
 ## 0.6.1
 
 ### Changed
