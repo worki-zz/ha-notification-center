@@ -36,7 +36,7 @@ interface ModeDraft {
 
 /** The mode's condition in a few words. */
 function conditionText(hass: HomeAssistant | undefined, mode: Mode): string {
-  return mode.condition ? conditionWords(hass, mode.condition) : "When no other mode applies";
+  return mode.condition ? conditionWords(hass, mode.condition) : "When no other home mode applies";
 }
 
 /** A condition (of a mode, of a person's sleep) in a few words. */
@@ -82,8 +82,8 @@ export class NcSettingsModes extends LitElement {
     return html`
       ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
       ${noMode
-        ? html`<ha-alert alert-type="warning" title="No active mode">
-            The channels ticked in at least one mode send.
+        ? html`<ha-alert alert-type="warning" title="No active home mode">
+            The channels ticked in at least one home mode send.
           </ha-alert>`
         : nothing}
       ${fixedHome ? html`<ha-card outlined>${this._row(fixedHome, false)}</ha-card>` : nothing}
@@ -103,7 +103,7 @@ export class NcSettingsModes extends LitElement {
       <div>
         <ha-button appearance="filled" size="s" @click=${this._add}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
-          Add mode
+          Add home mode
         </ha-button>
       </div>
       ${this._edit ? this._renderDialog(this._edit) : nothing}
@@ -177,7 +177,7 @@ export class NcSettingsModes extends LitElement {
     return html`<ha-dialog
       open
       width="medium"
-      header-title=${edit.id ? "Edit mode" : "Add mode"}
+      header-title=${edit.id ? "Edit home mode" : "Add home mode"}
       @closed=${(ev: Event) => {
         if (ev.target !== ev.currentTarget) return;
         ev.stopPropagation();
@@ -282,7 +282,7 @@ export class NcSettingsModes extends LitElement {
     if (
       !(await confirmDialog(this, {
         title: `Delete ${edit.name}?`,
-        text: "The mode is removed from every channel.",
+        text: "The home mode is removed from every channel.",
         confirm: "Delete",
         destructive: true,
       }))
@@ -341,7 +341,7 @@ export class NcSettingsModes extends LitElement {
         if (this._channels) void this._saveChannels();
       }}
     >
-      <p class="hint">Which channels send in this mode, in every category.</p>
+      <p class="hint">Which channels send in this home mode, in every category.</p>
       <ha-card outlined class="channels">
         ${this._channelList().map(
           (channel) => html`<label class="row channel">

@@ -103,6 +103,51 @@ export function testButton(label: string, run: () => void, disabled = false) {
   </ha-icon-button>`;
 }
 
+/**
+ * An Add button that turns into Home Assistant's entity picker when pressed,
+ * as the notification editor's Add entity: the entity is chosen at once.
+ */
+export function addEntityButton(options: {
+  hass: HomeAssistant | undefined;
+  adding: boolean;
+  label: string;
+  icon?: string;
+  className: string;
+  domains: string[];
+  exclude: string[];
+  start: () => void;
+  picked: (entityId: string | undefined) => void;
+}) {
+  return options.adding
+    ? html`<ha-entity-picker
+        class=${`add-entity ${options.className}`}
+        .hass=${options.hass}
+        .value=${""}
+        .includeDomains=${options.domains}
+        .excludeEntities=${options.exclude}
+        @picker-closed=${() => options.picked(undefined)}
+        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+          ev.stopPropagation();
+          options.picked(ev.detail.value || undefined);
+        }}
+      ></ha-entity-picker>`
+    : html`<ha-button appearance="filled" size="s" @click=${options.start}>
+        <ha-icon slot="start" .icon=${options.icon ?? "mdi:plus"}></ha-icon>
+        ${options.label}
+      </ha-button>`;
+}
+
+/** Open the entity picker of an Add button, once it is drawn. */
+export async function openEntityPicker(host: LitElement, className: string): Promise<void> {
+  await host.updateComplete;
+  // After the click is over, or the picker takes it as a click outside.
+  await new Promise((resolve) => window.setTimeout(resolve, 50));
+  const picker = host.shadowRoot?.querySelector(`ha-entity-picker.${className}`) as
+    | (HTMLElement & { open?: () => Promise<void> })
+    | null;
+  await picker?.open?.();
+}
+
 /** The modes as Home Assistant's order shows them: the unconditional Home first. */
 function modeColumns(modes: Mode[] | undefined): Mode[] {
   const list = modes ?? [];
@@ -128,20 +173,23 @@ export class NcDeviceModesDialog extends LitElement {
 
   @state() private _busy = false;
 
+  private _saved = false;
+
   protected override render() {
     const modes = modeColumns(this.modes);
     return html`<ha-dialog
       open
       width="medium"
-      header-title=${`${this.name}: modes`}
+      header-title=${`${this.name}: home modes`}
       prevent-scrim-close
       @closed=${(ev: Event) => {
         if (ev.target !== ev.currentTarget) return;
         ev.stopPropagation();
-        this._done();
+        // Closed without Save: the ticks shown are saved all the same.
+        void (this._saved ? Promise.resolve() : this._save()).finally(() => this._done());
       }}
     >
-      <p class="hint">The modes it sends in, in every category. Each category can change it later.</p>
+      <p class="hint">The home modes it sends in, in every category. Each category can change it later.</p>
       ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
       <ha-card outlined>
         ${modes.map(
@@ -161,14 +209,13 @@ export class NcDeviceModesDialog extends LitElement {
         )}
       </ha-card>
       <ha-dialog-footer slot="footer">
-        <ha-button slot="secondaryAction" appearance="plain" @click=${this._done}>Skip</ha-button>
         <ha-button slot="primaryAction" .disabled=${this._busy} @click=${this._save}>Save</ha-button>
       </ha-dialog-footer>
     </ha-dialog>`;
   }
 
   private async _save(): Promise<void> {
-    if (!this.hass) return;
+    if (!this.hass || this._busy) return;
     this._busy = true;
     this._error = undefined;
     try {
@@ -178,6 +225,7 @@ export class NcDeviceModesDialog extends LitElement {
         channel: this.channel,
         modes: order.filter((id) => this._on.has(id)),
       });
+      this._saved = true;
       this._done();
     } catch (err) {
       this._error = errorText(err);

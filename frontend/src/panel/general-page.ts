@@ -1,5 +1,5 @@
 // A page of the General settings on its own, with Home Assistant's subpage
-// header and what it does at the top: Modes, People, Light, Sound, Snooze,
+// header and what it does at the top: Home modes, People, Light, Sound, Chimes,
 // Import and export.
 
 import { LitElement, css, html, nothing } from "lit";
@@ -12,7 +12,6 @@ import {
 } from "../shared/config";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
-import { field } from "./fields";
 import "./settings-modes";
 import "./settings-lights";
 import "./settings-people";
@@ -20,42 +19,41 @@ import "./settings-sound";
 
 const PAGES: Record<string, { title: string; intro: string[] }> = {
   modes: {
-    title: "Modes",
+    title: "Home modes",
     intro: [
-      "A mode decides which channels of a category send a notification. One mode is active at a time: the first in the list whose condition is true. Drag the rows to change the order.",
-      "Home without a condition is always true: it is shown on top, but checked last, so it applies when no other mode does. With a condition, Home is ordered like the others. When no mode is active, the channels ticked in at least one mode send.",
+      "A home mode decides which channels of a category send a notification. One home mode is active at a time: the first in the list whose condition is true. Drag the rows to change the order.",
+      "Home without a condition is always true: it is shown on top, but checked last, so it applies when no other home mode does. With a condition, Home is ordered like the others. When no home mode is active, the channels ticked in at least one home mode send.",
     ],
   },
   people: {
     title: "People",
     intro: [
       "Every person of Home Assistant is listed here. A person is Home (at home and awake), Sleep (at home and asleep) or Away; the Audience of a category or step ticks the states each person gets its notifications in.",
-      "Asleep is set like a mode's condition: an entity's state or a template. It counts only while the person is at home.",
+      "Sleep is set like a home mode's condition: an entity's state or a template. It counts only while the person is at home.",
     ],
   },
   light: {
     title: "Light",
     intro: [
-      "The lights of the Light channel. A light shows the color of the first notification it sends (in the order of the Notifications list), and goes back to how it was when no notification sends; if you change the light meanwhile, your change stays.",
-      "A highlighted notification (a setting of the category or the notification) blinks, or shows an effect of the light. A switch turns on, or blinks.",
+      "A light shows the color of the first active notification, and goes back to how it was when no notification is active.",
     ],
   },
   sound: {
     title: "Sound",
     intro: [
-      "The speakers and sirens of the Sound channels. A speaker plays the chime of a notification once when it starts to send, can read the message, and can repeat; a siren sounds while the notification sends. Silence (a button action) stops them.",
+      "The speakers and sirens of the Sound channels. A speaker plays the chime of a notification once when it starts to send, can read the message, and can repeat; a siren (such as a smoke alarm's) sounds while the notification sends. Silence (a button action) stops them.",
     ],
   },
-  snooze: {
-    title: "Snooze",
+  chimes: {
+    title: "Chimes",
     intro: [
-      "The default time when a notification is snoozed to another day.",
+      "The chimes a speaker can play: the built-in ones and your own sound files. Drag the rows to change their order in the lists.",
     ],
   },
   import: {
     title: "Import and export",
     intro: [
-      "Export downloads the whole configuration as YAML: notifications, categories, modes and settings. Import replaces the whole configuration; the current one is downloaded first.",
+      "Export downloads the whole configuration as YAML: notifications, categories, home modes and settings. Import replaces the whole configuration; the current one is downloaded first.",
     ],
   },
 };
@@ -85,16 +83,13 @@ export class NcGeneralPage extends LitElement {
 
   @state() private _busy = false;
 
-  // The Snooze time being edited; undefined while unchanged.
-  @state() private _snooze?: string;
-
   protected override render() {
     const page = PAGES[this.page];
     return html`<hass-subpage
       .hass=${this.hass}
       .narrow=${this.narrow}
       .header=${page?.title ?? "General"}
-      .backCallback=${() => navigate(`${this.base}/settings/general`)}
+      .backCallback=${() => navigate(`${this.base}/settings/general${this.page === "chimes" ? "/sound" : ""}`)}
     >
       <div class="content">
         ${page
@@ -121,54 +116,19 @@ export class NcGeneralPage extends LitElement {
             : this.page === "light"
               ? html`<nc-settings-lights .hass=${this.hass} .config=${this.config}></nc-settings-lights>`
               : this.page === "sound"
-                ? html`<nc-settings-sound .hass=${this.hass} .config=${this.config}></nc-settings-sound>`
-            : this.page === "snooze"
-              ? this._renderSnooze()
-              : this.page === "import"
+                ? html`<nc-settings-sound .hass=${this.hass} .config=${this.config} .base=${this.base}></nc-settings-sound>`
+                : this.page === "chimes"
+                  ? html`<nc-settings-sound
+                      view="chimes"
+                      .hass=${this.hass}
+                      .config=${this.config}
+                      .base=${this.base}
+                    ></nc-settings-sound>`
+            : this.page === "import"
                 ? this._renderImportExport()
                 : nothing}
       </div>
     </hass-subpage>`;
-  }
-
-  private _renderSnooze() {
-    const saved = this.config?.general?.snooze_tomorrow_at ?? "08:00";
-    const value = this._snooze ?? saved;
-    return html`<ha-card outlined>
-      <div class="card-content">
-        ${field(
-          this.hass,
-          { time: { no_second: true } },
-          value,
-          "Default time",
-          (time) => {
-            this._snooze = (time as string) || "08:00";
-          },
-        )}
-      </div>
-      <div class="card-actions">
-        <ha-button
-          .disabled=${this._busy ||
-          this._snooze === undefined ||
-          this._snooze === saved}
-          @click=${this._saveSnooze}
-        >
-          Save
-        </ha-button>
-      </div>
-    </ha-card>`;
-  }
-
-  private async _saveSnooze(): Promise<void> {
-    const time = this._snooze;
-    if (!time) return;
-    await this._run(async () => {
-      await this.hass?.callWS({
-        type: `${DOMAIN}/general/update`,
-        data: { ...(this.config?.general ?? {}), snooze_tomorrow_at: time },
-      });
-      this._snooze = undefined;
-    });
   }
 
   private _renderImportExport() {

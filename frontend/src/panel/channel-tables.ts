@@ -16,13 +16,13 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import {
   AUDIENCE_STATES,
-  BUILTIN_CHIMES,
   type AudienceEntry,
   type AudienceState,
   type ChannelSettings,
   type Duration,
   type Mode,
   type NotificationCenterConfig,
+  orderedChimes,
 } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
@@ -159,10 +159,7 @@ export function durationText(delay: Duration | null | undefined): string {
 
 /** The chimes a speaker can play: the built-in ones, then the Chimes list. */
 export function chimeOptions(config: NotificationCenterConfig | undefined): { value: string; label: string }[] {
-  return [
-    ...BUILTIN_CHIMES.map((chime) => ({ value: chime.id, label: chime.name })),
-    ...(config?.chimes ?? []).map((chime) => ({ value: chime.id, label: chime.name })),
-  ];
+  return orderedChimes(config).map((chime) => ({ value: chime.id, label: chime.name }));
 }
 
 function hasDelay(delay: Duration | null | undefined): boolean {
@@ -508,8 +505,8 @@ export class NcChannelTable extends LitElement {
   private async _resetRow(channel: ChannelInfo): Promise<void> {
     if (
       !(await confirmDialog(this, {
-        title: `Reset the modes of ${channel.name}?`,
-        text: "The modes go back to the category's settings.",
+        title: `Reset the home modes of ${channel.name}?`,
+        text: "The home modes go back to the category's settings.",
         confirm: "Reset",
       }))
     ) {
@@ -534,11 +531,11 @@ export class NcChannelTable extends LitElement {
           : this._renderTable(modes)}</ha-card
       >
       <p class="hint secondary">
-        The columns are the house's mode.
+        The columns are the home modes.
       </p>
       ${silent
         ? html`<ha-alert alert-type="warning"
-            >No mode ticked: nothing is sent.</ha-alert
+            >No home mode ticked: nothing is sent.</ha-alert
           >`
         : nothing}
       ${this._open ? this._renderDialog(modes) : nothing}
@@ -593,7 +590,7 @@ export class NcChannelTable extends LitElement {
             ${own
               ? html`<ha-icon-button
                   class="reset"
-                  .label=${"Reset the modes to the category's settings"}
+                  .label=${"Reset the home modes to the category's settings"}
                   @click=${() => void this._resetRow(channel)}
                 >
                   <ha-icon icon="mdi:restore"></ha-icon>
@@ -681,7 +678,7 @@ export class NcChannelTable extends LitElement {
     >
       ${device ? testButton("Test", () => void this._test(key, settings)) : nothing}
       ${this._testError ? html`<ha-alert alert-type="error">${this._testError}</ha-alert>` : nothing}
-      ${section("Modes", ownModes, "modes")}
+      ${section("Home modes", ownModes, "modes")}
       <p class="hint secondary">
         The modes the channel sends in. With no tick the channel is off.
       </p>

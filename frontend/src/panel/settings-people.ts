@@ -4,11 +4,12 @@
 // the Sleep condition only (None, State or Template); push settings join it
 // later. Asleep counts only at home: a person away is Away.
 
-import { LitElement, css, html, nothing } from "lit";
+import { LitElement, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import {
   DOMAIN,
+  type AudienceState,
   type NotificationCenterConfig,
   type Person,
   type StateMessage,
@@ -18,6 +19,10 @@ import type { HomeAssistant } from "../shared/types";
 import { STATE_NAMES } from "./channel-tables";
 import { field } from "./fields";
 import { conditionWords } from "./settings-modes";
+import { STATUS_STYLES, type Status, renderStatus } from "./status";
+
+// The colours of a person's state, as the Active chip of a home mode.
+const STATE_TONES: Record<AudienceState, Status["tone"]> = { home: "green", sleep: "purple", away: "grey" };
 
 type ConditionType = "none" | "state" | "template";
 
@@ -80,11 +85,11 @@ export class NcSettingsPeople extends LitElement {
         <div>${person.name}</div>
         <div class="secondary">
           ${person.sleep
-            ? `Asleep when ${conditionWords(this.hass, person.sleep)}`
+            ? `Sleep when ${conditionWords(this.hass, person.sleep)}`
             : "No sleep condition"}
         </div>
       </div>
-      ${now ? html`<span class="now">${STATE_NAMES[now]}</span>` : nothing}
+      ${now ? renderStatus({ label: STATE_NAMES[now], tone: STATE_TONES[now] }) : nothing}
       <ha-icon-button .label=${"Edit"} @click=${() => this._open(person)}>
         <ha-icon icon="mdi:pencil"></ha-icon>
       </ha-icon-button>
@@ -238,6 +243,7 @@ export class NcSettingsPeople extends LitElement {
   }
 
   static override styles = css`
+    ${unsafeCSS(STATUS_STYLES)}
     :host {
       display: flex;
       flex-direction: column;
@@ -273,8 +279,7 @@ export class NcSettingsPeople extends LitElement {
       flex: 1;
       min-width: 0;
     }
-    .secondary,
-    .now {
+    .secondary {
       color: var(--secondary-text-color);
       font-size: var(--ha-font-size-s, 12px);
     }

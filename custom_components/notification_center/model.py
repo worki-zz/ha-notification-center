@@ -228,6 +228,9 @@ GENERAL_SCHEMA = vol.Schema(
         # When a card snoozed until "Tomorrow" comes back, unless its step is
         # scheduled (then it comes back at the time it appeared).
         vol.Optional("snooze_tomorrow_at", default=DEFAULT_SNOOZE_TOMORROW_AT): _time,
+        # The order of the chimes (built-in and own) in the lists; the ones
+        # not in it follow by name.
+        vol.Optional("chime_order", default=list): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("read_the_message", default=dict): vol.Schema(
             {
                 vol.Optional("tts_service"): _optional(cv.entity_id),
@@ -299,7 +302,7 @@ LIGHT_SCHEMA = _with_id(
         vol.Optional("dim_brightness"): vol.Any(
             None, vol.All(vol.Coerce(int), vol.Range(1, 100))
         ),
-        vol.Optional("dim_continuously", default=False): cv.boolean,
+        vol.Optional("dim_continuously", default=True): cv.boolean,
         # How a highlighted notification shows: ``blink`` or an effect of
         # the light.
         vol.Optional("effect", default=EFFECT_BLINK): cv.string,

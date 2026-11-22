@@ -327,7 +327,7 @@ export class NotificationCenterPanel extends LitElement {
       const names = modeColumns(config?.modes)
         .filter((mode) => settings.modes?.includes(mode.id))
         .map((mode) => mode.name);
-      return names.length ? `Waiting for ${orList(names)} mode` : "Waiting for the mode";
+      return names.length ? `Waiting for ${orList(names)} home mode` : "Waiting for the home mode";
     }
     // The audience: what would make the card show (arrive, wake up, ...).
     const states = this._store.state?.people ?? {};
