@@ -659,7 +659,8 @@ export class NotificationCenterPanel extends LitElement {
     .content {
       max-width: 640px;
       margin: 0 auto;
-      padding: 16px;
+      /* 24px under the header, as on every settings page. */
+      padding: 24px 16px 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -750,9 +751,6 @@ export class NotificationCenterPanel extends LitElement {
     .badge.active {
       background-color: var(--primary-color);
       color: var(--text-primary-color);
-    }
-    ha-card {
-      margin-top: 8px;
     }
     .version {
       margin: 8px 0 0;

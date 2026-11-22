@@ -1366,7 +1366,7 @@ export class NcNotificationEditor extends LitElement {
       max-width: 1040px;
       margin: 0 auto;
       /* As much room under the header as on the overview. */
-      padding: 16px 16px 96px;
+      padding: 24px 16px 96px;
       display: flex;
       flex-direction: column;
       gap: 16px;
