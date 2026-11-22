@@ -1,8 +1,8 @@
 """The configuration schema of Notification Center.
 
 The whole configuration is one dictionary with these sections:
-``general``, ``modes``, ``people``, ``lights``, ``speakers``, ``chimes``,
-``categories`` and ``notifications``. Field names follow the labels of the
+``general``, ``modes``, ``people``, ``lights``, ``speakers``, ``sirens``,
+``chimes``, ``categories`` and ``notifications``. Field names follow the labels of the
 user interface in ``snake_case``. The same structure is stored, sent over the
 websocket API and used for YAML import and export.
 
@@ -35,6 +35,7 @@ SECTIONS: Final = (
     "people",
     "lights",
     "speakers",
+    "sirens",
     "chimes",
     "categories",
     "notifications",
@@ -45,6 +46,7 @@ COLLECTIONS: Final = (
     "modes",
     "lights",
     "speakers",
+    "sirens",
     "chimes",
     "categories",
     "notifications",
@@ -54,14 +56,34 @@ HOME_MODE_ID: Final = "home"
 GENERAL_CATEGORY_ID: Final = "general"
 
 # Channel keys: the Dashboard (the panel and the dashboard cards) and Push
-# are single channels, every light and speaker is its own channel, keyed by
-# its id.
+# are single channels, every light, speaker and siren is its own channel,
+# keyed by its id.
 CHANNEL_DASHBOARD: Final = "dashboard"
 # The earlier name of the Dashboard channel, renamed by the upgrade.
 CHANNEL_NOTIFICATION_CENTER: Final = "notification_center"
 CHANNEL_PUSH: Final = "push"
 CHANNEL_LIGHT_PREFIX: Final = "light:"
 CHANNEL_SPEAKER_PREFIX: Final = "speaker:"
+CHANNEL_SIREN_PREFIX: Final = "siren:"
+# The device sections and the prefix of their channel keys.
+DEVICE_PREFIXES: Final = {
+    "lights": CHANNEL_LIGHT_PREFIX,
+    "speakers": CHANNEL_SPEAKER_PREFIX,
+    "sirens": CHANNEL_SIREN_PREFIX,
+}
+
+# The sounds that come with the integration, by chime id: their file and
+# name. A chime of the Chimes list can be any other media.
+BUILTIN_CHIMES: Final = {
+    "nc_chime": ("chime.mp3", "Chime"),
+    "nc_attention": ("attention.mp3", "Attention"),
+    "nc_doorbell": ("doorbell.mp3", "Doorbell"),
+    "nc_alarm": ("alarm.mp3", "Alarm"),
+    "nc_alarm_indoor": ("alarm-indoor.mp3", "Indoor alarm"),
+}
+# How a light shows that a notification is highlighted: its own blinking,
+# or one of the light's effects (by name).
+EFFECT_BLINK: Final = "blink"
 
 BUILTIN_BUTTONS: Final = ("tap", "done", "snooze", "dismiss")
 BUTTON_TYPES: Final = (*BUILTIN_BUTTONS, "custom")
@@ -258,33 +280,58 @@ PERSON_SCHEMA = vol.Schema(
 
 LIGHT_SCHEMA = _with_id(
     {
-        vol.Required("entity_id"): cv.entity_domain("light"),
-        vol.Optional("transition"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0))
-        ),
+        # A light, or a switch (a lamp on a plug): on, or blinking.
+        vol.Required("entity_id"): cv.entity_domain(["light", "switch"]),
         vol.Optional("brightness"): vol.Any(
-            None, vol.All(vol.Coerce(int), vol.Range(0, 100))
+            None, vol.All(vol.Coerce(int), vol.Range(1, 100))
         ),
+        # A light with white only: its colour temperature (empty: its own).
+        vol.Optional("color_temp_kelvin"): vol.Any(
+            None, vol.All(vol.Coerce(int), vol.Range(1000, 20000))
+        ),
+        # Dim when dark: below ``dim_below`` lx the light uses
+        # ``dim_brightness``. Measured when the light turns on, or all the
+        # time (a sensor outside, which the light does not reach).
         vol.Optional("illuminance_sensor"): _optional(cv.entity_id),
         vol.Optional("dim_below"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0))
         ),
         vol.Optional("dim_brightness"): vol.Any(
-            None, vol.All(vol.Coerce(int), vol.Range(0, 100))
+            None, vol.All(vol.Coerce(int), vol.Range(1, 100))
         ),
-        vol.Optional("highlight_effect", default="none"): vol.In(
-            ("none", "flash", "glow", "pulse")
-        ),
+        vol.Optional("dim_continuously", default=False): cv.boolean,
+        # How a highlighted notification shows: ``blink`` or an effect of
+        # the light.
+        vol.Optional("effect", default=EFFECT_BLINK): cv.string,
+        # The light's own RGB for the system colours (only what differs).
+        vol.Optional("colors", default=dict): vol.Schema({cv.string: _rgb}),
     }
 )
 
 SPEAKER_SCHEMA = _with_id(
     {
         vol.Required("entity_id"): cv.entity_domain("media_player"),
+        # Empty: the volume is not changed.
         vol.Optional("volume"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(0, 1))
         ),
-        vol.Optional("resume_playback", default=True): cv.boolean,
+    }
+)
+
+SIREN_SCHEMA = _with_id(
+    {
+        # A siren, a switch, or a select (an option turns the siren on).
+        vol.Required("entity_id"): cv.entity_domain(["siren", "switch", "select"]),
+        vol.Optional("tone"): _optional(cv.string),
+        vol.Optional("volume"): vol.Any(
+            None, vol.All(vol.Coerce(float), vol.Range(0, 1))
+        ),
+        vol.Optional("duration"): vol.Any(
+            None, vol.All(vol.Coerce(int), vol.Range(min=1))
+        ),
+        # A select: the option that sounds, and the one that stops it.
+        vol.Optional("option"): _optional(cv.string),
+        vol.Optional("stop_option"): _optional(cv.string),
     }
 )
 
@@ -321,10 +368,15 @@ _CHANNEL_COMMON = {
 _CHANNEL_EXTRA: dict[str, dict[Any, Any]] = {
     CHANNEL_DASHBOARD: {},
     "light": {},
+    "siren": {},
     "speaker": {
         vol.Optional("chime"): _optional(_id),
         vol.Optional("repeat"): REPEAT_SCHEMA,
         vol.Optional("read_the_message"): cv.boolean,
+        # What is read besides the message: the notification's name and
+        # the Info line.
+        vol.Optional("read_name"): cv.boolean,
+        vol.Optional("read_info"): cv.boolean,
     },
     CHANNEL_PUSH: {
         vol.Optional("critical"): cv.boolean,
@@ -346,6 +398,8 @@ def channel_kind(key: str) -> str | None:
         return "light"
     if key.startswith(CHANNEL_SPEAKER_PREFIX):
         return "speaker"
+    if key.startswith(CHANNEL_SIREN_PREFIX):
+        return "siren"
     return None
 
 
@@ -361,7 +415,7 @@ def _channels(value: Any) -> dict[str, dict[str, Any]]:
         if kind is None:
             raise vol.Invalid(
                 f"unknown channel '{key}': use dashboard, push, "
-                "light:<id> or speaker:<id>"
+                "light:<id>, speaker:<id> or siren:<id>"
             )
         schema = vol.Schema({**_CHANNEL_COMMON, **_CHANNEL_EXTRA[kind]})
         try:
@@ -413,8 +467,12 @@ CATEGORY_SCHEMA = _with_id(
     {
         vol.Required("name"): cv.string,
         vol.Optional("icon"): _optional(cv.icon),
+        # A system colour by name, or a custom colour (#rrggbb) with the
+        # light's own ``light_color`` (empty: the card colour).
         vol.Optional("card_color"): _optional(cv.string),
         vol.Optional("light_color"): _optional(_rgb),
+        # The lights blink (or show their effect) for its notifications.
+        vol.Optional("highlight", default=False): cv.boolean,
         vol.Optional("chime"): _optional(_id),
         vol.Optional("buttons", default=list): _category_buttons_late,
         vol.Optional("audience", default=dict): _audience,
@@ -518,6 +576,8 @@ BUTTON_ACTION_SCHEMA = vol.Any(
     ),
     vol.Schema({vol.Required("type"): "navigate", vol.Required("path"): cv.string}),
     vol.Schema({vol.Required("type"): "show_attachment"}),
+    # Stop the lights, speakers and sirens; the card stays.
+    vol.Schema({vol.Required("type"): "silence"}),
 )
 
 # A button of a step. The buttons of the step's category (the four built-in
@@ -898,6 +958,7 @@ NOTIFICATION_SCHEMA = _with_id(
         vol.Optional("icon"): _optional(cv.icon),
         vol.Optional("card_color"): _optional(cv.string),
         vol.Optional("light_color"): _optional(_rgb),
+        vol.Optional("highlight"): _optional(cv.boolean),
         vol.Optional("entities", default=list): vol.All(
             cv.ensure_list, [ENTITY_SCHEMA]
         ),
@@ -914,6 +975,7 @@ ITEM_SCHEMAS: Final[dict[str, vol.Schema]] = {
     "modes": MODE_SCHEMA,
     "lights": LIGHT_SCHEMA,
     "speakers": SPEAKER_SCHEMA,
+    "sirens": SIREN_SCHEMA,
     "chimes": CHIME_SCHEMA,
     "categories": CATEGORY_SCHEMA,
     "notifications": NOTIFICATION_SCHEMA,
@@ -928,6 +990,7 @@ CONFIG_SCHEMA = vol.Schema(
         vol.Optional("speakers", default=list): vol.All(
             cv.ensure_list, [SPEAKER_SCHEMA]
         ),
+        vol.Optional("sirens", default=list): vol.All(cv.ensure_list, [SIREN_SCHEMA]),
         vol.Optional("chimes", default=list): vol.All(cv.ensure_list, [CHIME_SCHEMA]),
         vol.Optional("categories", default=list): vol.All(
             cv.ensure_list, [CATEGORY_SCHEMA]
@@ -997,11 +1060,9 @@ def _check_references(config: ConfigData) -> None:
             )
 
     channels = {CHANNEL_DASHBOARD, CHANNEL_PUSH}
-    channels.update(CHANNEL_LIGHT_PREFIX + light["id"] for light in config["lights"])
-    channels.update(
-        CHANNEL_SPEAKER_PREFIX + speaker["id"] for speaker in config["speakers"]
-    )
-    chimes = {chime["id"] for chime in config["chimes"]}
+    for section, prefix in DEVICE_PREFIXES.items():
+        channels.update(prefix + item["id"] for item in config[section])
+    chimes = {chime["id"] for chime in config["chimes"]} | set(BUILTIN_CHIMES)
     categories = {category["id"] for category in config["categories"]}
 
     def check_channels(settings: dict[str, dict[str, Any]], where: str) -> None:
@@ -1251,6 +1312,25 @@ def upgrade_category_buttons(data: dict[str, Any]) -> None:
                 for key in ("icon", "label"):
                     if not button.get(key):
                         button.pop(key, None)
+
+
+def upgrade_devices(data: dict[str, Any]) -> None:
+    """Drop the device settings of the first plan that 0.6.2 left out.
+
+    A light's transition and highlight effect (the effect is now chosen by
+    the light's Effect and the notification's Highlight), and a speaker's
+    resume playback (it follows the speaker).
+    """
+    for light in data.get("lights") or []:
+        if isinstance(light, dict):
+            light.pop("transition", None)
+            light.pop("highlight_effect", None)
+            for key in ("brightness", "dim_brightness"):
+                if light.get(key) == 0:
+                    light[key] = None
+    for speaker in data.get("speakers") or []:
+        if isinstance(speaker, dict):
+            speaker.pop("resume_playback", None)
 
 
 def upgrade_channels(data: dict[str, Any], people: Iterable[str]) -> None:
@@ -1586,6 +1666,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
         raise ConfigValidationError("the configuration must be a mapping")
     upgrade_category_buttons(data)
     upgrade_channels(data, _known_people(hass, data))
+    upgrade_devices(data)
     for notification in data.get("notifications") or []:
         # Before the structure check: the earlier fields are not in it.
         if isinstance(notification, dict):

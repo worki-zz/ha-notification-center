@@ -34,26 +34,28 @@ people:
 lights:
   - id: kitchen_strip
     entity_id: light.kitchen_strip
-    transition: 1
     brightness: 80
-    illuminance_sensor: sensor.living_room_illuminance
-    dim_below: 10
-    dim_brightness: 20
-    highlight_effect: flash
+    illuminance_sensor: sensor.outdoor_illuminance
+    dim_below: 30
+    dim_brightness: 30
+    dim_continuously: true
+    effect: blink
 
 speakers:
   - id: kitchen_speaker
     entity_id: media_player.kitchen_speaker
     volume: 0.5
-    resume_playback: true
+
+sirens:
+  - id: balcony_siren
+    entity_id: siren.balcony_siren
+    duration: 60
+  - id: co_detector
+    entity_id: select.co_detector_siren
+    option: smoke_siren
+    stop_option: stop
 
 chimes:
-  - id: alarm
-    name: Alarm
-    media: {media_content_id: media-source://media_source/local/chimes/alarm.mp3, media_content_type: audio/mpeg}
-  - id: chime
-    name: Chime
-    media: {media_content_id: media-source://media_source/local/chimes/chime.mp3, media_content_type: audio/mpeg}
   - id: soft_chime
     name: Soft chime
     media: {media_content_id: media-source://media_source/local/chimes/soft.mp3, media_content_type: audio/mpeg}
@@ -69,8 +71,8 @@ categories:
     name: Emergency
     icon: mdi:alert-octagon
     card_color: red
-    light_color: [255, 0, 0]
-    chime: alarm
+    highlight: true
+    chime: nc_alarm
     snooze: {type: not_allowed}
     channels:
       dashboard: {modes: [away, sleep, guest, home]}
@@ -78,6 +80,8 @@ categories:
       speaker:kitchen_speaker:
         modes: [home]
         repeat: {type: until_muted, every: {seconds: 30}}
+      siren:balcony_siren: {modes: [away, sleep, guest, home]}
+      siren:co_detector: {modes: [away, sleep, guest, home]}
       push:
         modes: [away, sleep, guest, home]
         critical: true
@@ -86,8 +90,7 @@ categories:
     name: Security
     icon: mdi:shield-home
     card_color: indigo
-    light_color: [0, 0, 255]
-    chime: chime
+    chime: nc_chime
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
       dashboard: {modes: [away, home]}
@@ -96,7 +99,6 @@ categories:
     name: Devices
     icon: mdi:devices
     card_color: orange
-    light_color: [255, 165, 0]
     snooze: {type: fixed, duration: {days: 1}}
     channels:
       dashboard: {modes: [away, home]}
@@ -107,7 +109,6 @@ categories:
     name: Home
     icon: mdi:home-alert
     card_color: amber
-    light_color: [255, 191, 0]
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
       dashboard: {modes: [away, home]}
@@ -115,7 +116,6 @@ categories:
     name: Family
     icon: mdi:account-group
     card_color: purple
-    light_color: [160, 0, 255]
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
       dashboard: {modes: [away, home]}
@@ -123,7 +123,6 @@ categories:
     name: Household
     icon: mdi:broom
     card_color: blue
-    light_color: [0, 50, 255]
     chime: soft_chime
     snooze: {type: ask}
     channels:
@@ -132,7 +131,6 @@ categories:
     name: Garden
     icon: mdi:flower
     card_color: light-green
-    light_color: [0, 255, 0]
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
       dashboard: {modes: [away, home]}

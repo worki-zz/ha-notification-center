@@ -22,7 +22,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 import logging
-from typing import Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import (
@@ -114,6 +114,9 @@ from .render import TextTracker, render_text
 from .schedule import calendar_between
 from .scheduler import HISTORY_SKIPPED, StepSchedule
 from .store import RUNTIME_KEY, ConfigManager
+
+if TYPE_CHECKING:
+    from .devices import DeviceManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -880,6 +883,8 @@ class Engine:
         self._delay_timer: CALLBACK_TYPE | None = None
         self._delay_at: datetime | None = None
         self._person_states: dict[str, str] = {}
+        # The lights, speakers and sirens (set by the integration's setup).
+        self.devices: DeviceManager | None = None
         self._sleep = ConditionTracker(
             hass, self._sleep_conditions(), self._presence_changed
         )
@@ -1117,17 +1122,34 @@ class Engine:
             next((item for item in categories if item["id"] == "general"), None),
         )
 
-    def dashboard_summary(self) -> dict[str, Any]:
-        """Return what the Dashboard channel shows: its diagnostic sensor.
+    @property
+    def started(self) -> bool:
+        """Return whether Home Assistant started and the notifications run."""
+        return self._started
 
-        Shown: the active cards on the dashboard for at least one person.
+    def category_of(self, notification: Mapping[str, Any]) -> dict[str, Any] | None:
+        """Return a notification's category (General when it has none)."""
+        return self._category_of(notification)
+
+    def channel_settings_of(self, card: Card, key: str) -> dict[str, Any] | None:
+        """Return a channel's settings for a card's step (None: off)."""
+        notification = self.notification_config(card.notification_id) or {}
+        step = self._step_config(card.notification_id, card.step_id)
+        return channel_settings(self._category_of(notification), step, key)
+
+    def dashboard_summary(self, key: str = CHANNEL_DASHBOARD) -> dict[str, Any]:
+        """Return what a channel sends now: its diagnostic sensor.
+
+        Shown: the active cards the channel sends (the Dashboard: for at
+        least one person); a device leaves out the silenced cards and
+        counts them as ``silenced``.
         ``upcoming``: the active cards it holds back (shown under Upcoming),
         then the same by what they wait for: each mode they are ticked in
         (a card ticked in two modes counts in both), the delay, the
         audience. ``off``: cards with no mode ticked, never shown.
         """
         modes = [mode["id"] for mode in self._config.get("modes", [])]
-        shown = upcoming = off = delay = audience = 0
+        shown = upcoming = off = delay = audience = silenced = 0
         by_mode = dict.fromkeys(modes, 0)
         for notification in self._config["notifications"]:
             if not notification.get("enabled", True):
@@ -1135,9 +1157,12 @@ class Engine:
             for card in self._visible_cards(notification["id"]):
                 if card.status != STATE_ACTIVE:
                     continue
-                view = self.channel_view(card)
+                view = self.channel_view(card, key)
                 if view.sends:
-                    shown += 1
+                    if key != CHANNEL_DASHBOARD and card.silenced:
+                        silenced += 1
+                    else:
+                        shown += 1
                     continue
                 if view.reason == REASON_OFF:
                     off += 1
@@ -1148,7 +1173,7 @@ class Engine:
                 elif view.reason == REASON_AUDIENCE:
                     audience += 1
                 elif view.reason == REASON_MODE:
-                    settings = self._dashboard_settings(card) or {}
+                    settings = self.channel_settings_of(card, key) or {}
                     for mode_id in settings.get("modes") or []:
                         if mode_id in by_mode:
                             by_mode[mode_id] += 1
@@ -1162,14 +1187,15 @@ class Engine:
             "upcoming_waiting_for_delay": delay,
             "upcoming_waiting_for_audience": audience,
             "off": off,
+            **({} if key == CHANNEL_DASHBOARD else {"silenced": silenced}),
         }
 
-    def _dashboard_settings(self, card: Card) -> dict[str, Any] | None:
+    def _channel_keys(self, card: Card) -> set[str]:
+        """Return the channels a card's category or step sets."""
         notification = self.notification_config(card.notification_id) or {}
-        step = self._step_config(card.notification_id, card.step_id)
-        return channel_settings(
-            self._category_of(notification), step, CHANNEL_DASHBOARD
-        )
+        step = self._step_config(card.notification_id, card.step_id) or {}
+        category = self._category_of(notification) or {}
+        return set(category.get("channels") or {}) | set(step.get("channels") or {})
 
     @callback
     def _schedule_delay_timer(self) -> None:
@@ -1179,13 +1205,14 @@ class Engine:
         for card in self.cards.values():
             if card.status != STATE_ACTIVE:
                 continue
-            until = self.channel_view(card).until
-            if (
-                until is not None
-                and until > now
-                and (soonest is None or until < soonest)
-            ):
-                soonest = until
+            for key in self._channel_keys(card):
+                until = self.channel_view(card, key).until
+                if (
+                    until is not None
+                    and until > now
+                    and (soonest is None or until < soonest)
+                ):
+                    soonest = until
         if soonest == self._delay_at:
             return
         if self._delay_timer is not None:
@@ -1579,6 +1606,9 @@ class Engine:
             setattr(card, name, value)
         if opened:
             card.active_since = dt_util.utcnow()
+            # Silence lasts until the card goes away (Snooze ends, a new card).
+            if "silenced" not in changes:
+                card.silenced = False
         new = card.status
         changed = new != old
         previous = self.summary_context
@@ -2281,6 +2311,8 @@ class Engine:
             actions = list(action["actions"])
         elif action["type"] == "entity_action":
             actions = self.entity_actions(card, button_id)
+        elif action["type"] == "silence":
+            self.silence_cards([card], SOURCE_BUTTON, context)
         variables = self.variables(card)
         effect = BUTTON_EFFECTS.get(button["type"])
         if effect == CLOSED_DONE:

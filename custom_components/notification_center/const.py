@@ -18,6 +18,8 @@ CARD_ELEMENT: Final = "notification-center-card"
 
 # Static files: the built frontend modules are served from here.
 STATIC_URL_BASE: Final = f"/{DOMAIN}_static"
+# The built-in sounds of the speakers.
+SOUNDS_URL_BASE: Final = f"/{DOMAIN}_sounds"
 PANEL_FILENAME: Final = "notification-center-panel.js"
 CARD_FILENAME: Final = "notification-center-card.js"
 
@@ -27,6 +29,7 @@ STORAGE_KEYS: Final[tuple[str, ...]] = (
     DOMAIN,
     f"{DOMAIN}.runtime",
     f"{DOMAIN}.backup",
+    f"{DOMAIN}.devices",
 )
 
 # Entity platforms

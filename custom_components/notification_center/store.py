@@ -20,9 +20,8 @@ from homeassistant.util import dt as dt_util, yaml as yaml_util
 
 from .const import DOMAIN
 from .model import (
-    CHANNEL_LIGHT_PREFIX,
-    CHANNEL_SPEAKER_PREFIX,
     COLLECTIONS,
+    DEVICE_PREFIXES,
     GENERAL_CATEGORY_ID,
     GENERAL_SCHEMA,
     HOME_MODE_ID,
@@ -234,6 +233,26 @@ class ConfigManager:
                     modes.remove(mode_id)
         await self._async_commit(config)
 
+    async def async_set_channel_modes(self, key: str, modes: list[str]) -> None:
+        """Switch a channel on in the given modes of every category.
+
+        The second step of adding a light, speaker or siren: every category
+        gets the same modes. No mode leaves the channel off everywhere.
+        """
+        config = self._copy()
+        known = {mode["id"] for mode in config["modes"]}
+        for mode_id in modes:
+            if mode_id not in known:
+                raise ConfigValidationError(f"no mode '{mode_id}'")
+        for category in config["categories"]:
+            category["channels"][key] = {
+                **category["channels"].get(key, {}),
+                "modes": [
+                    mode["id"] for mode in config["modes"] if mode["id"] in modes
+                ],
+            }
+        await self._async_commit(config)
+
     async def async_reorder(self, section: str, item_ids: list[str]) -> None:
         """Put the items of a collection in the given order."""
         config = self._copy()
@@ -424,7 +443,7 @@ def _category(config: ConfigData, category_id: str) -> dict[str, Any] | None:
 
 
 def _remove_references(config: ConfigData, section: str, item_id: str) -> None:
-    """Remove the references to a deleted mode, light, speaker or chime."""
+    """Remove the references to a deleted mode, device or chime."""
     channel_lists = _channel_lists(config)
     if section == "modes":
         for channels in channel_lists:
@@ -433,8 +452,8 @@ def _remove_references(config: ConfigData, section: str, item_id: str) -> None:
                     channel["modes"] = [
                         mode for mode in channel["modes"] if mode != item_id
                     ]
-    elif section in ("lights", "speakers"):
-        prefix = CHANNEL_LIGHT_PREFIX if section == "lights" else CHANNEL_SPEAKER_PREFIX
+    elif section in DEVICE_PREFIXES:
+        prefix = DEVICE_PREFIXES[section]
         for channels in channel_lists:
             channels.pop(prefix + item_id, None)
     elif section == "chimes":

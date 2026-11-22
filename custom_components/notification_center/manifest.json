@@ -2,6 +2,7 @@
   "domain": "notification_center",
   "name": "Notification Center",
   "after_dependencies": [
+    "media_source",
     "person"
   ],
   "codeowners": [

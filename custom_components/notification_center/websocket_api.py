@@ -96,6 +96,8 @@ def async_register(hass: HomeAssistant) -> None:
         ws_update_person,
         ws_update_general,
         ws_set_mode_channels,
+        ws_set_channel_modes,
+        ws_channel_test,
         ws_export,
         ws_import,
         ws_state_subscribe,
@@ -332,6 +334,72 @@ async def ws_set_mode_channels(
 ) -> None:
     """Switch a new mode on for the chosen channels of every category."""
     await manager.async_set_mode_channels(msg["mode_id"], msg["channels"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/channel/set_modes",
+        vol.Required("channel"): str,
+        vol.Required("modes"): [str],
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_set_channel_modes(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: ConfigManager,
+) -> None:
+    """Switch a new light, speaker or siren on in the modes of every category."""
+    await manager.async_set_channel_modes(msg["channel"], msg["modes"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/channel/test",
+        vol.Required("channel"): str,
+        # The settings being edited, not saved yet: the device's, the
+        # channel's, and the category's or notification's colour.
+        vol.Optional("device"): vol.Any(None, dict),
+        vol.Optional("settings"): vol.Any(None, dict),
+        vol.Optional("category"): vol.Any(None, dict),
+        vol.Optional("notification"): vol.Any(None, dict),
+        vol.Optional("color"): vol.Any(None, str),
+        vol.Optional("highlight"): bool,
+        vol.Optional("name"): vol.Any(None, str),
+        vol.Optional("message"): vol.Any(None, str),
+        vol.Optional("info"): vol.Any(None, str),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_channel_test(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: ConfigManager,
+) -> None:
+    """Run a light, speaker or siren once (the Test button), in the background."""
+    engine = async_get_engine(hass)
+    devices = engine.devices if engine else None
+    if devices is None:
+        connection.send_error(
+            msg["id"], "not_loaded", "Notification Center is not loaded"
+        )
+        return
+    data = {key: value for key, value in msg.items() if key not in ("id", "type")}
+    key = data.pop("channel")
+    if key not in devices.devices and not data.get("device"):
+        connection.send_error(msg["id"], "not_found", f"No device '{key}'")
+        return
+    hass.async_create_background_task(
+        devices.async_test(key, data), f"{DOMAIN} test {key}"
+    )
     connection.send_result(msg["id"])
 
 
