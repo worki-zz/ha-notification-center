@@ -52,7 +52,7 @@ export class NcSettingsGeneral extends LitElement {
       {
         key: "snooze",
         name: "Snooze",
-        description: `Tomorrow at ${tomorrow.slice(0, 5)}`,
+        description: tomorrow.slice(0, 5),
         icon: "mdi:alarm-snooze",
         color: "#26A69A",
       },

@@ -7,6 +7,7 @@
 - Diagnostic sensor `sensor.nc_channel_dashboard`: the cards not shown are counted by reason, `mode`, `delay`, `audience` and `off` (instead of `held_back` and `waiting`).
 - Audience: the Sleep column shows only when someone has a sleep condition (People page), and only those people have a Sleep tick.
 - Audience and Channels: one line under each table (the person's state, the house's state); the warnings read *No condition ticked* and *No mode ticked*. The delay's help reads *Delay after the notification becomes active*.
+- General, Snooze: the list shows only the time; the field is *Default time*, and the page says it is the default time when a notification is snoozed to another day.
 
 ## 0.6.0
 
