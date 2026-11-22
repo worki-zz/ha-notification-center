@@ -12,6 +12,7 @@ import {
   type Notification,
   type NotificationCenterConfig,
   type StateMessage,
+  colorCss,
 } from "../shared/config";
 import { cssColor } from "../shared/format";
 import { errorText, navigate } from "../shared/live";
@@ -126,7 +127,7 @@ export class NcSettings extends LitElement {
             href=${`${this.base}/settings/categories/${item.id}`}
             @click=${this._link}
           >
-            <div slot="start" class="icon" style=${`--icon-color: ${cssColor(item.card_color)}`}>
+            <div slot="start" class="icon" style=${`--icon-color: ${cssColor(colorCss(config, item.color))}`}>
               <ha-icon .icon=${item.icon || "mdi:bell"}></ha-icon>
             </div>
             <span slot="headline">${item.name}</span>
@@ -208,7 +209,7 @@ export class NcSettings extends LitElement {
   private _renderRow(item: Notification, category: Category | undefined, filtering: boolean) {
     const steps = item.steps.length;
     const status = statusOf(item, this.state?.notifications[item.id]);
-    const color = cssColor(item.card_color ?? category?.card_color);
+    const color = cssColor(colorCss(this.config, item.color ?? category?.color));
     // The menu and the handle are inside the row's link: they must not open it.
     const stop = (ev: Event) => {
       ev.preventDefault();

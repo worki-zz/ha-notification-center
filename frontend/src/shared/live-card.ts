@@ -87,7 +87,7 @@ export class NotificationCenterLiveCard extends LitElement {
       when: this.when,
       icon,
       stateObj: icon || !live.entityId ? undefined : hass.states[live.entityId],
-      color: cssColor(notification.card_color ?? category?.card_color),
+      color: cssColor(live.color ?? notification.color ?? category?.color),
       muted: this.muted,
       clickable: this.interactive && !!tapButton(live),
       compact: this._asking,

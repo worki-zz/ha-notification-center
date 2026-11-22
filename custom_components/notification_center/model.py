@@ -37,6 +37,7 @@ SECTIONS: Final = (
     "speakers",
     "sirens",
     "chimes",
+    "colors",
     "categories",
     "notifications",
 )
@@ -48,6 +49,7 @@ COLLECTIONS: Final = (
     "speakers",
     "sirens",
     "chimes",
+    "colors",
     "categories",
     "notifications",
 )
@@ -71,6 +73,40 @@ DEVICE_PREFIXES: Final = {
     "speakers": CHANNEL_SPEAKER_PREFIX,
     "sirens": CHANNEL_SIREN_PREFIX,
 }
+
+# The RGB of Home Assistant's system colours (its default theme), by name: a
+# category's or notification's colour is one of them or an own colour (the
+# Colors list) by its id.
+SYSTEM_COLORS: Final[dict[str, tuple[int, int, int]]] = {
+    "primary": (3, 169, 244),
+    "accent": (255, 152, 0),
+    "red": (244, 67, 54),
+    "pink": (233, 30, 99),
+    "purple": (146, 107, 199),
+    "deep-purple": (110, 65, 171),
+    "indigo": (63, 81, 181),
+    "blue": (33, 150, 243),
+    "light-blue": (3, 169, 244),
+    "cyan": (0, 188, 212),
+    "teal": (0, 150, 136),
+    "green": (76, 175, 80),
+    "light-green": (139, 195, 74),
+    "lime": (205, 220, 57),
+    "yellow": (255, 235, 59),
+    "amber": (255, 193, 7),
+    "orange": (255, 152, 0),
+    "deep-orange": (255, 111, 34),
+    "brown": (121, 85, 72),
+    "light-grey": (189, 189, 189),
+    "grey": (158, 158, 158),
+    "dark-grey": (96, 96, 96),
+    "blue-grey": (96, 125, 139),
+    "black": (0, 0, 0),
+    "white": (255, 255, 255),
+}
+
+# A notification's chime that plays nothing, even when its category has one.
+CHIME_NONE: Final = "none"
 
 # The sounds that come with the integration, by chime id: their file and
 # name. A chime of the Chimes list can be any other media.
@@ -306,8 +342,18 @@ LIGHT_SCHEMA = _with_id(
         # How a highlighted notification shows: ``blink`` or an effect of
         # the light.
         vol.Optional("effect", default=EFFECT_BLINK): cv.string,
-        # The light's own RGB for the system colours (only what differs).
+        # The light's own RGB for the system and own colours (only what
+        # differs).
         vol.Optional("colors", default=dict): vol.Schema({cv.string: _rgb}),
+    }
+)
+
+# An own colour of the Colors list: a name and its RGB, on the cards and on
+# the lights (a light can show it with its own RGB, see its ``colors``).
+COLOR_SCHEMA = _with_id(
+    {
+        vol.Required("name"): cv.string,
+        vol.Required("rgb"): _rgb,
     }
 )
 
@@ -373,7 +419,6 @@ _CHANNEL_EXTRA: dict[str, dict[Any, Any]] = {
     "light": {},
     "siren": {},
     "speaker": {
-        vol.Optional("chime"): _optional(_id),
         vol.Optional("repeat"): REPEAT_SCHEMA,
         vol.Optional("read_the_message"): cv.boolean,
         # What is read besides the message: the notification's name and
@@ -470,12 +515,11 @@ CATEGORY_SCHEMA = _with_id(
     {
         vol.Required("name"): cv.string,
         vol.Optional("icon"): _optional(cv.icon),
-        # A system colour by name, or a custom colour (#rrggbb) with the
-        # light's own ``light_color`` (empty: the card colour).
-        vol.Optional("card_color"): _optional(cv.string),
-        vol.Optional("light_color"): _optional(_rgb),
+        # A system colour by name, or an own colour by its id.
+        vol.Optional("color"): _optional(cv.string),
         # The lights blink (or show their effect) for its notifications.
         vol.Optional("highlight", default=False): cv.boolean,
+        # What the speakers play.
         vol.Optional("chime"): _optional(_id),
         vol.Optional("buttons", default=list): _category_buttons_late,
         vol.Optional("audience", default=dict): _audience,
@@ -959,9 +1003,9 @@ NOTIFICATION_SCHEMA = _with_id(
         vol.Optional("enabled", default=True): cv.boolean,
         # Left out: inherited from the category.
         vol.Optional("icon"): _optional(cv.icon),
-        vol.Optional("card_color"): _optional(cv.string),
-        vol.Optional("light_color"): _optional(_rgb),
+        vol.Optional("color"): _optional(cv.string),
         vol.Optional("highlight"): _optional(cv.boolean),
+        vol.Optional("chime"): _optional(_id),
         vol.Optional("entities", default=list): vol.All(
             cv.ensure_list, [ENTITY_SCHEMA]
         ),
@@ -980,6 +1024,7 @@ ITEM_SCHEMAS: Final[dict[str, vol.Schema]] = {
     "speakers": SPEAKER_SCHEMA,
     "sirens": SIREN_SCHEMA,
     "chimes": CHIME_SCHEMA,
+    "colors": COLOR_SCHEMA,
     "categories": CATEGORY_SCHEMA,
     "notifications": NOTIFICATION_SCHEMA,
 }
@@ -995,6 +1040,7 @@ CONFIG_SCHEMA = vol.Schema(
         ),
         vol.Optional("sirens", default=list): vol.All(cv.ensure_list, [SIREN_SCHEMA]),
         vol.Optional("chimes", default=list): vol.All(cv.ensure_list, [CHIME_SCHEMA]),
+        vol.Optional("colors", default=list): vol.All(cv.ensure_list, [COLOR_SCHEMA]),
         vol.Optional("categories", default=list): vol.All(
             cv.ensure_list, [CATEGORY_SCHEMA]
         ),
@@ -1018,7 +1064,7 @@ def default_config() -> ConfigData:
                     "id": GENERAL_CATEGORY_ID,
                     "name": "General",
                     "icon": "mdi:bell",
-                    "card_color": "blue",
+                    "color": "blue",
                     "channels": {CHANNEL_DASHBOARD: {"modes": [HOME_MODE_ID]}},
                 }
             ],
@@ -1077,23 +1123,28 @@ def _check_references(config: ConfigData) -> None:
                     raise ConfigValidationError(
                         _path(where, key, "modes") + f": no mode '{mode}'"
                     )
-            chime = channel.get("chime")
-            if chime is not None and chime not in chimes:
-                raise ConfigValidationError(
-                    _path(where, key, "chime") + f": no chime '{chime}'"
-                )
+
+    colors = {color["id"] for color in config["colors"]} | set(SYSTEM_COLORS)
+
+    def check_look(item: dict[str, Any], where: str) -> None:
+        if item.get("chime") not in (None, CHIME_NONE) and item["chime"] not in chimes:
+            raise ConfigValidationError(
+                _path(where, "chime") + f": no chime '{item['chime']}'"
+            )
+        if item.get("color") is not None and item["color"] not in colors:
+            raise ConfigValidationError(
+                _path(where, "color") + f": no colour '{item['color']}'"
+            )
 
     for category in config["categories"]:
         where = _path("categories", category["name"])
-        if category.get("chime") is not None and category["chime"] not in chimes:
-            raise ConfigValidationError(
-                _path(where, "chime") + f": no chime '{category['chime']}'"
-            )
+        check_look(category, where)
         check_channels(category["channels"], _path(where, "channels"))
 
     notification_ids = {item["id"] for item in config["notifications"]}
     for notification in config["notifications"]:
         where = _path("notifications", notification["name"])
+        check_look(notification, where)
         if notification["category"] not in categories:
             raise ConfigValidationError(
                 _path(where, "category") + f": no category '{notification['category']}'"
@@ -1334,6 +1385,88 @@ def upgrade_devices(data: dict[str, Any]) -> None:
     for speaker in data.get("speakers") or []:
         if isinstance(speaker, dict):
             speaker.pop("resume_playback", None)
+
+
+def upgrade_colors(data: dict[str, Any]) -> None:
+    """Bring the colours and chimes of 0.6.4 and before to the 0.6.5 form.
+
+    - ``card_color`` is now ``color``.
+    - A custom colour (``#rrggbb``, or a ``light_color``) becomes an own colour
+      of the Colors list, "Custom 1" and on (the same RGB is one colour). A
+      light colour that differs from the card colour goes to every light's
+      Colors, for that colour.
+    - A speaker channel has no chime of its own any more: the category's or
+      notification's plays.
+    """
+    colors = data.get("colors")
+    if not isinstance(colors, list):
+        colors = []
+    by_look: dict[tuple[Any, ...], str] = {}
+    lights = [light for light in data.get("lights") or [] if isinstance(light, dict)]
+    items = [
+        item
+        for section in ("categories", "notifications")
+        for item in data.get(section) or []
+        if isinstance(item, dict)
+    ]
+    for item in items:
+        if "card_color" not in item and "light_color" not in item:
+            continue
+        card = item.pop("card_color", None)
+        light = item.pop("light_color", None)
+        name = str(card).strip().lower().replace("_", "-") if card else None
+        if light is None and (not name or name in SYSTEM_COLORS):
+            item.setdefault("color", name)
+            continue
+        rgb = _parse_hex(card) or (
+            list(SYSTEM_COLORS[name]) if name in SYSTEM_COLORS else None
+        )
+        light_rgb = list(light) if isinstance(light, (list, tuple)) else None
+        rgb = rgb or light_rgb or list(SYSTEM_COLORS["primary"])
+        key = (tuple(rgb), tuple(light_rgb) if light_rgb else None)
+        if key not in by_look:
+            color_id = new_id()
+            colors.append(
+                {"id": color_id, "name": f"Custom {len(by_look) + 1}", "rgb": rgb}
+            )
+            by_look[key] = color_id
+            if light_rgb and light_rgb != rgb:
+                for lamp in lights:
+                    own = lamp.setdefault("colors", {})
+                    if isinstance(own, dict):
+                        own[color_id] = light_rgb
+        item.setdefault("color", by_look[key])
+    if colors:
+        data["colors"] = colors
+
+    def drop_chime(channels: Any) -> None:
+        if not isinstance(channels, dict):
+            return
+        for key, channel in channels.items():
+            if str(key).startswith(CHANNEL_SPEAKER_PREFIX) and isinstance(
+                channel, dict
+            ):
+                channel.pop("chime", None)
+
+    for category in data.get("categories") or []:
+        if isinstance(category, dict):
+            drop_chime(category.get("channels"))
+    for notification in data.get("notifications") or []:
+        for step in (
+            (notification.get("steps") or []) if isinstance(notification, dict) else []
+        ):
+            if isinstance(step, dict):
+                drop_chime(step.get("channels"))
+
+
+def _parse_hex(value: Any) -> list[int] | None:
+    text = value.strip() if isinstance(value, str) else ""
+    if len(text) == 7 and text.startswith("#"):
+        try:
+            return [int(text[i : i + 2], 16) for i in (1, 3, 5)]
+        except ValueError:
+            return None
+    return None
 
 
 def upgrade_channels(data: dict[str, Any], people: Iterable[str]) -> None:
@@ -1670,6 +1803,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     upgrade_category_buttons(data)
     upgrade_channels(data, _known_people(hass, data))
     upgrade_devices(data)
+    upgrade_colors(data)
     for notification in data.get("notifications") or []:
         # Before the structure check: the earlier fields are not in it.
         if isinstance(notification, dict):

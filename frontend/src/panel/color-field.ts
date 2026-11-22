@@ -1,21 +1,14 @@
-// The Color field of a category and of a notification: a system colour, or
-// Custom at the end of the list, which opens two pickers: the card's colour
-// and the lights' colour (the card's until changed). A system colour shows
-// on each light as that light's Colors tab sets it.
+// The fields of a category's and a notification's look: Color (a system
+// colour or an own colour of the Colors list), Highlight and Chime. A
+// notification shows its category's until it sets its own, which has an X
+// that goes back to the category's.
 
-import { html, nothing } from "lit";
+import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 
-import { SYSTEM_COLORS, parseRgb, rgbToHex } from "../shared/config";
+import { CHIME_NONE, type NotificationCenterConfig, SYSTEM_COLORS, orderedChimes } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
 import { field } from "./fields";
-
-export interface ColorValue {
-  card_color?: string | null;
-  light_color?: number[] | null;
-}
-
-const CUSTOM = "nc_custom";
 
 // No X on a colour that cannot be emptied: Home Assistant's colour picker
 // has no setting for it, so its inner picker is told (without a required
@@ -31,62 +24,89 @@ function hideClear(element: Element | undefined, hide: boolean): void {
   });
 }
 
-/** Whether a colour is a custom one (not a system colour by name). */
-export function isCustomColor(value: ColorValue): boolean {
-  return (!!value.card_color && !(value.card_color in SYSTEM_COLORS)) || !!value.light_color;
+// Only the listed colours: Home Assistant's colour picker offers what is
+// typed in the search as a "Custom color", which is not a colour here (own
+// colours are made on the Colors page).
+function onlyListed(element: Element | undefined): void {
+  const picker = element as (HTMLElement & { _getAdditionalItems?: () => unknown[]; requestUpdate?: () => void }) | undefined;
+  if (!picker || (picker as { _ncListed?: boolean })._ncListed) return;
+  (picker as { _ncListed?: boolean })._ncListed = true;
+  picker._getAdditionalItems = () => [];
+  picker.requestUpdate?.();
+}
+
+/** The own colours of the Colors list, as options of Home Assistant's colour picker. */
+export function ownColorOptions(config: NotificationCenterConfig | undefined) {
+  return (config?.colors ?? []).map((color) => ({
+    value: color.id,
+    label: color.name,
+    display_color: `rgb(${color.rgb.join(", ")})`,
+  }));
 }
 
 export function colorField(
   hass: HomeAssistant | undefined,
-  value: ColorValue,
-  changed: (value: ColorValue) => void,
-  options: { defaultColor?: string; helper?: string; inherits?: boolean } = {},
+  config: NotificationCenterConfig | undefined,
+  value: string | null | undefined,
+  changed: (value: string | null) => void,
+  options: { defaultColor?: string | null; inherits?: boolean } = {},
 ) {
-  const custom = isCustomColor(value);
-  // A notification shows its category's colour until it sets its own; its
-  // own one has an X that goes back to the category's.
-  const own = !!value.card_color || !!value.light_color;
-  const fallback = options.defaultColor && options.defaultColor in SYSTEM_COLORS ? options.defaultColor : "primary";
-  const cardRgb = parseRgb(value.card_color) ?? SYSTEM_COLORS[value.card_color ?? fallback] ?? SYSTEM_COLORS.primary;
+  const known = (color: string | null | undefined) =>
+    !!color && (color in SYSTEM_COLORS || !!config?.colors?.some((item) => item.id === color));
+  const fallback = known(options.defaultColor) ? options.defaultColor! : "primary";
+  const own = !!value;
   return html`<ha-color-picker
-      .hass=${hass}
-      .label=${"Color"}
-      .helper=${options.helper ?? ""}
-      .value=${custom ? CUSTOM : (value.card_color ?? (options.inherits ? fallback : undefined))}
-      ${ref((element) => hideClear(element, !options.inherits || !own))}
-      .defaultColor=${fallback}
-      .includeNone=${false}
-      .includeState=${false}
-      .extraOptions=${[{ value: CUSTOM, label: "Custom", icon: "mdi:palette-outline" }]}
-      @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-        ev.stopPropagation();
-        const picked = ev.detail.value;
-        if (picked === CUSTOM) {
-          if (!custom) changed({ card_color: rgbToHex(cardRgb), light_color: null });
-          return;
-        }
-        changed({ card_color: picked || null, light_color: null });
-      }}
-    ></ha-color-picker>
-    ${custom
-      ? html`${field(hass, { color_rgb: {} }, cardRgb, "Card color", (rgb) => {
-            const parsed = parseRgb(rgb);
-            if (parsed) changed({ ...value, card_color: rgbToHex(parsed) });
-          })}
-          ${field(
-            hass,
-            { color_rgb: {} },
-            value.light_color ?? cardRgb,
-            "Light color",
-            (rgb) => {
-              const parsed = parseRgb(rgb);
-              if (!parsed) return;
-              const same = parsed.every((part, index) => part === cardRgb[index]);
-              changed({ ...value, light_color: same ? null : parsed });
-            },
-            { helper: value.light_color ? "" : "The card color until changed." },
-          )}`
-      : nothing}`;
+        .hass=${hass}
+        .label=${"Color"}
+        .value=${value || fallback}
+        ${ref((element) => {
+          onlyListed(element);
+          hideClear(element, !options.inherits || !own);
+        })}
+        .defaultColor=${fallback}
+        .includeNone=${false}
+        .includeState=${false}
+        .extraOptions=${ownColorOptions(config)}
+        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+          ev.stopPropagation();
+          changed(ev.detail.value || null);
+        }}
+      ></ha-color-picker>`;
+}
+
+/**
+ * Chime: what the speakers play. A category's None plays nothing; a
+ * notification can also choose None over its category's chime.
+ */
+export function chimeField(
+  config: NotificationCenterConfig | undefined,
+  value: string | null | undefined,
+  inherited: string | null | undefined,
+  changed: (value: string | null) => void,
+  options: { inherits?: boolean } = {},
+) {
+  const own = value !== undefined && value !== null;
+  const shown = own ? value : (options.inherits ? inherited : value) ?? CHIME_NONE;
+  return field(
+    undefined,
+    {
+      select: {
+        mode: "dropdown",
+        options: [
+          { value: CHIME_NONE, label: "None" },
+          ...orderedChimes(config).map((chime) => ({ value: chime.id, label: chime.name })),
+        ],
+      },
+    },
+    shown ?? CHIME_NONE,
+    "Chime",
+    (picked) => {
+      if (picked === undefined || picked === null) changed(null);
+      else if (options.inherits) changed(String(picked));
+      else changed(picked === CHIME_NONE ? null : String(picked));
+    },
+    { clearable: !!options.inherits && own },
+  );
 }
 
 /**

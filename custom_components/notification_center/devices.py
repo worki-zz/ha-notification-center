@@ -20,7 +20,7 @@ The Test button of a channel runs a device once, outside these rules.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
@@ -61,7 +61,9 @@ from .model import (
     CHANNEL_LIGHT_PREFIX,
     CHANNEL_SIREN_PREFIX,
     CHANNEL_SPEAKER_PREFIX,
+    CHIME_NONE,
     EFFECT_BLINK,
+    SYSTEM_COLORS,
     ConfigData,
 )
 
@@ -73,35 +75,6 @@ _LOGGER = logging.getLogger(__name__)
 STORE_KEY: Final = f"{DOMAIN}.devices"
 STORE_VERSION: Final = 1
 
-# The RGB of Home Assistant's system colours (its default theme): what a
-# light shows for a card colour, unless the light has its own.
-SYSTEM_COLORS: Final[dict[str, tuple[int, int, int]]] = {
-    "primary": (3, 169, 244),
-    "accent": (255, 152, 0),
-    "red": (244, 67, 54),
-    "pink": (233, 30, 99),
-    "purple": (146, 107, 199),
-    "deep-purple": (110, 65, 171),
-    "indigo": (63, 81, 181),
-    "blue": (33, 150, 243),
-    "light-blue": (3, 169, 244),
-    "cyan": (0, 188, 212),
-    "teal": (0, 150, 136),
-    "green": (76, 175, 80),
-    "light-green": (139, 195, 74),
-    "lime": (205, 220, 57),
-    "yellow": (255, 235, 59),
-    "amber": (255, 193, 7),
-    "orange": (255, 152, 0),
-    "deep-orange": (255, 111, 34),
-    "brown": (121, 85, 72),
-    "light-grey": (189, 189, 189),
-    "grey": (158, 158, 158),
-    "dark-grey": (96, 96, 96),
-    "blue-grey": (96, 125, 139),
-    "black": (0, 0, 0),
-    "white": (255, 255, 255),
-}
 # A light shows the greys white (a lamp has no grey): their defaults on a light.
 LIGHT_DEFAULTS: Final[dict[str, tuple[int, int, int]]] = {
     **SYSTEM_COLORS,
@@ -151,22 +124,31 @@ def parse_color(value: Any) -> Rgb | None:
 def color_of(
     notification: Mapping[str, Any] | None,
     category: Mapping[str, Any] | None,
-) -> tuple[str | None, Rgb | None]:
-    """Return a notification's colour: a system colour's name, or a custom RGB.
+) -> str:
+    """Return a notification's colour: a system colour's name or an own colour's id.
 
-    The notification's own colour wins over its category's. A custom colour
-    carries its light colour (empty: the card colour itself).
+    The notification's own colour wins over its category's.
     """
     for item in (notification or {}, category or {}):
-        card = item.get("card_color")
-        light = parse_color(item.get("light_color"))
-        if not card and light is None:
-            continue
-        name = str(card).strip().lower().replace("_", "-") if card else None
-        if name in SYSTEM_COLORS and light is None:
-            return name, None
-        return None, light or parse_color(card) or SYSTEM_COLORS[DEFAULT_COLOR]
-    return DEFAULT_COLOR, None
+        color = item.get("color")
+        if color:
+            text = str(color).strip()
+            name = text.lower().replace("_", "-")
+            return name if name in SYSTEM_COLORS else text
+    return DEFAULT_COLOR
+
+
+def chime_of(
+    notification: Mapping[str, Any] | None, category: Mapping[str, Any] | None
+) -> str | None:
+    """Return what the speakers play for a notification (None: nothing).
+
+    The notification's own chime wins over its category's; ``none`` is no
+    chime even when the category has one.
+    """
+    own = (notification or {}).get("chime")
+    chime = own if own is not None else (category or {}).get("chime")
+    return None if chime in (None, CHIME_NONE) else str(chime)
 
 
 def highlight_of(
@@ -179,13 +161,28 @@ def highlight_of(
     return bool((category or {}).get("highlight", False))
 
 
-def light_rgb(light: Mapping[str, Any], name: str | None, custom: Rgb | None) -> Rgb:
-    """Return what a light shows for a colour: its own RGB of a system colour."""
-    if custom is not None:
-        return custom
-    name = name or DEFAULT_COLOR
-    own = parse_color((light.get("colors") or {}).get(name))
-    return own or LIGHT_DEFAULTS.get(name, LIGHT_DEFAULTS[DEFAULT_COLOR])
+def light_rgb(
+    light: Mapping[str, Any],
+    color: str | None,
+    colors: Sequence[Mapping[str, Any]] | None = None,
+) -> Rgb:
+    """Return what a light shows for a colour: its own RGB, or the colour's.
+
+    ``color`` is a system colour's name or an own colour's id (from
+    ``colors``, the Colors list); an RGB given as text also works (a test).
+    """
+    color = color or DEFAULT_COLOR
+    own = parse_color((light.get("colors") or {}).get(color))
+    if own:
+        return own
+    if color in LIGHT_DEFAULTS:
+        return LIGHT_DEFAULTS[color]
+    for item in colors or []:
+        if item.get("id") == color:
+            rgb = parse_color(item.get("rgb"))
+            if rgb:
+                return rgb
+    return parse_color(color) or LIGHT_DEFAULTS[DEFAULT_COLOR]
 
 
 @dataclass(slots=True)
@@ -422,6 +419,10 @@ class Device:
     def _notification(self, card: Card) -> dict[str, Any]:
         return self.manager.engine.notification_config(card.notification_id) or {}
 
+    def _colors(self) -> list[dict[str, Any]]:
+        """Return the own colours of the Colors list."""
+        return list(self.manager.engine.manager.config.get("colors") or [])
+
 
 # ---------------------------------------------------------------------------
 # Lights
@@ -560,9 +561,10 @@ class LightDevice(Device):
         card = cards[0]
         notification = self._notification(card)
         category = self.manager.engine.category_of(notification)
-        name, custom = color_of(notification, category)
         look = Look(
-            rgb=light_rgb(self.settings, name, custom),
+            rgb=light_rgb(
+                self.settings, color_of(notification, category), self._colors()
+            ),
             highlight=highlight_of(notification, category),
             notification_id=card.notification_id,
         )
@@ -722,15 +724,11 @@ class LightDevice(Device):
         """Show a colour for a few seconds, then go back."""
         if data.get("device"):
             self.settings = {**self.settings, **data["device"]}
-        name, custom = color_of(data.get("notification"), data.get("category"))
-        if data.get("color"):
-            name, custom = (
-                (data["color"], None)
-                if data["color"] in SYSTEM_COLORS
-                else (None, parse_color(data["color"]))
-            )
+        color = data.get("color") or color_of(
+            data.get("notification"), data.get("category")
+        )
         look = Look(
-            rgb=light_rgb(self.settings, name, custom),
+            rgb=light_rgb(self.settings, color, self._colors()),
             highlight=bool(data.get("highlight"))
             or highlight_of(data.get("notification"), data.get("category")),
         )
@@ -897,7 +895,7 @@ class SpeakerDevice(Device):
         notification = self._notification(card)
         category = engine.category_of(notification) or {}
         settings = self._settings_of(card)
-        chime = settings.get("chime", category.get("chime"))
+        chime = chime_of(notification, category)
         text = None
         if settings.get("read_the_message"):
             text = spoken_text(
@@ -1045,7 +1043,7 @@ class SpeakerDevice(Device):
             self.settings = {**self.settings, **data["device"]}
         settings = data.get("settings") or {}
         category = data.get("category") or {}
-        chime = settings.get("chime", category.get("chime"))
+        chime = chime_of(data.get("notification"), category)
         text = None
         if settings.get("read_the_message"):
             text = spoken_text(

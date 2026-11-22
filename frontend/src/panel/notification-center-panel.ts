@@ -4,7 +4,7 @@ import { repeat } from "lit/directives/repeat.js";
 
 import "./dialog-back";
 import { loadDashboardElements } from "../card/elements";
-import { CHANNEL_DASHBOARD, type AudienceEntry, type AudienceState } from "../shared/config";
+import { CHANNEL_DASHBOARD, colorCss, type AudienceEntry, type AudienceState } from "../shared/config";
 import {
   cssColor,
   firstWeekday,
@@ -212,7 +212,7 @@ export class NotificationCenterPanel extends LitElement {
             message,
             when: this._when(due),
             icon: notification.icon || category?.icon || "mdi:calendar-clock",
-            color: cssColor(notification.card_color ?? category?.card_color),
+            color: cssColor(colorCss(config, notification.color ?? category?.color)),
             muted: true,
             buttons: [{ key: "done_early", label: "Done", icon: "mdi:check" }],
           },

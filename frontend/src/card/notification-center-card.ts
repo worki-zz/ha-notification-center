@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
-import { DOMAIN } from "../shared/config";
+import { DOMAIN, colorCss } from "../shared/config";
 import { defineElement } from "../shared/define";
 import {
   cssColor,
@@ -250,7 +250,7 @@ export class NotificationCenterCard extends LitElement {
       info: "This card is hidden on the dashboard while nothing is active.",
       icon,
       stateObj: icon ? undefined : this.hass!.states[entityId],
-      color: cssColor(notification.card_color ?? category?.card_color),
+      color: cssColor(colorCss(config, notification.color ?? category?.color)),
     };
   }
 

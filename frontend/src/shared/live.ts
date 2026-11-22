@@ -19,6 +19,7 @@ import {
   type NotificationCenterConfig,
   type StateMessage,
   type Step,
+  colorCss,
 } from "./config";
 import { entityAttribute, entityState, formatTime } from "./format";
 import type { HomeAssistant } from "./types";
@@ -72,6 +73,8 @@ export interface LiveCard {
   notification: Notification;
   category?: Category;
   step?: Step;
+  // The CSS colour of the card: the notification's or its category's.
+  color?: string;
   // The notification's sensor.
   entityId?: string;
   // When the notification was last done.
@@ -336,6 +339,7 @@ export function liveCards(
         notification,
         category,
         step,
+        color: colorCss(config, notification.color ?? category?.color),
         entityId: entry.entity_id ?? undefined,
         lastDone: entry.last_done,
         held,

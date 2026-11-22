@@ -57,3 +57,6 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ### Trace
 *Area: Insight.* A trace view like the one for automations: why a notification became active or closed, which trigger and conditions matched, which channels were sent. Needs its own storage and its own view. *(Phase 4, 2026-11-19)*
+
+### Chime per speaker
+*Area: Channels.* Let a speaker channel play another chime than the notification's (for example a softer one in the bedroom). 0.6.5 moved the chime to the category and the notification only. *(Kristóf, 2026-11-22; phase 6.1)*

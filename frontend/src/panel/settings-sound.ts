@@ -633,7 +633,7 @@ export class NcSettingsSound extends LitElement {
         title: `Delete ${name}?`,
         text:
           edit.section === "chimes"
-            ? "Categories and channels that play it play nothing instead."
+            ? "Categories and notifications that play it play nothing instead."
             : "It leaves its channel in every category and notification.",
         confirm: "Delete",
         destructive: true,
