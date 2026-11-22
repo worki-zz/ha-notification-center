@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Settings pages, the editors and the Overview all have 24 px under the header.
+- General: a line between the rows of the list.
+
 ## 0.6.3
 
 Fixes and changes after testing 0.6.2.

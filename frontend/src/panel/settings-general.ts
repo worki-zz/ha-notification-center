@@ -186,6 +186,10 @@ export class NcSettingsGeneral extends LitElement {
     ha-card {
       overflow: hidden;
     }
+    /* A line between the rows, as in the Notifications list. */
+    ha-list-item-button + ha-list-item-button {
+      border-top: 1px solid var(--divider-color);
+    }
     /* As the icons of Home Assistant's System settings. */
     .page-icon {
       padding: 8px;

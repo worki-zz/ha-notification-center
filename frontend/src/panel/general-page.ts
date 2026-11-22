@@ -263,7 +263,8 @@ export class NcGeneralPage extends LitElement {
     .content {
       max-width: 1040px;
       margin: 0 auto;
-      padding: 16px;
+      /* 24px under the header, as on the Overview. */
+      padding: 24px 16px 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;
