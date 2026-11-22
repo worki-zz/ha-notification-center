@@ -184,6 +184,7 @@ export class NotificationCenterPanel extends LitElement {
     const hass = this.hass;
     if (!config || !state || !hass) return [];
     const person = personOf(hass);
+    const people = Object.keys(state.people ?? {});
     const result: Upcoming[] = [];
     for (const notification of config.notifications) {
       if (!notification.enabled) continue;
@@ -191,7 +192,7 @@ export class NotificationCenterPanel extends LitElement {
       const category = categoryOf(config, notification);
       for (const item of entry?.upcoming ?? []) {
         const step = stepOf(notification, item.step_id);
-        if (!step || !inAudience(step, person)) continue;
+        if (!step || !inAudience(category, step, person, people)) continue;
         // A step with an open card shows that card instead.
         if (entry.cards.some((card) => card.step_id === step.id && card.status !== "done")) {
           continue;
@@ -296,6 +297,50 @@ export class NotificationCenterPanel extends LitElement {
     );
   }
 
+  // The active cards the Dashboard holds back for the viewer now.
+  private _held(): LiveCard[] {
+    const { config, state } = this._store;
+    if (!config || !state || !this.hass) return [];
+    return liveCards(config, state, {
+      statuses: ["active"],
+      person: personOf(this.hass),
+      withHeld: true,
+    }).filter((live) => live.held);
+  }
+
+  // Why a card is held back, as the line under it says.
+  private _heldText(live: LiveCard): string {
+    const held = live.held!;
+    if (held.reason === "delay" && held.until) {
+      return `Shows ${this._when(new Date(held.until))}`;
+    }
+    if (held.reason === "mode") {
+      const mode = this._store.config?.modes.find((item) => item.id === this._store.state?.mode);
+      return mode ? `Held back in ${mode.name} mode` : "Held back by the mode";
+    }
+    const person = this.hass ? personOf(this.hass) : undefined;
+    const state = person ? this._store.state?.people?.[person] : undefined;
+    if (state === "away") return "Shows when you are home";
+    if (state === "sleep") return "Shows when you are awake";
+    if (state === "home") return "Not while you are home";
+    return "Waiting for the audience";
+  }
+
+  // An active card the Dashboard holds back: neutral, with the reason.
+  private _renderHeld(live: LiveCard) {
+    return html`
+      <notification-center-live-card
+        class="upcoming"
+        .hass=${this.hass}
+        .live=${live}
+        .now=${this._now}
+        .data=${""}
+        .when=${this._heldText(live)}
+        .muted=${true}
+      ></notification-center-live-card>
+    `;
+  }
+
   // A snoozed card among the upcoming ones: neutral, with its snooze end.
   private _renderSnoozed(live: LiveCard) {
     const until = live.card.snoozed_until;
@@ -332,7 +377,17 @@ export class NotificationCenterPanel extends LitElement {
   private _renderOverview() {
     const active = this._cards(["active"]);
     const end = this._endOfToday();
-    const timed: { at: number; key: string; live?: LiveCard; item?: Upcoming }[] = [
+    const timed: {
+      at: number;
+      key: string;
+      live?: LiveCard;
+      item?: Upcoming;
+    }[] = [
+      ...this._held().map((live) => ({
+        at: live.held?.until ? new Date(live.held.until).getTime() : this._now,
+        key: cardKey(live.card),
+        live,
+      })),
       ...this._cards(["snoozed"]).map((live) => ({
         at: live.card.snoozed_until ? new Date(live.card.snoozed_until).getTime() : 0,
         key: cardKey(live.card),
@@ -358,7 +413,9 @@ export class NotificationCenterPanel extends LitElement {
               (entry) => entry.key,
               (entry) =>
                 entry.live
-                  ? this._renderSnoozed(entry.live)
+                  ? entry.live.held
+                    ? this._renderHeld(entry.live)
+                    : this._renderSnoozed(entry.live)
                   : this._renderUpcoming([entry.item!]),
             )}`
         : nothing}

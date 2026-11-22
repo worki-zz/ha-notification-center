@@ -1063,6 +1063,7 @@ export class NcNotificationEditor extends LitElement {
           .entities=${this.hass ? listedEntities(this.hass, draft) : []}
           .entityActions=${buttonsWithEntityActions(draft)}
           .category=${this._category()}
+          .modes=${this.config?.modes ?? []}
           @value-changed=${(ev: CustomEvent<{ value: EditorStep }>) => {
             ev.stopPropagation();
             this._changeStep(index, ev.detail.value);

@@ -27,11 +27,23 @@ export interface CategoryButton {
   push_tap?: boolean;
 }
 
+/**
+ * A channel's settings. A category has them all; a step stores only what it
+ * changes (``delay: null`` there: at once, over the category's delay).
+ */
 export interface ChannelSettings {
   modes?: string[];
-  when?: { type: string; [key: string]: unknown };
+  delay?: Duration | null;
   [key: string]: unknown;
 }
+
+/** The states of a person a notification is for. */
+export type AudienceState = "home" | "sleep" | "away";
+export type AudienceEntry = Record<AudienceState, boolean>;
+export const AUDIENCE_STATES: AudienceState[] = ["home", "sleep", "away"];
+
+/** The Dashboard channel: the panel and the dashboard cards. */
+export const CHANNEL_DASHBOARD = "dashboard";
 
 export interface Category {
   id: string;
@@ -42,6 +54,9 @@ export interface Category {
   chime?: string | null;
   // The built-in buttons (always there) and the category's custom ones.
   buttons: CategoryButton[];
+  // The states each person gets the category's notifications in; a person
+  // left out gets what the listed ones have in common.
+  audience?: Record<string, AudienceEntry>;
   channels: Record<string, ChannelSettings>;
 }
 
@@ -108,8 +123,10 @@ export interface Step {
   data?: StepData | null;
   activation: { type: "triggers" | "schedule" };
   buttons: Button[];
-  // Person entities who see the card; empty means everyone.
-  audience?: string[];
+  // The people whose states differ from the category's audience.
+  audience?: Record<string, AudienceEntry>;
+  // What differs from the category's channels.
+  channels?: Record<string, ChannelSettings>;
 }
 
 export interface Notification {
@@ -128,6 +145,8 @@ export interface Person {
   picture?: string | null;
   notify?: string | null;
   device_type: "ios" | "android" | "other";
+  // When the person is asleep (counted only at home), like a mode's condition.
+  sleep?: Mode["condition"];
 }
 
 export interface GeneralSettings {
@@ -168,6 +187,21 @@ export interface CardState {
   info: string | null;
   // The step's custom data text, rendered.
   data_text?: string | null;
+  // Whether the Dashboard channel shows the card now, and to whom.
+  dashboard?: ChannelView;
+}
+
+/** Why a channel does not send a card now. */
+export type ChannelReason = "off" | "mode" | "delay" | "audience";
+
+export interface ChannelView {
+  // The people it goes to now.
+  people: string[];
+  // The people of the audience (in at least one state).
+  audience: string[];
+  reason: ChannelReason | null;
+  // The end of the delay.
+  until: string | null;
 }
 
 export interface NotificationState {
@@ -182,8 +216,11 @@ export interface NotificationState {
 }
 
 export interface StateMessage {
-  // The current mode; null when no mode applies (every channel sends).
+  // The current mode; null when no mode applies (the channels with a tick
+  // in any mode send).
   mode: string | null;
+  // Each person: at home (awake), asleep or away.
+  people?: Record<string, AudienceState>;
   notifications: Record<string, NotificationState>;
 }
 

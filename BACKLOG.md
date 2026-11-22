@@ -34,6 +34,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## Low priority
 
+### On departure
+*Area: Channels.* Send a channel when a person leaves home (for example a reminder that is only useful on the way out). Mostly covered by the Away state of the Audience and the late send; a separate trigger may still be useful. *(Kristóf, 2026-11-21; phase 6.0)*
+
 ### Display channel
 *Area: Channels.* Show notifications on smart displays (for example a Nest Hub) as a channel of its own, with its own settings like the other channels. Deferred as a whole; 1.0 has no display support. *(Scope cut, 2026-11-15)*
 

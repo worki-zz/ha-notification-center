@@ -4,6 +4,9 @@ A notification's sensor shows its state (``active``, ``hidden``, ...). It is
 ``sensor.nc_<name>``; the entity id stays when the notification is renamed,
 like any Home Assistant entity. The summary sensor
 ``sensor.notification_center`` counts the active cards and shows the mode.
+
+Every channel has a diagnostic sensor, ``sensor.nc_channel_<channel>``: the
+Dashboard's counts the cards it shows now.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -24,6 +28,7 @@ from .const import (
     DOMAIN,
     PANEL_ICON,
     SENSOR_STATES,
+    UNIQUE_ID_CHANNEL_PREFIX,
     UNIQUE_ID_NOTIFICATION_PREFIX,
     UNIQUE_ID_SUMMARY,
 )
@@ -72,7 +77,9 @@ async def async_setup_entry(
             else:
                 sensors[nid].config_changed(wanted[nid])
 
-    async_add_entities([SummarySensor(engine, info)])
+    async_add_entities(
+        [SummarySensor(engine, info), DashboardChannelSensor(engine, info)]
+    )
     sync(runtime.manager.config)
     entry.async_on_unload(runtime.manager.async_add_listener(sync))
     _remove_orphans(hass, entry, set(sensors))
@@ -196,5 +203,45 @@ class SummarySensor(SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the mode, the counts per category and the top notification."""
         summary = self._engine.summary()
+        summary.pop("state")
+        return summary
+
+
+class DashboardChannelSensor(SensorEntity):
+    """The cards the Dashboard channel shows now, and the ones it holds back."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:view-dashboard-outline"
+    _attr_translation_key = "dashboard_channel"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, engine: Engine, info: Any) -> None:
+        """Set up the sensor."""
+        self._engine = engine
+        self._attr_unique_id = f"{UNIQUE_ID_CHANNEL_PREFIX}dashboard"
+        self._attr_device_info = info
+        self.entity_id = "sensor.nc_channel_dashboard"
+
+    async def async_added_to_hass(self) -> None:
+        """Follow the engine."""
+        self.async_on_remove(self._engine.async_add_listener(self._changed, late=True))
+
+    @callback
+    def _changed(self) -> None:
+        if (context := self._engine.summary_context) is not None:
+            self.async_set_context(context)
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of cards shown."""
+        return int(self._engine.dashboard_summary()["state"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the cards held back by the mode and the waiting ones."""
+        summary = self._engine.dashboard_summary()
         summary.pop("state")
         return summary

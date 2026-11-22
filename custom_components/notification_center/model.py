@@ -53,8 +53,11 @@ COLLECTIONS: Final = (
 HOME_MODE_ID: Final = "home"
 GENERAL_CATEGORY_ID: Final = "general"
 
-# Channel keys: the Notification center and Push are single channels, every
-# light and speaker is its own channel, keyed by its id.
+# Channel keys: the Dashboard (the panel and the dashboard cards) and Push
+# are single channels, every light and speaker is its own channel, keyed by
+# its id.
+CHANNEL_DASHBOARD: Final = "dashboard"
+# The earlier name of the Dashboard channel, renamed by the upgrade.
 CHANNEL_NOTIFICATION_CENTER: Final = "notification_center"
 CHANNEL_PUSH: Final = "push"
 CHANNEL_LIGHT_PREFIX: Final = "light:"
@@ -247,7 +250,9 @@ PERSON_SCHEMA = vol.Schema(
         vol.Optional("device_type", default="other"): vol.In(
             ("ios", "android", "other")
         ),
-        vol.Optional("sleep_entity"): _optional(cv.entity_id),
+        # When the person is asleep (only counted at home), set like the
+        # condition of a mode.
+        vol.Optional("sleep"): _optional(MODE_CONDITION_SCHEMA),
     }
 )
 
@@ -293,12 +298,6 @@ CHIME_SCHEMA = _with_id(
 # ---------------------------------------------------------------------------
 # Channels
 
-WHEN_SCHEMA = vol.Any(
-    vol.Schema({vol.Required("type"): "immediately"}),
-    vol.Schema({vol.Required("type"): "after", vol.Required("delay"): DURATION}),
-    vol.Schema({vol.Required("type"): "on_arrival"}),
-)
-
 REPEAT_SCHEMA = vol.Any(
     vol.Schema({vol.Required("type"): "once"}),
     vol.Schema({vol.Required("type"): "until_muted", vol.Required("every"): DURATION}),
@@ -312,13 +311,15 @@ RECIPIENTS_SCHEMA = vol.Schema(
     }
 )
 
-# Every key is optional so that a step can store only what it changes.
+# Every key is optional so that a step can store only what it changes. A
+# channel sends after its delay (none: at once); in a step, ``delay: null``
+# overrides the category's delay with "at once".
 _CHANNEL_COMMON = {
     vol.Optional("modes"): vol.All(cv.ensure_list, [_id]),
-    vol.Optional("when"): WHEN_SCHEMA,
+    vol.Optional("delay"): _optional(DURATION),
 }
 _CHANNEL_EXTRA: dict[str, dict[Any, Any]] = {
-    CHANNEL_NOTIFICATION_CENTER: {},
+    CHANNEL_DASHBOARD: {},
     "light": {},
     "speaker": {
         vol.Optional("chime"): _optional(_id),
@@ -339,7 +340,7 @@ _CHANNEL_EXTRA: dict[str, dict[Any, Any]] = {
 
 def channel_kind(key: str) -> str | None:
     """Return the kind of channel a key names, or None if it is not one."""
-    if key in (CHANNEL_NOTIFICATION_CENTER, CHANNEL_PUSH):
+    if key in (CHANNEL_DASHBOARD, CHANNEL_PUSH):
         return key
     if key.startswith(CHANNEL_LIGHT_PREFIX):
         return "light"
@@ -359,7 +360,7 @@ def _channels(value: Any) -> dict[str, dict[str, Any]]:
         kind = channel_kind(str(key))
         if kind is None:
             raise vol.Invalid(
-                f"unknown channel '{key}': use notification_center, push, "
+                f"unknown channel '{key}': use dashboard, push, "
                 "light:<id> or speaker:<id>"
             )
         schema = vol.Schema({**_CHANNEL_COMMON, **_CHANNEL_EXTRA[kind]})
@@ -367,6 +368,35 @@ def _channels(value: Any) -> dict[str, dict[str, Any]]:
             result[str(key)] = schema(settings or {})
         except vol.Invalid as err:
             raise vol.Invalid(f"channel '{key}': {err}") from err
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Audience
+
+# The states of a person a notification can be for: at home and awake,
+# asleep (at home, with the person's Sleep entity on) and away.
+AUDIENCE_STATES: Final = ("home", "sleep", "away")
+
+AUDIENCE_ENTRY_SCHEMA = vol.Schema(
+    {vol.Optional(state, default=False): cv.boolean for state in AUDIENCE_STATES}
+)
+
+
+def _audience(value: Any) -> dict[str, dict[str, bool]]:
+    """Validate an audience: the states each person gets the notification in.
+
+    In a category it is the default; a person left out gets what every
+    listed person has in common. In a step it holds only the people whose
+    states differ from the category's.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise vol.Invalid("expected a mapping of people to their states")
+    result: dict[str, dict[str, bool]] = {}
+    for person, states in value.items():
+        result[cv.entity_domain("person")(person)] = AUDIENCE_ENTRY_SCHEMA(states or {})
     return result
 
 
@@ -387,6 +417,7 @@ CATEGORY_SCHEMA = _with_id(
         vol.Optional("light_color"): _optional(_rgb),
         vol.Optional("chime"): _optional(_id),
         vol.Optional("buttons", default=list): _category_buttons_late,
+        vol.Optional("audience", default=dict): _audience,
         vol.Optional("channels", default=dict): _channels,
     }
 )
@@ -848,10 +879,8 @@ STEP_SCHEMA = _with_id(
         vol.Optional("conditions", default=dict): STEP_CONDITIONS_SCHEMA,
         vol.Optional("done_when", default=dict): DONE_WHEN_SCHEMA,
         vol.Optional("buttons", default=list): _buttons,
-        # People who see the card and get the push; empty means everyone.
-        vol.Optional("audience", default=list): vol.All(
-            cv.ensure_list, [cv.entity_domain("person")]
-        ),
+        # The people whose states differ from the category's audience.
+        vol.Optional("audience", default=dict): _audience,
         vol.Optional("attachments", default=list): vol.All(
             cv.ensure_list, [ATTACHMENT_SCHEMA]
         ),
@@ -924,12 +953,7 @@ def default_config() -> ConfigData:
                     "name": "General",
                     "icon": "mdi:bell",
                     "card_color": "blue",
-                    "channels": {
-                        CHANNEL_NOTIFICATION_CENTER: {
-                            "modes": [HOME_MODE_ID],
-                            "when": {"type": "immediately"},
-                        }
-                    },
+                    "channels": {CHANNEL_DASHBOARD: {"modes": [HOME_MODE_ID]}},
                 }
             ],
         }
@@ -972,7 +996,7 @@ def _check_references(config: ConfigData) -> None:
                 _path("modes", mode["name"], "condition") + ": required"
             )
 
-    channels = {CHANNEL_NOTIFICATION_CENTER, CHANNEL_PUSH}
+    channels = {CHANNEL_DASHBOARD, CHANNEL_PUSH}
     channels.update(CHANNEL_LIGHT_PREFIX + light["id"] for light in config["lights"])
     channels.update(
         CHANNEL_SPEAKER_PREFIX + speaker["id"] for speaker in config["speakers"]
@@ -1229,6 +1253,86 @@ def upgrade_category_buttons(data: dict[str, Any]) -> None:
                         button.pop(key, None)
 
 
+def upgrade_channels(data: dict[str, Any], people: Iterable[str]) -> None:
+    """Bring the channels and audiences of 0.5 and before to the 0.6 form.
+
+    - The Notification center channel is now called Dashboard.
+    - ``when`` becomes ``delay``: After X keeps its time, Immediately and On
+      arrival send at once (arriving is now part of the audience: a person
+      away gets it when they are home again).
+    - A category gets an audience (everyone, in every state), and, once, the
+      Dashboard in every mode, so that nothing disappears after the update.
+    - A step's audience, a list of people (empty: everyone), becomes the
+      people it leaves out, with no state.
+    - A person's Sleep entity becomes a Sleep condition (the entity is on).
+    """
+    categories = data.get("categories")
+    categories = categories if isinstance(categories, list) else []
+    modes = [
+        mode["id"]
+        for mode in data.get("modes") or []
+        if isinstance(mode, dict) and mode.get("id")
+    ]
+    first = any(
+        isinstance(category, dict) and "audience" not in category
+        for category in categories
+    )
+    for category in categories:
+        if not isinstance(category, dict):
+            continue
+        channels = category.get("channels")
+        if isinstance(channels, dict):
+            _upgrade_channel_settings(channels, category=True)
+        if first and "audience" not in category:
+            category["audience"] = {}
+            channels = category.setdefault("channels", {})
+            if isinstance(channels, dict) and CHANNEL_DASHBOARD not in channels:
+                channels[CHANNEL_DASHBOARD] = {"modes": list(modes)}
+    for person in data.get("people") or []:
+        if isinstance(person, dict) and "sleep_entity" in person:
+            entity = person.pop("sleep_entity")
+            if entity and "sleep" not in person:
+                person["sleep"] = {"type": "state", "entity_id": entity, "state": "on"}
+    everyone = set(people)
+    for notification in data.get("notifications") or []:
+        if not isinstance(notification, dict):
+            continue
+        for step in notification.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            channels = step.get("channels")
+            if isinstance(channels, dict):
+                _upgrade_channel_settings(channels, category=False)
+            audience = step.get("audience")
+            if isinstance(audience, list):
+                chosen = {str(person) for person in audience}
+                step["audience"] = (
+                    {
+                        person: dict.fromkeys(AUDIENCE_STATES, False)
+                        for person in sorted(everyone - chosen)
+                    }
+                    if chosen
+                    else {}
+                )
+
+
+def _upgrade_channel_settings(channels: dict[str, Any], *, category: bool) -> None:
+    if CHANNEL_NOTIFICATION_CENTER in channels:
+        old = channels.pop(CHANNEL_NOTIFICATION_CENTER)
+        channels.setdefault(CHANNEL_DASHBOARD, old)
+    for channel in channels.values():
+        if not isinstance(channel, dict) or "when" not in channel:
+            continue
+        when = channel.pop("when")
+        delay = (
+            when.get("delay")
+            if isinstance(when, dict) and when.get("type") == "after"
+            else None
+        )
+        if delay or not category:
+            channel["delay"] = delay or None
+
+
 def upgrade_show_when(notification: dict[str, Any]) -> None:
     """Turn the Start conditions and Hide while of earlier steps into Show when.
 
@@ -1481,6 +1585,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     if not isinstance(data, dict):
         raise ConfigValidationError("the configuration must be a mapping")
     upgrade_category_buttons(data)
+    upgrade_channels(data, _known_people(hass, data))
     for notification in data.get("notifications") or []:
         # Before the structure check: the earlier fields are not in it.
         if isinstance(notification, dict):
@@ -1523,6 +1628,15 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     return config
 
 
+def _known_people(hass: HomeAssistant, data: dict[str, Any]) -> list[str]:
+    """Return the person entities of Home Assistant and of the settings."""
+    people = {state.entity_id for state in hass.states.async_all("person")}
+    for person in data.get("people") or []:
+        if isinstance(person, dict) and isinstance(person.get("person"), str):
+            people.add(person["person"])
+    return sorted(people)
+
+
 def order_modes(modes: list[dict[str, Any]]) -> None:
     """Put Home last when it has no condition: then it is always true.
 
@@ -1534,13 +1648,12 @@ def order_modes(modes: list[dict[str, Any]]) -> None:
 
 
 def _check_category_channels_complete(category: dict[str, Any]) -> None:
-    """Fill in modes and When of a category's channels.
+    """Fill in the modes of a category's channels.
 
     A step stores only what it changes, but a category is the full setting.
     """
     for channel in category["channels"].values():
         channel.setdefault("modes", [])
-        channel.setdefault("when", {"type": "immediately"})
 
 
 def validate_item(section: str, data: Any) -> dict[str, Any]:

@@ -24,9 +24,12 @@ from datetime import date, datetime, time, timedelta
 import logging
 from typing import Any, Final, cast
 
+from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import (
     CALLBACK_TYPE,
     Context,
+    Event,
+    EventStateChangedData,
     HomeAssistant,
     State,
     callback,
@@ -57,6 +60,16 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.hass_dict import HassKey
 import voluptuous as vol
 
+from .channels import (
+    CHANNEL_DASHBOARD,
+    REASON_AUDIENCE,
+    REASON_DELAY,
+    ChannelView,
+    audience_of,
+    channel_settings,
+    channel_view,
+    person_state,
+)
 from .const import (
     CLOSED_DISMISSED,
     CLOSED_DONE,
@@ -94,7 +107,7 @@ from .model import (
     effective_buttons,
     entities_references,
 )
-from .modes import ModeTracker
+from .modes import ConditionTracker, ModeTracker
 from .render import TextTracker, render_text
 from .schedule import calendar_between
 from .scheduler import HISTORY_SKIPPED, StepSchedule
@@ -230,6 +243,9 @@ class Card:
     data_text: str | None = None
     # A scheduled card closes as expired at this time.
     expires_at: datetime | None = None
+    # When the card last opened (or came back from a snooze): the channels
+    # count their delay from here.
+    active_since: datetime | None = None
 
     @property
     def key(self) -> CardKey:
@@ -276,6 +292,7 @@ class Card:
             "info": self.info,
             "data_text": self.data_text,
             "expires_at": _iso(self.expires_at),
+            "active_since": _iso(self.active_since),
         }
 
     @classmethod
@@ -305,6 +322,7 @@ class Card:
             info=data.get("info"),
             data_text=data.get("data_text"),
             expires_at=_parse_time(data.get("expires_at")),
+            active_since=_parse_time(data.get("active_since")),
         )
 
 
@@ -856,6 +874,13 @@ class Engine:
         self._unsubs: list[CALLBACK_TYPE] = []
         self._started = False
         self._config = manager.config
+        # The end of the next channel delay: the channels change then.
+        self._delay_timer: CALLBACK_TYPE | None = None
+        self._delay_at: datetime | None = None
+        self._person_states: dict[str, str] = {}
+        self._sleep = ConditionTracker(
+            hass, self._sleep_conditions(), self._presence_changed
+        )
 
     # -- Life cycle ---------------------------------------------------------
 
@@ -886,10 +911,20 @@ class Engine:
         )
         self._unsubs.append(async_track_time_change(self.hass, self._minute, second=0))
         self._unsubs.append(async_at_started(self.hass, self._async_started))
+        self._unsubs.append(
+            self.hass.bus.async_listen(
+                EVENT_STATE_CHANGED,
+                self._presence_changed,
+                event_filter=self._is_presence_event,
+            )
+        )
+        self._person_states = self._read_person_states()
 
     async def _async_started(self, _hass: HomeAssistant) -> None:
         self._started = True
         self.modes.async_start()
+        self._sleep.async_start()
+        self._person_states = self._read_person_states()
         for notification in self._config["notifications"]:
             await self._async_start_notification(notification)
         for card in list(self.cards.values()):
@@ -927,6 +962,10 @@ class Engine:
             runner.async_stop()
         self.runners.clear()
         self.modes.async_stop()
+        self._sleep.async_stop()
+        if self._delay_timer is not None:
+            self._delay_timer()
+            self._delay_timer = None
         for timers in (self._snooze_timers, self._expiry_timers):
             for cancel in timers.values():
                 cancel()
@@ -940,6 +979,13 @@ class Engine:
     def _config_changed(self, config: ConfigData) -> None:
         old = {item["id"]: item for item in self._config["notifications"]}
         self._config = config
+        sleep = self._sleep_conditions()
+        if sleep != self._sleep.conditions:
+            self._sleep.async_stop()
+            self._sleep = ConditionTracker(self.hass, sleep, self._presence_changed)
+            if self._started:
+                self._sleep.async_start()
+        self._person_states = self._read_person_states()
         if config["modes"] != self.modes.modes:
             self.modes.async_stop()
             self.modes = ModeTracker(self.hass, config["modes"], self._mode_changed)
@@ -1008,8 +1054,121 @@ class Engine:
 
     @callback
     def _notify(self) -> None:
+        self._schedule_delay_timer()
         for listener in [*self._listeners, *self._late_listeners]:
             listener()
+
+    # -- Channels -----------------------------------------------------------
+
+    def _sleep_conditions(self) -> dict[str, dict[str, Any]]:
+        return {
+            person["person"]: person["sleep"]
+            for person in self._config.get("people", [])
+            if person.get("sleep")
+        }
+
+    def _read_person_states(self) -> dict[str, str]:
+        return {
+            state.entity_id: person_state(
+                self.hass, state.entity_id, self._sleep.is_true(state.entity_id)
+            )
+            for state in self.hass.states.async_all("person")
+        }
+
+    @callback
+    def _is_presence_event(self, event_data: EventStateChangedData) -> bool:
+        return event_data["entity_id"].startswith("person.")
+
+    @callback
+    def _presence_changed(
+        self, _event: Event[EventStateChangedData] | None = None
+    ) -> None:
+        states = self._read_person_states()
+        if states != self._person_states:
+            self._person_states = states
+            self._notify()
+
+    @property
+    def person_states(self) -> dict[str, str]:
+        """Return whether each person is at home, asleep or away."""
+        return dict(self._person_states)
+
+    def channel_view(self, card: Card, key: str = CHANNEL_DASHBOARD) -> ChannelView:
+        """Return whether a channel sends an active card now, and to whom."""
+        notification = self.notification_config(card.notification_id) or {}
+        step = self._step_config(card.notification_id, card.step_id)
+        category = self._category_of(notification)
+        states = self._person_states
+        return channel_view(
+            channel_settings(category, step, key),
+            mode_id=self.modes.current["id"] if self.modes.current else None,
+            active_since=card.active_since or card.state_since,
+            now=dt_util.utcnow(),
+            audience=audience_of(category, step, sorted(states)),
+            states=states,
+        )
+
+    def _category_of(self, notification: Mapping[str, Any]) -> dict[str, Any] | None:
+        categories = self._config["categories"]
+        return next(
+            (item for item in categories if item["id"] == notification.get("category")),
+            next((item for item in categories if item["id"] == "general"), None),
+        )
+
+    def dashboard_summary(self) -> dict[str, Any]:
+        """Return what the Dashboard channel shows: its diagnostic sensor.
+
+        Shown: the active cards on the dashboard for at least one person.
+        Held back: not in this mode. Waiting: for the delay, or for someone
+        of the audience to be in a ticked state.
+        """
+        shown = held_back = waiting = 0
+        for notification in self._config["notifications"]:
+            if not notification.get("enabled", True):
+                continue
+            for card in self._visible_cards(notification["id"]):
+                if card.status != STATE_ACTIVE:
+                    continue
+                view = self.channel_view(card)
+                if view.sends:
+                    shown += 1
+                elif view.reason in (REASON_DELAY, REASON_AUDIENCE):
+                    waiting += 1
+                else:
+                    held_back += 1
+        return {"state": shown, "held_back": held_back, "waiting": waiting}
+
+    @callback
+    def _schedule_delay_timer(self) -> None:
+        """Wake up when the next channel delay ends."""
+        now = dt_util.utcnow()
+        soonest: datetime | None = None
+        for card in self.cards.values():
+            if card.status != STATE_ACTIVE:
+                continue
+            until = self.channel_view(card).until
+            if (
+                until is not None
+                and until > now
+                and (soonest is None or until < soonest)
+            ):
+                soonest = until
+        if soonest == self._delay_at:
+            return
+        if self._delay_timer is not None:
+            self._delay_timer()
+            self._delay_timer = None
+        self._delay_at = soonest
+        if soonest is None:
+            return
+
+        @callback
+        def fire(_now: datetime) -> None:
+            self._delay_timer = None
+            self._delay_at = None
+            self._notify()
+
+        self._delay_timer = async_track_point_in_utc_time(self.hass, fire, soonest)
 
     @callback
     def _mode_changed(self) -> None:
@@ -1382,8 +1541,11 @@ class Engine:
         **changes: Any,
     ) -> None:
         old = card.status
+        opened = changes.get("phase") == PHASE_OPEN and card.phase != PHASE_OPEN
         for name, value in changes.items():
             setattr(card, name, value)
+        if opened:
+            card.active_since = dt_util.utcnow()
         new = card.status
         changed = new != old
         previous = self.summary_context
@@ -1858,16 +2020,23 @@ class Engine:
             "top_message": top["message"] if top else None,
         }
 
+    def _card_state(self, card: Card) -> dict[str, Any]:
+        data = card.as_dict()
+        # For a card not active, only who it is for counts (``audience``).
+        data["dashboard"] = self.channel_view(card).as_dict()
+        return data
+
     def snapshot(self) -> dict[str, Any]:
         """Return every notification's state and cards for the websocket API."""
         return {
             "mode": self.modes.current["id"] if self.modes.current else None,
+            "people": self.person_states,
             "notifications": {
                 notification["id"]: {
                     "state": self.notification_state(notification["id"]),
                     "entity_id": self.entity_id_of(notification["id"]),
                     "cards": [
-                        card.as_dict()
+                        self._card_state(card)
                         for card in self._visible_cards(notification["id"])
                     ],
                     "last_done": _iso(

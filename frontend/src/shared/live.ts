@@ -6,12 +6,15 @@
 // everywhere.
 
 import {
+  AUDIENCE_STATES,
   DOMAIN,
+  type AudienceEntry,
   type Button,
   type CategoryButton,
   type EffectiveButton,
   type CardState,
   type Category,
+  type ChannelReason,
   type Notification,
   type NotificationCenterConfig,
   type StateMessage,
@@ -73,6 +76,8 @@ export interface LiveCard {
   entityId?: string;
   // When the notification was last done.
   lastDone?: string | null;
+  // Active, but held back from the Dashboard for the viewer now.
+  held?: Held;
 }
 
 export function cardKey(card: CardState): string {
@@ -225,10 +230,42 @@ export function personOf(hass: HomeAssistant): string | undefined {
   )?.entity_id;
 }
 
-/** True when the logged in user is in a step's audience. */
-export function inAudience(step: Step | undefined, person: string | undefined): boolean {
-  const audience = step?.audience ?? [];
-  return audience.length === 0 || (!!person && audience.includes(person));
+/** The states each person gets a step in: the step's, then the category's. */
+export function audienceOf(
+  category: Category | undefined,
+  step: Pick<Step, "audience"> | undefined,
+  people: string[],
+): Record<string, AudienceEntry> {
+  const base = category?.audience ?? {};
+  const own = step?.audience ?? {};
+  const entries = Object.values(base);
+  const common = Object.fromEntries(
+    AUDIENCE_STATES.map((state) => [
+      state,
+      entries.length ? entries.every((entry) => entry[state]) : true,
+    ]),
+  ) as AudienceEntry;
+  return Object.fromEntries(
+    people.map((person) => [person, { ...(own[person] ?? base[person] ?? common) }]),
+  );
+}
+
+/** True when a person gets a step in any state (with no person: always). */
+export function inAudience(
+  category: Category | undefined,
+  step: Step | undefined,
+  person: string | undefined,
+  people: string[],
+): boolean {
+  if (!person || !people.length) return true;
+  const entry = audienceOf(category, step, [person])[person];
+  return AUDIENCE_STATES.some((state) => entry[state]);
+}
+
+/** Why a card is held back from the Dashboard for the viewer. */
+export interface Held {
+  reason: Exclude<ChannelReason, "off">;
+  until?: string | null;
 }
 
 export interface LiveFilter {
@@ -236,7 +273,31 @@ export interface LiveFilter {
   categories?: string[];
   // The logged in user's person; undefined with ignoreAudience.
   person?: string;
+  // Show what the house sees: the cards on the Dashboard for anyone.
   ignoreAudience?: boolean;
+  // Also return the active cards the Dashboard holds back now (``held``).
+  withHeld?: boolean;
+}
+
+/**
+ * Whether the Dashboard shows an active card to the viewer: shown, held
+ * back (and why), or not for them at all (null).
+ */
+function dashboardOf(
+  card: CardState,
+  person: string | undefined,
+  people: string[],
+): { show: boolean; held?: Held } | null {
+  const view = card.dashboard;
+  if (!view) return { show: true };
+  if (view.reason === "off") return null;
+  const house = !person || !people.length;
+  if (!house && !view.audience.includes(person)) return null;
+  if (view.reason === "mode" || view.reason === "delay") {
+    return { show: false, held: { reason: view.reason, until: view.until } };
+  }
+  if (house ? view.reason === null : view.people.includes(person)) return { show: true };
+  return { show: false, held: { reason: "audience" } };
 }
 
 /** The cards of every notification, in list and step order. */
@@ -246,6 +307,8 @@ export function liveCards(
   filter: LiveFilter,
 ): LiveCard[] {
   const result: LiveCard[] = [];
+  const people = Object.keys(state.people ?? {});
+  const person = filter.ignoreAudience ? undefined : filter.person;
   for (const notification of config.notifications) {
     if (!notification.enabled) continue;
     if (filter.categories?.length && !filter.categories.includes(notification.category)) {
@@ -257,7 +320,17 @@ export function liveCards(
     for (const card of entry.cards) {
       if (!filter.statuses.includes(card.status)) continue;
       const step = stepOf(notification, card.step_id);
-      if (!filter.ignoreAudience && !inAudience(step, filter.person)) continue;
+      let held: Held | undefined;
+      if (card.status === "active") {
+        const dashboard = dashboardOf(card, person, people);
+        if (!dashboard) continue;
+        if (!dashboard.show) {
+          if (!filter.withHeld) continue;
+          held = dashboard.held;
+        }
+      } else if (!inAudience(category, step, person, people)) {
+        continue;
+      }
       result.push({
         card,
         notification,
@@ -265,6 +338,7 @@ export function liveCards(
         step,
         entityId: entry.entity_id ?? undefined,
         lastDone: entry.last_done,
+        held,
       });
     }
   }

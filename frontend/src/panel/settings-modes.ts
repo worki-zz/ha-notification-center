@@ -2,7 +2,7 @@
 // is the current one, so the list is ordered by dragging. Home without a
 // condition is always true: it is shown on top, but works as the last one
 // (when no other mode applies). With a condition, Home is ordered like the
-// others, and when no mode is true every channel sends.
+// others, and when no mode is true the channels ticked in at least one mode send.
 //
 // A new mode is added in two steps: its name and condition (saved with
 // Home's channels), then which channels of every category it switches on.
@@ -11,7 +11,7 @@ import { LitElement, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
-import { DOMAIN, type Mode, type NotificationCenterConfig, type StateMessage } from "../shared/config";
+import { CHANNEL_DASHBOARD, DOMAIN, type Mode, type NotificationCenterConfig, type StateMessage } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
@@ -35,8 +35,11 @@ interface ModeDraft {
 
 /** The mode's condition in a few words. */
 function conditionText(hass: HomeAssistant | undefined, mode: Mode): string {
-  const condition = mode.condition;
-  if (!condition) return "When no other mode applies";
+  return mode.condition ? conditionWords(hass, mode.condition) : "When no other mode applies";
+}
+
+/** A condition (of a mode, of a person's sleep) in a few words. */
+export function conditionWords(hass: HomeAssistant | undefined, condition: NonNullable<Mode["condition"]>): string {
   const entityId = String(condition.entity_id ?? "");
   const name = hass?.states[entityId]?.attributes.friendly_name;
   const entity = typeof name === "string" ? name : entityId;
@@ -79,7 +82,7 @@ export class NcSettingsModes extends LitElement {
       ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
       ${noMode
         ? html`<ha-alert alert-type="warning" title="No active mode">
-            Every channel sends, whatever its modes.
+            The channels ticked in at least one mode send.
           </ha-alert>`
         : nothing}
       ${fixedHome ? html`<ha-card outlined>${this._row(fixedHome, false)}</ha-card>` : nothing}
@@ -302,28 +305,10 @@ export class NcSettingsModes extends LitElement {
 
   // -- Step 2: the channels of a new mode ------------------------------------------
 
-  // Every channel, as in the editors: the Notification center, the lights,
-  // the speakers and Push.
+  // Every channel, as in the editors. 6.0 has the Dashboard only; the lights,
+  // the speakers and Push join in 6.1 and 6.2.
   private _channelList(): { key: string; name: string; icon: string }[] {
-    const config = this.config!;
-    const name = (entityId: string, fallback?: string) => {
-      const friendly = this.hass?.states[entityId]?.attributes.friendly_name;
-      return fallback || (typeof friendly === "string" ? friendly : entityId);
-    };
-    return [
-      { key: "notification_center", name: "Notification center", icon: "mdi:bell-outline" },
-      ...config.lights.map((light) => ({
-        key: `light:${light.id}`,
-        name: name(light.entity_id, light.name),
-        icon: "mdi:lightbulb-outline",
-      })),
-      ...config.speakers.map((speaker) => ({
-        key: `speaker:${speaker.id}`,
-        name: name(speaker.entity_id, speaker.name),
-        icon: "mdi:speaker",
-      })),
-      { key: "push", name: "Push", icon: "mdi:cellphone-message" },
-    ];
+    return [{ key: CHANNEL_DASHBOARD, name: "Dashboard", icon: "mdi:view-dashboard-outline" }];
   }
 
   // The channels Home is on for, in any category.

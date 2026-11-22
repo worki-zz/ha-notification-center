@@ -4,18 +4,30 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { DOMAIN, type NotificationCenterConfig, type StateMessage } from "../shared/config";
+import {
+  DOMAIN,
+  type NotificationCenterConfig,
+  type StateMessage,
+} from "../shared/config";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { field } from "./fields";
 import "./settings-modes";
+import "./settings-people";
 
 const PAGES: Record<string, { title: string; intro: string[] }> = {
   modes: {
     title: "Modes",
     intro: [
       "A mode decides which channels of a category send a notification. One mode is active at a time: the first in the list whose condition is true. Drag the rows to change the order.",
-      "Home without a condition is always true: it is shown on top, but checked last, so it applies when no other mode does. With a condition, Home is ordered like the others. When no mode is active, every channel sends.",
+      "Home without a condition is always true: it is shown on top, but checked last, so it applies when no other mode does. With a condition, Home is ordered like the others. When no mode is active, the channels ticked in at least one mode send.",
+    ],
+  },
+  people: {
+    title: "People",
+    intro: [
+      "Every person of Home Assistant is listed here. A person is Home (at home and awake), Sleep (at home and asleep) or Away; the Audience of a category or step ticks the states each person gets its notifications in.",
+      "Asleep is set like a mode's condition: an entity's state or a template. It counts only while the person is at home.",
     ],
   },
   snooze: {
@@ -69,16 +81,32 @@ export class NcGeneralPage extends LitElement {
       .backCallback=${() => navigate(`${this.base}/settings/general`)}
     >
       <div class="content">
-        ${page ? page.intro.map((text) => html`<p class="intro">${text}</p>`) : nothing}
-        ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
-        ${this._notice ? html`<ha-alert alert-type="success">${this._notice}</ha-alert>` : nothing}
+        ${page
+          ? page.intro.map((text) => html`<p class="intro">${text}</p>`)
+          : nothing}
+        ${this._error
+          ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+          : nothing}
+        ${this._notice
+          ? html`<ha-alert alert-type="success">${this._notice}</ha-alert>`
+          : nothing}
         ${this.page === "modes"
-          ? html`<nc-settings-modes .hass=${this.hass} .config=${this.config} .state=${this.state}></nc-settings-modes>`
-          : this.page === "snooze"
-            ? this._renderSnooze()
-            : this.page === "import"
-              ? this._renderImportExport()
-              : nothing}
+          ? html`<nc-settings-modes
+              .hass=${this.hass}
+              .config=${this.config}
+              .state=${this.state}
+            ></nc-settings-modes>`
+          : this.page === "people"
+            ? html`<nc-settings-people
+                .hass=${this.hass}
+                .config=${this.config}
+                .state=${this.state}
+              ></nc-settings-people>`
+            : this.page === "snooze"
+              ? this._renderSnooze()
+              : this.page === "import"
+                ? this._renderImportExport()
+                : nothing}
       </div>
     </hass-subpage>`;
   }
@@ -88,12 +116,23 @@ export class NcGeneralPage extends LitElement {
     const value = this._snooze ?? saved;
     return html`<ha-card outlined>
       <div class="card-content">
-        ${field(this.hass, { time: { no_second: true } }, value, "Tomorrow at", (time) => {
-          this._snooze = (time as string) || "08:00";
-        })}
+        ${field(
+          this.hass,
+          { time: { no_second: true } },
+          value,
+          "Tomorrow at",
+          (time) => {
+            this._snooze = (time as string) || "08:00";
+          },
+        )}
       </div>
       <div class="card-actions">
-        <ha-button .disabled=${this._busy || this._snooze === undefined || this._snooze === saved} @click=${this._saveSnooze}>
+        <ha-button
+          .disabled=${this._busy ||
+          this._snooze === undefined ||
+          this._snooze === saved}
+          @click=${this._saveSnooze}
+        >
           Save
         </ha-button>
       </div>
@@ -120,24 +159,38 @@ export class NcGeneralPage extends LitElement {
           ${pending
             ? html`
                 <p>
-                  Importing <b>${pending.name}</b> replaces the whole configuration
-                  (${this.config?.notifications.length ?? 0} notifications now). The
-                  current one is downloaded first.
+                  Importing <b>${pending.name}</b> replaces the whole
+                  configuration (${this.config?.notifications.length ?? 0}
+                  notifications now). The current one is downloaded first.
                 </p>
                 <div class="buttons">
-                  <ha-button variant="danger" .disabled=${this._busy} @click=${this._confirmImport}>
+                  <ha-button
+                    variant="danger"
+                    .disabled=${this._busy}
+                    @click=${this._confirmImport}
+                  >
                     Replace
                   </ha-button>
-                  <ha-button appearance="plain" @click=${this._cancelImport}>Cancel</ha-button>
+                  <ha-button appearance="plain" @click=${this._cancelImport}
+                    >Cancel</ha-button
+                  >
                 </div>
               `
             : html`
                 <div class="buttons">
-                  <ha-button appearance="plain" .disabled=${this._busy} @click=${this._export}>
+                  <ha-button
+                    appearance="plain"
+                    .disabled=${this._busy}
+                    @click=${this._export}
+                  >
                     <ha-icon slot="start" icon="mdi:download"></ha-icon>
                     Export
                   </ha-button>
-                  <ha-button appearance="plain" .disabled=${this._busy} @click=${this._pickFile}>
+                  <ha-button
+                    appearance="plain"
+                    .disabled=${this._busy}
+                    @click=${this._pickFile}
+                  >
                     <ha-icon slot="start" icon="mdi:upload"></ha-icon>
                     Import
                   </ha-button>
@@ -172,7 +225,9 @@ export class NcGeneralPage extends LitElement {
   }
 
   private _pickFile(): void {
-    this.renderRoot.querySelector<HTMLInputElement>("input[type=file]")?.click();
+    this.renderRoot
+      .querySelector<HTMLInputElement>("input[type=file]")
+      ?.click();
   }
 
   private async _fileChosen(event: Event): Promise<void> {

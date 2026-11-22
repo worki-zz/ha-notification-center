@@ -225,10 +225,7 @@ class ConfigManager:
             for key in set(settings) | set(channels):
                 channel = settings.get(key)
                 if channel is None:
-                    settings[key] = {
-                        "modes": [mode_id],
-                        "when": {"type": "immediately"},
-                    }
+                    settings[key] = {"modes": [mode_id]}
                     continue
                 modes = channel.setdefault("modes", [])
                 if key in channels and mode_id not in modes:
@@ -307,7 +304,7 @@ class ConfigManager:
     # -- People and general settings ----------------------------------------
 
     async def async_update_person(self, data: dict[str, Any]) -> None:
-        """Save the settings of a person (push, device type, sleep entity)."""
+        """Save the settings of a person (push, device type, sleep condition)."""
         try:
             person = PERSON_SCHEMA(data)
         except Exception as err:
@@ -471,7 +468,7 @@ def async_people_view(hass: HomeAssistant, config: ConfigData) -> list[dict[str,
                 "user_id": state.attributes.get("user_id"),
                 "notify": stored.get("notify"),
                 "device_type": stored.get("device_type", "other"),
-                "sleep_entity": stored.get("sleep_entity"),
+                "sleep": stored.get("sleep"),
             }
         )
     return people

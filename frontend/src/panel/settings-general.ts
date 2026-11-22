@@ -1,5 +1,5 @@
 // The General tab of the settings: a list of pages like Home Assistant's
-// System settings (Modes, Snooze, and Import and export in its own block),
+// System settings (Modes, People, Snooze, and Import and export in its own block),
 // and the version. Each page opens on its own (nc-general-page).
 
 import { LitElement, css, html, nothing } from "lit";
@@ -41,6 +41,13 @@ export class NcSettingsGeneral extends LitElement {
         description: `${config.modes.length} ${config.modes.length === 1 ? "mode" : "modes"}`,
         icon: "mdi:home-switch-outline",
         color: "#5C6BC0",
+      },
+      {
+        key: "people",
+        name: "People",
+        description: `${config.people.length} ${config.people.length === 1 ? "person" : "people"}`,
+        icon: "mdi:account-multiple",
+        color: "#E68D0D",
       },
       {
         key: "snooze",

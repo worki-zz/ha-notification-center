@@ -67,6 +67,17 @@
             "name": "Legfontosabb üzenet"
           }
         }
+      },
+      "dashboard_channel": {
+        "name": "Dashboard csatorna",
+        "state_attributes": {
+          "held_back": {
+            "name": "Visszatartva"
+          },
+          "waiting": {
+            "name": "Várakozik"
+          }
+        }
       }
     }
   },
