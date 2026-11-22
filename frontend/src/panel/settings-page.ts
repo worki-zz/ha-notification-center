@@ -84,6 +84,7 @@ export class NcSettings extends LitElement {
             ? html`<nc-settings-general
                 .hass=${this.hass}
                 .config=${this.config}
+                .hasData=${this.hasData}
                 .narrow=${this.narrow}
                 .base=${this.base}
               ></nc-settings-general>`

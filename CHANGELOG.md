@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- General: **Import and export** opens a dialog instead of a page (Export, Import; an import over existing data asks to Replace first).
+
 ## 0.6.4
 
 ### Changed
