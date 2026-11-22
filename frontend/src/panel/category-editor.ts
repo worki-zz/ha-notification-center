@@ -414,7 +414,7 @@ export class NcCategoryEditor extends LitElement {
           (value) => this._change({ name: (value as string) ?? "" }),
         )}
       </div>
-      <div class="row">
+      <div class="row three">
         ${field(
           this.hass,
           { icon: { placeholder: "mdi:bell" } },
@@ -714,6 +714,10 @@ export class NcCategoryEditor extends LitElement {
     .block > .row > * {
       flex: 1 1 240px;
       min-width: 0;
+    }
+    /* Icon, Color and Highlight stay on one row down to a narrow screen. */
+    .row.three > * {
+      flex-basis: 160px;
     }
     .title {
       font-weight: var(--ha-font-weight-medium, 500);

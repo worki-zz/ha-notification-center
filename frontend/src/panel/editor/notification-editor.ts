@@ -613,7 +613,7 @@ export class NcNotificationEditor extends LitElement {
           (value) => this._changeCategory(value || "general"),
         )}
       </div>
-      <div class="row">
+      <div class="row three">
         ${this._selector(
           { icon: { placeholder: category?.icon ?? "mdi:bell" } },
           draft.icon ?? "",
@@ -1354,6 +1354,10 @@ export class NcNotificationEditor extends LitElement {
     .row > * {
       flex: 1 1 240px;
       min-width: 0;
+    }
+    /* Icon, Color and Highlight stay on one row down to a narrow screen. */
+    .row.three > * {
+      flex-basis: 160px;
     }
     .list {
       overflow: hidden;
