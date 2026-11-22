@@ -813,7 +813,7 @@ async def test_example_config_runs(
     ]
     assert len(sensors) == 28
     # A scheduled step due later today makes its notification "upcoming";
-    # a card outside its time window (by the time of day of the run) is hidden.
+    # a card whose conditions fail at this time of day is "hidden".
     assert {state.state for state in sensors} <= {
         "idle",
         "active",
