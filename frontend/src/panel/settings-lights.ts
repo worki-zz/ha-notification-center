@@ -302,7 +302,7 @@ export class NcSettingsLights extends LitElement {
     );
     if (!edit.illuminance_sensor) return html`<div class="title">Dim when dark</div>${sensor}`;
     return html`<div class="title">Dim when dark</div>
-      <div class="row-fields">
+      <div class="row-fields bottom">
         ${sensor}
         ${field(
           this.hass,
@@ -502,6 +502,9 @@ export function DEVICE_PAGE_STYLES() {
       gap: 16px;
       flex-wrap: wrap;
     }
+    .row-fields.bottom {
+      align-items: flex-end;
+    }
     .row-fields > * {
       flex: 1 1 200px;
       min-width: 0;
@@ -525,7 +528,6 @@ export function DEVICE_PAGE_STYLES() {
       font-size: var(--ha-font-size-s, 14px);
       font-weight: var(--ha-font-weight-medium, 500);
       color: var(--secondary-text-color);
-      background-color: var(--secondary-background-color, transparent);
       border-bottom: 1px solid var(--divider-color);
     }
     .rows + .group-header {
