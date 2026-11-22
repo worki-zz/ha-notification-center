@@ -1,7 +1,7 @@
 // The notification as the editor holds it, and the conversions between
 // its stored form and the form Home Assistant's own editors use.
 
-import type { Button, Category, Duration, NotificationState } from "../../shared/config";
+import type { AudienceEntry, Button, Category, ChannelSettings, Duration, NotificationState } from "../../shared/config";
 import { categoryButtons, effectiveButtons } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
@@ -65,7 +65,10 @@ export interface EditorStep {
   conditions: StepConditions;
   done_when: { triggers: Obj[]; activation_conditions_no_longer_true: boolean };
   buttons: Button[];
-  audience?: string[];
+  // The people whose states differ from the category's audience.
+  audience?: Record<string, AudienceEntry>;
+  // What differs from the category's channels.
+  channels?: Record<string, ChannelSettings>;
   [key: string]: unknown;
 }
 
@@ -142,7 +145,8 @@ export function newStep(category?: Category): EditorStep {
       builtin("dismiss", enabled("dismiss")),
       builtin("snooze", enabled("snooze")),
     ],
-    audience: [],
+    audience: {},
+    channels: {},
   };
 }
 

@@ -17,17 +17,30 @@ import {
   type NotificationCenterConfig,
 } from "../shared/config";
 import { cssColor } from "../shared/format";
-import { categoryButtons, errorText, liveButtons, navigate, snoozeChoices } from "../shared/live";
+import {
+  categoryButtons,
+  errorText,
+  liveButtons,
+  navigate,
+  snoozeChoices,
+} from "../shared/live";
 import "../shared/notification-view";
 import type { NotificationViewData } from "../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../shared/text";
 import type { HomeAssistant } from "../shared/types";
+import "./channel-tables";
+import { CHANNELS, audienceCount } from "./channel-tables";
 import { confirmDialog } from "./confirm";
 import { field } from "./fields";
 import { BLOCK_STYLES, block } from "./editor/block";
 import { INTERACTION_DEFAULTS } from "./editor/interaction-dialog";
 import "./editor/interaction-dialog";
-import { type EditorNotification, listedEntities, newId, toEditor } from "./editor/model";
+import {
+  type EditorNotification,
+  listedEntities,
+  newId,
+  toEditor,
+} from "./editor/model";
 
 type Draft = Omit<Category, "id"> & { id?: string };
 
@@ -56,7 +69,6 @@ export class NcCategoryEditor extends LitElement {
   // The preview's message, rendered for a real entity of the example.
   @state() private _example?: { key: string; message: string };
 
-
   // The button whose dialog is open.
   @state() private _button?: { button: CategoryButton; isNew: boolean };
 
@@ -79,14 +91,17 @@ export class NcCategoryEditor extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has("categoryId") && this._loadedFor !== this.categoryId) this._draft = undefined;
+    if (changed.has("categoryId") && this._loadedFor !== this.categoryId)
+      this._draft = undefined;
     if (!this.config) return;
     if (!this._draft) this._load();
     else if (!this._isNew && changed.has("config")) {
       const stored = this._storedItem();
-      if (stored && JSON.stringify(stored) !== this._stored && !this._dirty) this._load();
+      if (stored && JSON.stringify(stored) !== this._stored && !this._dirty)
+        this._load();
     }
-    if (changed.has("config") || changed.has("categoryId")) this._renderExample();
+    if (changed.has("config") || changed.has("categoryId"))
+      this._renderExample();
   }
 
   // The example of the preview: the category's first notification with an
@@ -95,9 +110,13 @@ export class NcCategoryEditor extends LitElement {
     const hass = this.hass;
     const notifications = this._isNew ? [] : this._notifications();
     if (!hass) return { notification: notifications[0] };
-    const all = (this.config?.notifications ?? []) as unknown as EditorNotification[];
+    const all = (this.config?.notifications ??
+      []) as unknown as EditorNotification[];
     for (const notification of notifications) {
-      const entity = listedEntities(hass, toEditor(notification as unknown as EditorNotification, all, undefined))[0];
+      const entity = listedEntities(
+        hass,
+        toEditor(notification as unknown as EditorNotification, all, undefined),
+      )[0];
       if (entity) return { notification, entity };
     }
     return { notification: notifications[0] };
@@ -128,13 +147,17 @@ export class NcCategoryEditor extends LitElement {
     this._inUse = false;
     if (this._isNew) {
       // A new category starts with General's icon and colour.
-      const general = this.config!.categories.find((item) => item.id === "general");
+      const general = this.config!.categories.find(
+        (item) => item.id === "general",
+      );
       this._draft = {
         name: "",
         icon: general?.icon ?? null,
         card_color: general?.card_color ?? null,
         buttons: categoryButtons(undefined),
-        channels: {},
+        // And General's channels and audience.
+        channels: structuredClone(general?.channels ?? {}),
+        audience: structuredClone(general?.audience ?? {}),
       };
       this._stored = "";
     } else {
@@ -145,7 +168,10 @@ export class NcCategoryEditor extends LitElement {
         return;
       }
       this._stored = JSON.stringify(stored);
-      this._draft = { ...structuredClone(stored), buttons: categoryButtons(stored) };
+      this._draft = {
+        ...structuredClone(stored),
+        buttons: categoryButtons(stored),
+      };
     }
     this._original = JSON.stringify(this._draft);
   }
@@ -155,7 +181,9 @@ export class NcCategoryEditor extends LitElement {
   }
 
   private _notifications(): Notification[] {
-    return (this.config?.notifications ?? []).filter((item) => item.category === this.categoryId);
+    return (this.config?.notifications ?? []).filter(
+      (item) => item.category === this.categoryId,
+    );
   }
 
   // -- Preview ---------------------------------------------------------------
@@ -164,7 +192,13 @@ export class NcCategoryEditor extends LitElement {
     const hass = this.hass;
     if (!hass) return undefined;
     const { notification, entity } = this._exampleOf();
-    const step = notification?.steps[0] ?? { id: "", enabled: true, message: "", activation: { type: "triggers" }, buttons: [] };
+    const step = notification?.steps[0] ?? {
+      id: "",
+      enabled: true,
+      message: "",
+      activation: { type: "triggers" },
+      buttons: [],
+    };
     const category = { ...draft, id: draft.id ?? "" } as Category;
     const card = {
       notification_id: notification?.id ?? "",
@@ -177,13 +211,20 @@ export class NcCategoryEditor extends LitElement {
       message: null,
       info: null,
     } as CardState;
-    const live = { card, notification: notification ?? ({} as Notification), category, step };
+    const live = {
+      card,
+      notification: notification ?? ({} as Notification),
+      category,
+      step,
+    };
     return {
       label: notification?.name ?? "Example",
       // Rendered for the example's entity; without one the placeholders
       // read as words, {Area} as Area.
       message:
-        (this._example && this._example.key === JSON.stringify([notification?.id, entity, step.message])
+        (this._example &&
+        this._example.key ===
+          JSON.stringify([notification?.id, entity, step.message])
           ? this._example.message
           : step.message && !isTemplate(step.message)
             ? plainPlaceholders(step.message)
@@ -203,7 +244,9 @@ export class NcCategoryEditor extends LitElement {
 
   protected override render() {
     const draft = this._draft;
-    const title = draft ? draft.name || (this._isNew ? "New category" : "") : "Category";
+    const title = draft
+      ? draft.name || (this._isNew ? "New category" : "")
+      : "Category";
     return html`
       <hass-subpage
         .hass=${this.hass}
@@ -213,11 +256,18 @@ export class NcCategoryEditor extends LitElement {
       >
         ${draft ? this._renderToolbar() : nothing}
         <div class="content">
-          ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
+          ${this._error
+            ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+            : nothing}
           ${this._inUse
             ? html`<ha-alert alert-type="warning">
-                ${draft?.name || "This category"} has notifications, so it cannot be deleted.
-                <ha-button slot="action" appearance="plain" @click=${this._viewNotifications}>
+                ${draft?.name || "This category"} has notifications, so it
+                cannot be deleted.
+                <ha-button
+                  slot="action"
+                  appearance="plain"
+                  @click=${this._viewNotifications}
+                >
                   View notifications
                 </ha-button>
               </ha-alert>`
@@ -261,9 +311,15 @@ export class NcCategoryEditor extends LitElement {
     const view = this._previewView(draft);
     return html`
       ${view
-        ? html`<notification-center-view class="preview" .hass=${this.hass} .view=${view}></notification-center-view>`
+        ? html`<notification-center-view
+            class="preview"
+            .hass=${this.hass}
+            .view=${view}
+          ></notification-center-view>`
         : nothing}
-      ${this._panel("settings", "mdi:cog-outline", "Settings", undefined, () => this._renderSettings(draft))}
+      ${this._panel("settings", "mdi:cog-outline", "Settings", undefined, () =>
+        this._renderSettings(draft),
+      )}
       ${this._panel(
         "interactions",
         "mdi:gesture-tap-button",
@@ -271,10 +327,57 @@ export class NcCategoryEditor extends LitElement {
         draft.buttons.filter((button) => button.enabled).length,
         () => this._renderInteractions(draft),
       )}
+      ${this._panel(
+        "audience",
+        "mdi:account-multiple",
+        "Audience",
+        this._audienceCount(draft),
+        () =>
+          html`<nc-audience-table
+            .hass=${this.hass}
+            .value=${draft.audience ?? {}}
+            @value-changed=${(
+              ev: CustomEvent<{ value: Category["audience"] }>,
+            ) => {
+              ev.stopPropagation();
+              this._change({ audience: ev.detail.value });
+            }}
+          ></nc-audience-table>`,
+      )}
+      ${this._panel(
+        "channels",
+        "mdi:broadcast",
+        "Channels",
+        undefined,
+        () =>
+          html`<nc-channel-table
+            .hass=${this.hass}
+            .narrow=${this.narrow}
+            .modes=${this.config?.modes ?? []}
+            .channels=${CHANNELS}
+            .value=${draft.channels ?? {}}
+            @value-changed=${(
+              ev: CustomEvent<{ value: Category["channels"] }>,
+            ) => {
+              ev.stopPropagation();
+              this._change({ channels: ev.detail.value });
+            }}
+          ></nc-channel-table>`,
+      )}
     `;
   }
 
-  private _panel(_key: string, icon: string, header: string, count: number | undefined, content: () => unknown) {
+  private _audienceCount(draft: Draft): string | undefined {
+    return audienceCount(this.hass, draft.audience, undefined);
+  }
+
+  private _panel(
+    _key: string,
+    icon: string,
+    header: string,
+    count: number | string | undefined,
+    content: () => unknown,
+  ) {
     return block({
       icon,
       header,
@@ -291,11 +394,19 @@ export class NcCategoryEditor extends LitElement {
   private _renderSettings(draft: Draft) {
     return html`<div class="block">
       <div class="fields">
-        ${field(this.hass, { text: {} }, draft.name, "Category name*", (value) =>
-          this._change({ name: (value as string) ?? "" }),
+        ${field(
+          this.hass,
+          { text: {} },
+          draft.name,
+          "Category name*",
+          (value) => this._change({ name: (value as string) ?? "" }),
         )}
-        ${field(this.hass, { icon: { placeholder: "mdi:bell" } }, draft.icon ?? "", "Icon", (value) =>
-          this._change({ icon: (value as string) || null }),
+        ${field(
+          this.hass,
+          { icon: { placeholder: "mdi:bell" } },
+          draft.icon ?? "",
+          "Icon",
+          (value) => this._change({ icon: (value as string) || null }),
         )}
         ${field(
           this.hass,
@@ -312,15 +423,18 @@ export class NcCategoryEditor extends LitElement {
 
   private _renderInteractions(draft: Draft) {
     const tap = draft.buttons.filter((button) => button.type === "tap");
-    const builtin = draft.buttons.filter((button) => button.type !== "tap" && button.type !== "custom");
+    const builtin = draft.buttons.filter(
+      (button) => button.type !== "tap" && button.type !== "custom",
+    );
     const custom = draft.buttons.filter((button) => button.type === "custom");
     const card = (items: CategoryButton[]) =>
-      html`<ha-card outlined class="interactions">${items.map((button) => this._row(button))}</ha-card>`;
+      html`<ha-card outlined class="interactions"
+        >${items.map((button) => this._row(button))}</ha-card
+      >`;
     return html`<div class="block">
       ${card(tap)}
       <div class="title">Buttons</div>
-      ${card(builtin)}
-      ${custom.length ? card(custom) : nothing}
+      ${card(builtin)} ${custom.length ? card(custom) : nothing}
       <div>
         <ha-button appearance="filled" size="s" @click=${this._addButton}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -332,8 +446,14 @@ export class NcCategoryEditor extends LitElement {
 
   private _row(button: CategoryButton) {
     const defaults = INTERACTION_DEFAULTS[button.type];
-    const label = button.type === "tap" ? defaults.label : button.label || defaults.label;
-    const secondary = button.type === "snooze" ? snoozeChoices(button).map((choice) => choice.text).join(", ") : "";
+    const label =
+      button.type === "tap" ? defaults.label : button.label || defaults.label;
+    const secondary =
+      button.type === "snooze"
+        ? snoozeChoices(button)
+            .map((choice) => choice.text)
+            .join(", ")
+        : "";
     const open = () => (this._button = { button, isNew: false });
     return html`<div
       class="interaction ${button.enabled ? "" : "off"}"
@@ -347,9 +467,18 @@ export class NcCategoryEditor extends LitElement {
       <ha-switch
         .checked=${button.enabled}
         @click=${(ev: Event) => ev.stopPropagation()}
-        @change=${(ev: Event) => this._setButton({ ...button, enabled: (ev.target as HTMLInputElement).checked })}
+        @change=${(ev: Event) =>
+          this._setButton({
+            ...button,
+            enabled: (ev.target as HTMLInputElement).checked,
+          })}
       ></ha-switch>
-      <ha-icon class=${button.type === "custom" ? "" : "builtin"} .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}></ha-icon>
+      <ha-icon
+        class=${button.type === "custom" ? "" : "builtin"}
+        .icon=${button.type === "tap"
+          ? defaults.icon
+          : button.icon || defaults.icon}
+      ></ha-icon>
       <div class="own-text">
         <div>${label}</div>
         ${secondary ? html`<div class="secondary">${secondary}</div>` : nothing}
@@ -362,7 +491,9 @@ export class NcCategoryEditor extends LitElement {
 
   private _setButton(button: CategoryButton): void {
     const buttons = [...this._draft!.buttons];
-    const index = buttons.findIndex((item) => item.id === button.id && item.type === button.type);
+    const index = buttons.findIndex(
+      (item) => item.id === button.id && item.type === button.type,
+    );
     if (index < 0) buttons.push(button);
     else buttons[index] = button;
     this._change({ buttons });
@@ -371,7 +502,13 @@ export class NcCategoryEditor extends LitElement {
   private _addButton(): void {
     this._button = {
       isNew: true,
-      button: { id: newId(), type: "custom", enabled: true, label: "", show_in_push: true },
+      button: {
+        id: newId(),
+        type: "custom",
+        enabled: true,
+        label: "",
+        show_in_push: true,
+      },
     };
   }
 
@@ -379,7 +516,10 @@ export class NcCategoryEditor extends LitElement {
     const edit = this._button!;
     const otherPushButtons = this._draft!.buttons.filter(
       (button) =>
-        button.id !== edit.button.id && button.enabled && button.type !== "tap" && button.show_in_push,
+        button.id !== edit.button.id &&
+        button.enabled &&
+        button.type !== "tap" &&
+        button.show_in_push,
     ).length;
     return html`<nc-interaction-dialog
       .hass=${this.hass}
@@ -388,19 +528,28 @@ export class NcCategoryEditor extends LitElement {
       .button=${{ ...edit.button, action: { type: "nothing" } } as Button}
       .isNew=${edit.isNew}
       .otherPushButtons=${otherPushButtons}
-      @interaction-closed=${(ev: CustomEvent<{ result?: Button | "delete" }>) => {
+      @interaction-closed=${(
+        ev: CustomEvent<{ result?: Button | "delete" }>,
+      ) => {
         ev.stopPropagation();
         this._button = undefined;
         const result = ev.detail.result;
         if (!result) return;
         if (result === "delete") {
-          this._change({ buttons: this._draft!.buttons.filter((button) => button.id !== edit.button.id) });
+          this._change({
+            buttons: this._draft!.buttons.filter(
+              (button) => button.id !== edit.button.id,
+            ),
+          });
           return;
         }
         const { action: _action, confirm: _confirm, ...rest } = result;
         void _action;
         void _confirm;
-        this._setButton({ ...rest, enabled: rest.enabled ?? true } as CategoryButton);
+        this._setButton({
+          ...rest,
+          enabled: rest.enabled ?? true,
+        } as CategoryButton);
       }}
     ></nc-interaction-dialog>`;
   }
@@ -408,7 +557,9 @@ export class NcCategoryEditor extends LitElement {
   // -- Actions -----------------------------------------------------------------
 
   private _viewNotifications(): void {
-    navigate(`${this.base}/settings/notifications?category=${encodeURIComponent(this.categoryId)}`);
+    navigate(
+      `${this.base}/settings/notifications?category=${encodeURIComponent(this.categoryId)}`,
+    );
   }
 
   private async _back(): Promise<void> {
@@ -478,7 +629,11 @@ export class NcCategoryEditor extends LitElement {
       return;
     }
     try {
-      await this.hass!.callWS({ type: `${DOMAIN}/item/delete`, section: "categories", item_id: this.categoryId });
+      await this.hass!.callWS({
+        type: `${DOMAIN}/item/delete`,
+        section: "categories",
+        item_id: this.categoryId,
+      });
       this._original = JSON.stringify(this._draft);
       navigate(`${this.base}/settings/categories`, true);
     } catch (err) {

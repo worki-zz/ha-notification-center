@@ -72,7 +72,7 @@ A notification uses its category's buttons live: in its Interactions they are in
 
 ### Modes
 
-A mode tells which channels deliver a notification (the channel table of the categories, phase 6). Only one mode is active at a time: the first in the list whose condition is true. Its condition is an entity state or a template (a `toggle` condition in YAML still works). **Home** without a condition is always true: it is shown on top but checked last, so it applies when no other mode does. Home with a condition is a normal row that can be dragged like the others. When no mode is active, the page says *No active mode* and every channel sends, whatever its modes. The active mode has an *Active* chip.
+A mode tells which channels deliver a notification (the channel table of the categories, phase 6). Only one mode is active at a time: the first in the list whose condition is true. Its condition is an entity state or a template (a `toggle` condition in YAML still works). **Home** without a condition is always true: it is shown on top but checked last, so it applies when no other mode does. Home with a condition is a normal row that can be dragged like the others. When no mode is active, the page says *No active mode* and only the channels ticked in at least one mode send. The active mode has an *Active* chip.
 
 *Add mode* has two steps: the mode is saved first with the same channels as Home, then the next dialog lists the channels to switch on for it in every category (it starts with Home's and cannot be skipped). The icon of a mode is kept in YAML.
 

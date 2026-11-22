@@ -3,8 +3,8 @@
 Modes are checked in their order; the first one whose condition is true is
 the current mode. A mode without a condition (only Home can be one) is
 always true; it is kept last, so it applies when no other mode does. When
-Home has a condition too, there can be no current mode: then every channel
-sends, whatever its modes.
+Home has a condition too, there can be no current mode: then the channels
+ticked in at least one mode send.
 """
 
 from __future__ import annotations

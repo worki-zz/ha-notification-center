@@ -2022,8 +2022,8 @@ class Engine:
 
     def _card_state(self, card: Card) -> dict[str, Any]:
         data = card.as_dict()
-        if card.status == STATE_ACTIVE:
-            data["dashboard"] = self.channel_view(card).as_dict()
+        # For a card not active, only who it is for counts (``audience``).
+        data["dashboard"] = self.channel_view(card).as_dict()
         return data
 
     def snapshot(self) -> dict[str, Any]:

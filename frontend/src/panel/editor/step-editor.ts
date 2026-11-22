@@ -26,14 +26,31 @@ import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
 import { BLOCK_STYLES, block } from "./block";
 import "./schedule-editor";
-import type { Button, Category, CategoryButton, EffectiveButton } from "../../shared/config";
-import { categoryButtons, effectiveButtons, snoozeChoices } from "../../shared/live";
+import type {
+  AudienceEntry,
+  Button,
+  Category,
+  CategoryButton,
+  ChannelSettings,
+  EffectiveButton,
+  Mode,
+} from "../../shared/config";
+import "../channel-tables";
+import { CHANNELS, audienceCount } from "../channel-tables";
+import {
+  categoryButtons,
+  effectiveButtons,
+  snoozeChoices,
+} from "../../shared/live";
 import { INTERACTION_DEFAULTS, actionText } from "./interaction-dialog";
 import "./interaction-dialog";
 
 type StartKind = "triggers" | "schedule" | "repeat";
 
-const HELP: Record<StartKind | "show" | "done" | "interactions", { title: string; text: string[] }> = {
+const HELP: Record<
+  StartKind | "show" | "done" | "interactions",
+  { title: string; text: string[] }
+> = {
   triggers: {
     title: "Triggers",
     text: [
@@ -104,9 +121,20 @@ const LAST_CHANGED = "__last_changed";
 const LAST_UPDATED = "__last_updated";
 
 // Attributes that are not worth showing on a card.
-const HIDDEN_ATTRIBUTES = ["friendly_name", "icon", "entity_picture", "supported_features", "attribution"];
+const HIDDEN_ATTRIBUTES = [
+  "friendly_name",
+  "icon",
+  "entity_picture",
+  "supported_features",
+  "attribution",
+];
 
-const TIME_TYPES: DataType[] = ["active_since", "last_done", "last_changed", "last_updated"];
+const TIME_TYPES: DataType[] = [
+  "active_since",
+  "last_done",
+  "last_changed",
+  "last_updated",
+];
 
 function kindOf(type: DataType): DataKind | "" {
   if (type === "none") return "";
@@ -123,7 +151,15 @@ const FORMATS = [
   { value: "datetime", label: "Date and time" },
 ];
 
-export const STEP_BLOCKS = ["message", "interactions", "start", "show", "done", "audience"] as const;
+export const STEP_BLOCKS = [
+  "message",
+  "interactions",
+  "start",
+  "show",
+  "done",
+  "audience",
+  "channels",
+] as const;
 export type StepBlock = (typeof STEP_BLOCKS)[number];
 
 @customElement("nc-step-editor")
@@ -150,34 +186,52 @@ export class NcStepEditor extends LitElement {
   // The notification's category: its buttons are inherited.
   @property({ attribute: false }) public category?: Category;
 
+  // The modes, for the Channels table.
+  @property({ attribute: false }) public modes: Mode[] = [];
+
   // The interaction whose dialog is open: the step's own entry for it, the
   // category's button it inherits from, and whether it is a new own button.
-  @state() private _interaction?: { button: Button; inherited?: CategoryButton; isNew: boolean };
+  @state() private _interaction?: {
+    button: Button;
+    inherited?: CategoryButton;
+    isNew: boolean;
+  };
 
   @state() private _help?: keyof typeof HELP;
 
   @state() private _pinnedOpen = false;
 
-
   // The text field the entity parameters go into.
   private _field: "message" | "info" = "message";
 
   private _emit(step: EditorStep): void {
-    this.dispatchEvent(new CustomEvent("value-changed", { detail: { value: step } }));
+    this.dispatchEvent(
+      new CustomEvent("value-changed", { detail: { value: step } }),
+    );
   }
 
   private _change(changes: Partial<EditorStep>): void {
     this._emit({ ...this.step!, ...changes });
   }
 
-  private _panel(key: StepBlock, icon: string, header: string, count: number | string | undefined, content: unknown) {
+  private _panel(
+    key: StepBlock,
+    icon: string,
+    header: string,
+    count: number | string | undefined,
+    content: unknown,
+  ) {
     return block({
       icon,
       header,
       count,
       expanded: this.expanded.has(key),
       toggled: (expanded) =>
-        this.dispatchEvent(new CustomEvent("block-toggled", { detail: { block: key, expanded } })),
+        this.dispatchEvent(
+          new CustomEvent("block-toggled", {
+            detail: { block: key, expanded },
+          }),
+        ),
       content,
     });
   }
@@ -188,14 +242,24 @@ export class NcStepEditor extends LitElement {
     const kind = this._kind(step);
     const doneCount =
       step.done_when.triggers.length +
-      (step.done_when.activation_conditions_no_longer_true && this._startCanEnd(step) ? 1 : 0);
+      (step.done_when.activation_conditions_no_longer_true &&
+      this._startCanEnd(step)
+        ? 1
+        : 0);
     return html`
-      ${this._panel("message", "mdi:message-text-outline", "Message", undefined, this._renderMessage(step))}
+      ${this._panel(
+        "message",
+        "mdi:message-text-outline",
+        "Message",
+        undefined,
+        this._renderMessage(step),
+      )}
       ${this._panel(
         "interactions",
         "mdi:gesture-tap-button",
         "Interactions",
-        effectiveButtons(this.category, step).filter((button) => button.enabled).length,
+        effectiveButtons(this.category, step).filter((button) => button.enabled)
+          .length,
         this._renderInteractions(step),
       )}
       <div class="group-gap"></div>
@@ -203,13 +267,42 @@ export class NcStepEditor extends LitElement {
         "start",
         "mdi:play-circle-outline",
         "Activation",
-        kind === "triggers" ? this._startCount(step) : kind === "repeat" ? "Repeat" : "Schedule",
+        kind === "triggers"
+          ? this._startCount(step)
+          : kind === "repeat"
+            ? "Repeat"
+            : "Schedule",
         this._renderStart(step),
       )}
-      ${this._panel("show", "mdi:eye-outline", "Conditions", step.conditions.conditions.length, this._renderShow(step))}
-      ${this._panel("done", "mdi:check-circle-outline", "Done", doneCount, this._renderDone(step))}
+      ${this._panel(
+        "show",
+        "mdi:eye-outline",
+        "Conditions",
+        step.conditions.conditions.length,
+        this._renderShow(step),
+      )}
+      ${this._panel(
+        "done",
+        "mdi:check-circle-outline",
+        "Done",
+        doneCount,
+        this._renderDone(step),
+      )}
       <div class="group-gap"></div>
-      ${this._panel("audience", "mdi:account-multiple", "Audience", this._audienceCount(step), this._renderAudience(step))}
+      ${this._panel(
+        "audience",
+        "mdi:account-multiple",
+        "Audience",
+        audienceCount(this.hass, this.category?.audience, step.audience),
+        this._renderAudience(step),
+      )}
+      ${this._panel(
+        "channels",
+        "mdi:broadcast",
+        "Channels",
+        undefined,
+        this._renderChannels(step),
+      )}
       ${this._help ? this._renderHelp(this._help) : nothing}
       ${this._interaction ? this._renderInteractionDialog(step) : nothing}
     `;
@@ -218,12 +311,16 @@ export class NcStepEditor extends LitElement {
   private _startCount(step: EditorStep): number {
     const triggers = step.activation.triggers ?? [];
     const pinned = pinnedEntities(step);
-    return pinned && !entitiesFilled(pinned.kind, pinned.options) ? triggers.length - 1 : triggers.length;
+    return pinned && !entitiesFilled(pinned.kind, pinned.options)
+      ? triggers.length - 1
+      : triggers.length;
   }
 
   private _kind(step: EditorStep): StartKind {
     if (step.activation.type === "triggers") return "triggers";
-    return step.activation.schedule?.type === "after_last_done" ? "repeat" : "schedule";
+    return step.activation.schedule?.type === "after_last_done"
+      ? "repeat"
+      : "schedule";
   }
 
   // -- Message -------------------------------------------------------------
@@ -231,27 +328,35 @@ export class NcStepEditor extends LitElement {
   private _renderMessage(step: EditorStep) {
     const data = step.data ?? { type: "none" };
     return html`<div class="block">
-      ${this._text("message", "Message", step.message, (value) => this._change({ message: value }))}
+      ${this._text("message", "Message", step.message, (value) =>
+        this._change({ message: value }),
+      )}
       <div class="chips">
         ${PLACEHOLDERS.filter(
-          (name) => name !== "Floor" || Object.keys(this.hass?.floors ?? {}).length > 0,
+          (name) =>
+            name !== "Floor" || Object.keys(this.hass?.floors ?? {}).length > 0,
         ).map(
-          (name) => html`<button
-            class="param"
-            type="button"
-            @mousedown=${(ev: Event) => ev.preventDefault()}
-            @click=${() => this._insert(`{${name}}`)}
-          >
-            {${name}}
-          </button>`,
+          (name) =>
+            html`<button
+              class="param"
+              type="button"
+              @mousedown=${(ev: Event) => ev.preventDefault()}
+              @click=${() => this._insert(`{${name}}`)}
+            >
+              {${name}}
+            </button>`,
         )}
       </div>
       ${data.type === "none"
         ? html`<div class="row data">
-            ${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
+            ${this._text("info", "Info", step.info ?? "", (value) =>
+              this._change({ info: value || null }),
+            )}
             ${this._renderData(data)}
           </div>`
-        : html`${this._text("info", "Info", step.info ?? "", (value) => this._change({ info: value || null }))}
+        : html`${this._text("info", "Info", step.info ?? "", (value) =>
+              this._change({ info: value || null }),
+            )}
             <div class="row data">${this._renderData(data)}</div>`}
     </div>`;
   }
@@ -263,7 +368,10 @@ export class NcStepEditor extends LitElement {
           { select: { mode: "dropdown", options: FORMATS } },
           data.format ?? "relative",
           "Format",
-          (value) => this._dataChanged({ format: (value as StepData["format"]) ?? null }),
+          (value) =>
+            this._dataChanged({
+              format: (value as StepData["format"]) ?? null,
+            }),
         )
       : nothing;
     return html`
@@ -275,7 +383,12 @@ export class NcStepEditor extends LitElement {
           const next = (value as DataKind | undefined) ?? "";
           if (next === kind) return;
           this._dataChanged({
-            type: next === "notification" ? "active_since" : next === "entity" ? "state" : next || "none",
+            type:
+              next === "notification"
+                ? "active_since"
+                : next === "entity"
+                  ? "state"
+                  : next || "none",
             entity_id: null,
             attribute: null,
           });
@@ -288,7 +401,10 @@ export class NcStepEditor extends LitElement {
             { select: { mode: "dropdown", options: NOTIFICATION_OPTIONS } },
             data.type,
             "Time",
-            (value) => this._dataChanged({ type: (value as DataType) || "active_since" }),
+            (value) =>
+              this._dataChanged({
+                type: (value as DataType) || "active_since",
+              }),
           )}${format}`
         : nothing}
       ${kind === "entity"
@@ -305,17 +421,19 @@ export class NcStepEditor extends LitElement {
             >${this._renderAttribute(data)}${format}`
         : nothing}
       ${kind === "custom"
-        ? this._selector(
-            { text: {} },
-            data.text ?? "",
-            "Template",
-            (value) => this._dataChanged({ text: (value as string) || null }),
+        ? this._selector({ text: {} }, data.text ?? "", "Template", (value) =>
+            this._dataChanged({ text: (value as string) || null }),
           )
         : nothing}
     `;
   }
 
-  private _text(name: "message" | "info", label: string, value: string, changed: (value: string) => void) {
+  private _text(
+    name: "message" | "info",
+    label: string,
+    value: string,
+    changed: (value: string) => void,
+  ) {
     return html`<ha-selector
       class=${name}
       .hass=${this.hass}
@@ -337,9 +455,12 @@ export class NcStepEditor extends LitElement {
     const entityId = data.entity_id ?? this.entities[0];
     const stateObj = entityId ? hass.states[entityId] : undefined;
     const names = stateObj
-      ? Object.keys(stateObj.attributes).filter((name) => !HIDDEN_ATTRIBUTES.includes(name))
+      ? Object.keys(stateObj.attributes).filter(
+          (name) => !HIDDEN_ATTRIBUTES.includes(name),
+        )
       : [];
-    if (data.attribute && !names.includes(data.attribute)) names.push(data.attribute);
+    if (data.attribute && !names.includes(data.attribute))
+      names.push(data.attribute);
     const options = [
       { value: STATE, label: "State" },
       ...names.map((name) => ({
@@ -364,20 +485,29 @@ export class NcStepEditor extends LitElement {
       "Attribute",
       (picked) => {
         const name = (picked as string | undefined) ?? STATE;
-        if (name === LAST_CHANGED) this._dataChanged({ type: "last_changed", attribute: null });
-        else if (name === LAST_UPDATED) this._dataChanged({ type: "last_updated", attribute: null });
-        else if (name !== STATE) this._dataChanged({ type: "attribute", attribute: name });
+        if (name === LAST_CHANGED)
+          this._dataChanged({ type: "last_changed", attribute: null });
+        else if (name === LAST_UPDATED)
+          this._dataChanged({ type: "last_updated", attribute: null });
+        else if (name !== STATE)
+          this._dataChanged({ type: "attribute", attribute: name });
         else this._dataChanged({ type: "state", attribute: null });
       },
     );
   }
 
   private _dataChanged(changes: Partial<StepData>): void {
-    const data: StepData = { ...(this.step!.data ?? { type: "none" }), ...changes };
+    const data: StepData = {
+      ...(this.step!.data ?? { type: "none" }),
+      ...changes,
+    };
     const clean: StepData = { type: data.type };
-    if (TIME_TYPES.includes(data.type) && data.format) clean.format = data.format;
-    if (kindOf(data.type) === "entity" && data.entity_id) clean.entity_id = data.entity_id;
-    if (data.type === "attribute" && data.attribute) clean.attribute = data.attribute;
+    if (TIME_TYPES.includes(data.type) && data.format)
+      clean.format = data.format;
+    if (kindOf(data.type) === "entity" && data.entity_id)
+      clean.entity_id = data.entity_id;
+    if (data.type === "attribute" && data.attribute)
+      clean.attribute = data.attribute;
     if (data.type === "attribute" && !data.attribute) clean.type = "state";
     if (data.type === "custom" && data.text) clean.text = data.text;
     this._change({ data: data.type === "none" ? null : clean });
@@ -387,7 +517,8 @@ export class NcStepEditor extends LitElement {
     const field = this._field;
     const host = this.renderRoot.querySelector(`ha-selector.${field}`);
     const input = host ? deepInput(host) : undefined;
-    const current = (field === "message" ? this.step!.message : this.step!.info) ?? "";
+    const current =
+      (field === "message" ? this.step!.message : this.step!.info) ?? "";
     let next = `${current}${token}`;
     let cursor = next.length;
     if (input && input.selectionStart !== null && input.value === current) {
@@ -415,7 +546,10 @@ export class NcStepEditor extends LitElement {
     className?: string,
     clearable = false,
   ) {
-    return field(this.hass, selector, value, label, changed, { className, clearable });
+    return field(this.hass, selector, value, label, changed, {
+      className,
+      clearable,
+    });
   }
 
   // -- Start -----------------------------------------------------------------
@@ -446,7 +580,9 @@ export class NcStepEditor extends LitElement {
             @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
               ev.stopPropagation();
               const pinned = pinnedEntities(step);
-              const triggers = pinned ? [pinned.item, ...ev.detail.value] : ev.detail.value;
+              const triggers = pinned
+                ? [pinned.item, ...ev.detail.value]
+                : ev.detail.value;
               this._change({ activation: { ...step.activation, triggers } });
             }}
           ></ha-automation-trigger>`
@@ -458,7 +594,9 @@ export class NcStepEditor extends LitElement {
             .saved=${this.saved}
             @value-changed=${(ev: CustomEvent<{ value: Schedule }>) => {
               ev.stopPropagation();
-              this._change({ activation: { ...step.activation, schedule: ev.detail.value } });
+              this._change({
+                activation: { ...step.activation, schedule: ev.detail.value },
+              });
             }}
           ></nc-schedule-editor>`}
     </div>`;
@@ -477,37 +615,44 @@ export class NcStepEditor extends LitElement {
     const pinned = pinnedEntities(step);
     if (!pinned && !this.entities.length) return nothing;
     // Left empty, Numeric state when every listed entity has a number.
-    const kind: EntitiesKind = pinned?.kind ?? (this._allNumeric() ? "numeric" : "state");
+    const kind: EntitiesKind =
+      pinned?.kind ?? (this._allNumeric() ? "numeric" : "state");
     const options = pinned?.options ?? {};
     // In a card, as Home Assistant's trigger rows, so it has their background.
-    return html`<ha-card outlined class="pinned-card"><ha-expansion-panel
-      class="pinned"
-      .expanded=${this._pinnedOpen}
-      @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
-        ev.stopPropagation();
-        if (ev.target === ev.currentTarget) this._pinnedOpen = ev.detail.expanded;
-      }}
-      @expanded-will-change=${(ev: Event) => ev.stopPropagation()}
-    >
-      <ha-icon slot="leading-icon" class="builtin" icon="mdi:format-list-checks"></ha-icon>
-      <div slot="header" class="pinned-title">Notification entities</div>
-      <nc-entities-form
-        kind-switch
-        .hass=${this.hass}
-        .kind=${kind}
-        .value=${options}
-        .entities=${this.entities}
-        @kind-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
+    return html`<ha-card outlined class="pinned-card"
+      ><ha-expansion-panel
+        class="pinned"
+        .expanded=${this._pinnedOpen}
+        @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
           ev.stopPropagation();
-          // Every field stays, so switching back brings them again.
-          this._pinnedChanged(step, ev.detail.value, options);
+          if (ev.target === ev.currentTarget)
+            this._pinnedOpen = ev.detail.expanded;
         }}
-        @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
-          ev.stopPropagation();
-          this._pinnedChanged(step, kind, ev.detail.value);
-        }}
-      ></nc-entities-form>
-    </ha-expansion-panel></ha-card>`;
+        @expanded-will-change=${(ev: Event) => ev.stopPropagation()}
+      >
+        <ha-icon
+          slot="leading-icon"
+          class="builtin"
+          icon="mdi:format-list-checks"
+        ></ha-icon>
+        <div slot="header" class="pinned-title">Notification entities</div>
+        <nc-entities-form
+          kind-switch
+          .hass=${this.hass}
+          .kind=${kind}
+          .value=${options}
+          .entities=${this.entities}
+          @kind-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
+            ev.stopPropagation();
+            // Every field stays, so switching back brings them again.
+            this._pinnedChanged(step, ev.detail.value, options);
+          }}
+          @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
+            ev.stopPropagation();
+            this._pinnedChanged(step, kind, ev.detail.value);
+          }}
+        ></nc-entities-form> </ha-expansion-panel
+    ></ha-card>`;
   }
 
   private _allNumeric(): boolean {
@@ -519,29 +664,43 @@ export class NcStepEditor extends LitElement {
           !!entity &&
           (entity.attributes.unit_of_measurement !== undefined ||
             entity.attributes.state_class !== undefined ||
-            (entity.state.trim() !== "" && !Number.isNaN(Number(entity.state)))),
+            (entity.state.trim() !== "" &&
+              !Number.isNaN(Number(entity.state)))),
       )
     );
   }
 
-  private _pinnedChanged(step: EditorStep, kind: EntitiesKind, options: Obj): void {
+  private _pinnedChanged(
+    step: EditorStep,
+    kind: EntitiesKind,
+    options: Obj,
+  ): void {
     const item: Obj = {
       trigger: kind === "numeric" ? ENTITIES_NUMERIC : ENTITIES_STATE,
       options,
       [PINNED]: true,
     };
     const rest = this._listTriggers(step);
-    this._change({ activation: { ...step.activation, triggers: [item, ...rest] } });
+    this._change({
+      activation: { ...step.activation, triggers: [item, ...rest] },
+    });
   }
 
   private _kindChanged(kind: StartKind): void {
     const step = this.step!;
     if (kind === this._kind(step)) return;
     if (kind === "triggers") {
-      this._change({ activation: { ...step.activation, type: "triggers", triggers: step.activation.triggers ?? [] } });
+      this._change({
+        activation: {
+          ...step.activation,
+          type: "triggers",
+          triggers: step.activation.triggers ?? [],
+        },
+      });
       return;
     }
-    const type: Schedule["type"] = kind === "schedule" ? "calendar" : "after_last_done";
+    const type: Schedule["type"] =
+      kind === "schedule" ? "calendar" : "after_last_done";
     this._change({
       start: {
         ...step.activation,
@@ -554,7 +713,10 @@ export class NcStepEditor extends LitElement {
   private _title(title: string, help: keyof typeof HELP) {
     return html`<div class="title">
       <span>${title}</span>
-      <ha-icon-button .label=${`About ${title}`} @click=${() => (this._help = help)}>
+      <ha-icon-button
+        .label=${`About ${title}`}
+        @click=${() => (this._help = help)}
+      >
         <ha-icon icon="mdi:information-outline"></ha-icon>
       </ha-icon-button>
     </div>`;
@@ -564,8 +726,14 @@ export class NcStepEditor extends LitElement {
 
   private _renderShow(step: EditorStep) {
     const show = step.conditions;
-    const toggle = (key: "activate_only_while_met" | "hide_while_not_met") => (ev: Event) =>
-      this._change({ conditions: { ...show, [key]: (ev.target as HTMLInputElement).checked } });
+    const toggle =
+      (key: "activate_only_while_met" | "hide_while_not_met") => (ev: Event) =>
+        this._change({
+          conditions: {
+            ...show,
+            [key]: (ev.target as HTMLInputElement).checked,
+          },
+        });
     return html`<div class="block">
       <div class="show-switches">
         <ha-card outlined class="own-row">
@@ -577,9 +745,14 @@ export class NcStepEditor extends LitElement {
           <div class="own-text">Activate only while conditions are met</div>
         </ha-card>
         <ha-card outlined class="own-row">
-          <ha-switch .checked=${show.hide_while_not_met} @change=${toggle("hide_while_not_met")}></ha-switch>
+          <ha-switch
+            .checked=${show.hide_while_not_met}
+            @change=${toggle("hide_while_not_met")}
+          ></ha-switch>
           <ha-icon class="builtin" icon="mdi:eye-off-outline"></ha-icon>
-          <div class="own-text">Hide active notification while conditions are not met</div>
+          <div class="own-text">
+            Hide active notification while conditions are not met
+          </div>
         </ha-card>
       </div>
       ${this._title("Conditions", "show")}
@@ -589,7 +762,9 @@ export class NcStepEditor extends LitElement {
         .conditions=${show.conditions}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
-          this._change({ conditions: { ...show, conditions: ev.detail.value } });
+          this._change({
+            conditions: { ...show, conditions: ev.detail.value },
+          });
         }}
       ></ha-automation-condition>
     </div>`;
@@ -602,7 +777,9 @@ export class NcStepEditor extends LitElement {
     const show = step.conditions;
     return (
       pinnedFilled(step) ||
-      (step.activation.type === "triggers" && show.activate_only_while_met && show.conditions.length > 0)
+      (step.activation.type === "triggers" &&
+        show.activate_only_while_met &&
+        show.conditions.length > 0)
     );
   }
 
@@ -617,12 +794,16 @@ export class NcStepEditor extends LitElement {
                 this._change({
                   done_when: {
                     ...step.done_when,
-                    activation_conditions_no_longer_true: (ev.target as HTMLInputElement).checked,
+                    activation_conditions_no_longer_true: (
+                      ev.target as HTMLInputElement
+                    ).checked,
                   },
                 })}
             ></ha-switch>
             <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
-            <div class="own-text">Done when activation conditions no longer true</div>
+            <div class="own-text">
+              Done when activation conditions no longer true
+            </div>
           </ha-card>`
         : nothing}
       ${this._title("Triggers", "done")}
@@ -632,7 +813,9 @@ export class NcStepEditor extends LitElement {
         .triggers=${step.done_when.triggers}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
-          this._change({ done_when: { ...step.done_when, triggers: ev.detail.value } });
+          this._change({
+            done_when: { ...step.done_when, triggers: ev.detail.value },
+          });
         }}
       ></ha-automation-trigger>
     </div>`;
@@ -641,7 +824,11 @@ export class NcStepEditor extends LitElement {
   // -- Interactions --------------------------------------------------------
 
   // The step's own entry for a button, matched as effectiveButtons does.
-  private _entryIndex(step: EditorStep, button: Pick<Button, "id" | "type">, inherited: boolean): number {
+  private _entryIndex(
+    step: EditorStep,
+    button: Pick<Button, "id" | "type">,
+    inherited: boolean,
+  ): number {
     return step.buttons.findIndex((item) =>
       inherited && button.type !== "custom"
         ? item.type === button.type
@@ -657,74 +844,53 @@ export class NcStepEditor extends LitElement {
     this._change({ buttons });
   }
 
-  // Every person of Home Assistant, by name.
-  private _people(): { id: string; name: string; picture?: string }[] {
-    return Object.values(this.hass?.states ?? {})
-      .filter((state) => state.entity_id.startsWith("person."))
-      .map((state) => ({
-        id: state.entity_id,
-        name: String(state.attributes.friendly_name ?? state.entity_id.slice(7)),
-        picture: (state.attributes.entity_picture as string | undefined) ?? undefined,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  private _audienceCount(step: EditorStep): string | undefined {
-    const people = this._people();
-    if (!people.length) return undefined;
-    const audience = step.audience ?? [];
-    const on = audience.length ? people.filter((person) => audience.includes(person.id)).length : people.length;
-    return `${on}/${people.length}`;
-  }
-
-  // Empty means everyone, a person added later too; with someone switched
-  // off, only the ones switched on.
+  // The people whose states differ from the category's; the rest as there.
   private _renderAudience(step: EditorStep) {
-    const people = this._people();
-    const audience = step.audience ?? [];
-    const everyone = audience.length === 0;
-    if (!people.length) {
-      return html`<div class="block"><div class="secondary">No people in Home Assistant: everyone sees the card.</div></div>`;
-    }
-    const set = (id: string, on: boolean) => {
-      const chosen = new Set(everyone ? people.map((person) => person.id) : audience);
-      if (on) chosen.add(id);
-      else chosen.delete(id);
-      const all = people.every((person) => chosen.has(person.id));
-      this._change({ audience: all ? [] : people.map((person) => person.id).filter((item) => chosen.has(item)) });
-    };
     return html`<div class="block">
-      <ha-card outlined class="interactions">
-        ${people.map((person) => {
-          const on = everyone || audience.includes(person.id);
-          return html`<div class="own-row">
-            <ha-switch
-              .checked=${on}
-              @change=${(ev: Event) => set(person.id, (ev.target as HTMLInputElement).checked)}
-            ></ha-switch>
-            ${customElements.get("ha-person-badge")
-              ? html`<ha-person-badge
-                  class="avatar"
-                  .person=${{ id: person.id, name: person.name, picture: person.picture }}
-                ></ha-person-badge>`
-              : person.picture
-                ? html`<img class="avatar" src=${person.picture} alt="" />`
-                : html`<span class="avatar">${initials(person.name)}</span>`}
-            <div class="own-text">${person.name}</div>
-          </div>`;
-        })}
-      </ha-card>
-      ${!everyone && audience.every((id) => !people.some((person) => person.id === id))
-        ? html`<ha-alert alert-type="warning">Nobody listed exists any more: nobody sees the card.</ha-alert>`
-        : nothing}
+      <nc-audience-table
+        .hass=${this.hass}
+        .base=${this.category?.audience ?? {}}
+        .value=${step.audience ?? {}}
+        @value-changed=${(
+          ev: CustomEvent<{ value: Record<string, AudienceEntry> }>,
+        ) => {
+          ev.stopPropagation();
+          this._change({ audience: ev.detail.value });
+        }}
+      ></nc-audience-table>
+    </div>`;
+  }
+
+  // The channels' modes and settings that differ from the category's.
+  private _renderChannels(step: EditorStep) {
+    return html`<div class="block">
+      <nc-channel-table
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .modes=${this.modes}
+        .channels=${CHANNELS}
+        .base=${this.category?.channels ?? {}}
+        .value=${step.channels ?? {}}
+        @value-changed=${(
+          ev: CustomEvent<{ value: Record<string, ChannelSettings> }>,
+        ) => {
+          ev.stopPropagation();
+          this._change({ channels: ev.detail.value });
+        }}
+      ></nc-channel-table>
     </div>`;
   }
 
   private _renderInteractions(step: EditorStep) {
     const rows = effectiveButtons(this.category, step);
     const tap = rows.filter((button) => button.type === "tap");
-    const builtin = rows.filter((button) => button.category && button.type !== "tap" && button.type !== "custom");
-    const fromCategory = rows.filter((button) => button.category && button.type === "custom");
+    const builtin = rows.filter(
+      (button) =>
+        button.category && button.type !== "tap" && button.type !== "custom",
+    );
+    const fromCategory = rows.filter(
+      (button) => button.category && button.type === "custom",
+    );
     const own = rows.filter((button) => !button.category);
     const card = (items: EffectiveButton[]) =>
       html`<ha-card outlined class="interactions">
@@ -732,8 +898,7 @@ export class NcStepEditor extends LitElement {
       </ha-card>`;
     return html`<div class="block">
       ${tap.length ? card(tap) : nothing}
-      ${this._title("Buttons", "interactions")}
-      ${card(builtin)}
+      ${this._title("Buttons", "interactions")} ${card(builtin)}
       ${fromCategory.length ? card(fromCategory) : nothing}
       ${own.length ? card(own) : nothing}
       <div>
@@ -749,16 +914,23 @@ export class NcStepEditor extends LitElement {
   private _base(button: EffectiveButton): CategoryButton | undefined {
     if (!button.category) return undefined;
     return categoryButtons(this.category).find((item) =>
-      button.type === "custom" ? item.type === "custom" && item.id === button.id : item.type === button.type,
+      button.type === "custom"
+        ? item.type === "custom" && item.id === button.id
+        : item.type === button.type,
     );
   }
 
   private _interactionRow(step: EditorStep, button: EffectiveButton) {
     const defaults = INTERACTION_DEFAULTS[button.type];
-    const label = button.type === "tap" ? defaults.label : button.label || defaults.label;
+    const label =
+      button.type === "tap" ? defaults.label : button.label || defaults.label;
     const parts: string[] = [];
     if (button.type === "snooze") {
-      parts.push(snoozeChoices(button).map((choice) => choice.text).join(", "));
+      parts.push(
+        snoozeChoices(button)
+          .map((choice) => choice.text)
+          .join(", "),
+      );
     }
     if ((button.action?.type ?? "nothing") !== "nothing") {
       parts.push(actionText(this.hass, button.action));
@@ -768,9 +940,14 @@ export class NcStepEditor extends LitElement {
       const index = this._entryIndex(step, button, button.category);
       return index >= 0
         ? step.buttons[index]
-        : ({ id: button.id, type: button.type, action: button.action } as Button);
+        : ({
+            id: button.id,
+            type: button.type,
+            action: button.action,
+          } as Button);
     };
-    const open = () => (this._interaction = { button: entry(), inherited, isNew: false });
+    const open = () =>
+      (this._interaction = { button: entry(), inherited, isNew: false });
     return html`<div
       class="interaction ${button.enabled ? "" : "off"}"
       role="button"
@@ -784,11 +961,17 @@ export class NcStepEditor extends LitElement {
         .checked=${button.enabled}
         @click=${(ev: Event) => ev.stopPropagation()}
         @change=${(ev: Event) =>
-          this._setEntry(step, { ...entry(), enabled: (ev.target as HTMLInputElement).checked }, button.category)}
+          this._setEntry(
+            step,
+            { ...entry(), enabled: (ev.target as HTMLInputElement).checked },
+            button.category,
+          )}
       ></ha-switch>
       <ha-icon
         class=${button.category ? "builtin" : ""}
-        .icon=${button.type === "tap" ? defaults.icon : button.icon || defaults.icon}
+        .icon=${button.type === "tap"
+          ? defaults.icon
+          : button.icon || defaults.icon}
       ></ha-icon>
       <div class="own-text">
         <div>${label}</div>
@@ -820,7 +1003,11 @@ export class NcStepEditor extends LitElement {
     const otherPushButtons = effectiveButtons(this.category, step).filter(
       (button) =>
         !(button.type === edit.button.type && button.id === edit.button.id) &&
-        !(edit.inherited && edit.button.type !== "custom" && button.type === edit.button.type) &&
+        !(
+          edit.inherited &&
+          edit.button.type !== "custom" &&
+          button.type === edit.button.type
+        ) &&
         button.enabled &&
         button.type !== "tap" &&
         button.show_in_push,
@@ -833,7 +1020,9 @@ export class NcStepEditor extends LitElement {
       .isNew=${edit.isNew}
       .entityActionSet=${this.entityActions.has(edit.button.id)}
       .otherPushButtons=${otherPushButtons}
-      @interaction-closed=${(ev: CustomEvent<{ result?: Button | "delete" }>) => {
+      @interaction-closed=${(
+        ev: CustomEvent<{ result?: Button | "delete" }>,
+      ) => {
         ev.stopPropagation();
         this._interaction = undefined;
         const result = ev.detail.result;
@@ -841,7 +1030,11 @@ export class NcStepEditor extends LitElement {
         if (result === "delete") {
           this._change({
             buttons: step.buttons.filter(
-              (button) => !(button.type === edit.button.type && button.id === edit.button.id),
+              (button) =>
+                !(
+                  button.type === edit.button.type &&
+                  button.id === edit.button.id
+                ),
             ),
           });
           return;
@@ -864,7 +1057,9 @@ export class NcStepEditor extends LitElement {
     >
       ${help.text.map((text) => html`<p>${text}</p>`)}
       <ha-dialog-footer slot="footer">
-        <ha-button slot="primaryAction" @click=${() => (this._help = undefined)}>OK</ha-button>
+        <ha-button slot="primaryAction" @click=${() => (this._help = undefined)}
+          >OK</ha-button
+        >
       </ha-dialog-footer>
     </ha-dialog>`;
   }
@@ -1046,23 +1241,16 @@ export class NcStepEditor extends LitElement {
   `;
 }
 
-/** "Test User" -> "TU", as Home Assistant's person badge. */
-function initials(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 3)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-}
-
 /** The text field inside an element, through the shadow roots. */
-function deepInput(root: Element): HTMLInputElement | HTMLTextAreaElement | undefined {
+function deepInput(
+  root: Element,
+): HTMLInputElement | HTMLTextAreaElement | undefined {
   const queue: (Element | ShadowRoot)[] = [root];
   while (queue.length) {
     const node = queue.shift()!;
-    const found = node.querySelector?.("input, textarea") as HTMLInputElement | null;
+    const found = node.querySelector?.(
+      "input, textarea",
+    ) as HTMLInputElement | null;
     if (found) return found;
     if (node instanceof Element && node.shadowRoot) queue.push(node.shadowRoot);
     for (const child of Array.from(node.children ?? [])) {
