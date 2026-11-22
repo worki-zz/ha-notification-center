@@ -109,17 +109,37 @@ export function effectiveAudience(
   );
 }
 
-/** "2/3": the people in at least one state, of everyone. */
+/** The states shown as columns: Sleep only when someone can be asleep. */
+export function visibleStates(sleepers: string[]): AudienceState[] {
+  return sleepers.length ? AUDIENCE_STATES : ["home", "away"];
+}
+
+/** The states a person can be in: asleep only with a sleep condition. */
+function personStates(person: string, sleepers: string[]): AudienceState[] {
+  return sleepers.includes(person) ? AUDIENCE_STATES : ["home", "away"];
+}
+
+/** The people of the configuration with a sleep condition. */
+export function sleepersOf(
+  people: { person: string; sleep?: unknown }[] | undefined,
+): string[] {
+  return (people ?? [])
+    .filter((person) => person.sleep)
+    .map((person) => person.person);
+}
+
+/** "2/3": the people in at least one state they can be in, of everyone. */
 export function audienceCount(
   hass: HomeAssistant | undefined,
   category: Record<string, AudienceEntry> | undefined,
   own: Record<string, AudienceEntry> | undefined,
+  sleepers: string[] = [],
 ): string | undefined {
   const people = haPeople(hass).map((person) => person.id);
   if (!people.length) return undefined;
   const effective = effectiveAudience(category, own, people);
   const on = people.filter((person) =>
-    AUDIENCE_STATES.some((state) => effective[person][state]),
+    personStates(person, sleepers).some((state) => effective[person][state]),
   ).length;
   return `${on}/${people.length}`;
 }
@@ -276,6 +296,10 @@ export class NcAudienceTable extends LitElement {
   @property({ attribute: false }) public value: Record<string, AudienceEntry> =
     {};
 
+  // The people with a sleep condition: only they can be asleep, so only they
+  // have a Sleep tick (no column at all when nobody has one).
+  @property({ attribute: false }) public sleepers: string[] = [];
+
   private get _isStep(): boolean {
     return this.base !== undefined;
   }
@@ -322,21 +346,25 @@ export class NcAudienceTable extends LitElement {
       </p>`;
     }
     const effective = this._effective(people);
+    const states = visibleStates(this.sleepers);
     const nobody = people.every(
-      (person) => !AUDIENCE_STATES.some((state) => effective[person.id][state]),
+      (person) =>
+        !personStates(person.id, this.sleepers).some(
+          (state) => effective[person.id][state],
+        ),
     );
     return html`
       <ha-card outlined>
         <div
           class="table"
-          style="grid-template-columns: minmax(0, 1fr) repeat(3, minmax(56px, auto)) ${this
+          style="grid-template-columns: minmax(0, 1fr) repeat(${states.length}, minmax(56px, auto)) ${this
             ._isStep
             ? "48px"
             : ""}"
         >
           <div class="row head">
             <div class="cell name">Person</div>
-            ${AUDIENCE_STATES.map(
+            ${states.map(
               (state) =>
                 html`<div class="cell tick" title=${STATE_HELP[state]}>
                   ${STATE_NAMES[state]}
@@ -351,21 +379,22 @@ export class NcAudienceTable extends LitElement {
               <div class="cell name">
                 ${avatar(person)}<span class="name-text">${person.name}</span>
               </div>
-              ${AUDIENCE_STATES.map(
-                (state) =>
-                  html`<div class="cell tick">
-                    <ha-checkbox
-                      .checked=${entry[state]}
-                      .label=${`${person.name}: ${STATE_NAMES[state]}`}
-                      @change=${(ev: Event) =>
-                        this._set(
-                          people,
-                          person.id,
-                          state,
-                          (ev.target as HTMLInputElement).checked,
-                        )}
-                    ></ha-checkbox>
-                  </div>`,
+              ${states.map((state) =>
+                state === "sleep" && !this.sleepers.includes(person.id)
+                  ? html`<div class="cell tick"></div>`
+                  : html`<div class="cell tick">
+                      <ha-checkbox
+                        .checked=${entry[state]}
+                        .label=${`${person.name}: ${STATE_NAMES[state]}`}
+                        @change=${(ev: Event) =>
+                          this._set(
+                            people,
+                            person.id,
+                            state,
+                            (ev.target as HTMLInputElement).checked,
+                          )}
+                      ></ha-checkbox>
+                    </div>`,
               )}
               ${this._isStep
                 ? html`<div class="cell end">
@@ -384,13 +413,10 @@ export class NcAudienceTable extends LitElement {
           })}
         </div>
       </ha-card>
-      <p class="hint secondary">
-        Home: at home and awake. Sleep: at home and asleep (set on the People
-        page). Away: not at home.
-      </p>
+      <p class="hint secondary">The columns are the person's state.</p>
       ${nobody
         ? html`<ha-alert alert-type="warning"
-            >Nobody is ticked: nothing is sent.</ha-alert
+            >No condition ticked: nothing is sent.</ha-alert
           >`
         : nothing}
     `;
@@ -498,9 +524,12 @@ export class NcChannelTable extends LitElement {
           ? this._renderList(modes)
           : this._renderTable(modes)}</ha-card
       >
+      <p class="hint secondary">
+        The columns are the house's state (its mode).
+      </p>
       ${silent
         ? html`<ha-alert alert-type="warning"
-            >No channel is on in any mode: nothing is sent.</ha-alert
+            >No mode ticked: nothing is sent.</ha-alert
           >`
         : nothing}
       ${this._open ? this._renderDialog(modes) : nothing}
@@ -681,7 +710,7 @@ export class NcChannelTable extends LitElement {
               ...this._own(key),
               delay: value === "after" ? { minutes: 5 } : null,
             }),
-          { helper: "Counted from when the card becomes active." },
+          { helper: "Delay after the notification becomes active." },
         )}
         ${after
           ? field(

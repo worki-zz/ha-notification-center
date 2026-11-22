@@ -4,6 +4,7 @@
 // Settings, Entities and the steps; Save when something changed.
 
 import { LitElement, css, html, nothing, unsafeCSS, type PropertyValues } from "lit";
+import { sleepersOf } from "../channel-tables";
 import { customElement, property, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 
@@ -1064,6 +1065,7 @@ export class NcNotificationEditor extends LitElement {
           .entityActions=${buttonsWithEntityActions(draft)}
           .category=${this._category()}
           .modes=${this.config?.modes ?? []}
+          .sleepers=${sleepersOf(this.config?.people)}
           @value-changed=${(ev: CustomEvent<{ value: EditorStep }>) => {
             ev.stopPropagation();
             this._changeStep(index, ev.detail.value);
