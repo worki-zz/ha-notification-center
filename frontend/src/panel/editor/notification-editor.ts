@@ -831,11 +831,16 @@ export class NcNotificationEditor extends LitElement {
     const group = draft.entity_groups[edit.groupIndex];
     const close = () => (this._member = undefined);
     if (!group) return nothing;
-    const name = this.hass ? entityDisplay(this.hass, edit.entityId).primary : edit.entityId;
+    const display = this.hass
+      ? entityDisplay(this.hass, edit.entityId)
+      : { primary: edit.entityId, secondary: "" };
+    // Room ▸ device above the name, as in Home Assistant's more info dialog.
     return html`<ha-dialog
       open
       width="medium"
-      header-title=${name}
+      header-title=${display.primary}
+      header-subtitle=${display.secondary}
+      header-subtitle-position="above"
       @closed=${(ev: Event) => {
         ev.stopPropagation();
         close();
@@ -870,11 +875,16 @@ export class NcNotificationEditor extends LitElement {
     const edit = this._entity!;
     const draft = this._draft!;
     const close = () => (this._entity = undefined);
-    const name = this.hass ? entityDisplay(this.hass, edit.entityId).primary : edit.entityId;
+    const display = this.hass
+      ? entityDisplay(this.hass, edit.entityId)
+      : { primary: edit.entityId, secondary: "" };
+    // Room ▸ device above the name, as in Home Assistant's more info dialog.
     return html`<ha-dialog
       open
       width="medium"
-      header-title=${name}
+      header-title=${display.primary}
+      header-subtitle=${display.secondary}
+      header-subtitle-position="above"
       @closed=${(ev: Event) => {
         ev.stopPropagation();
         close();

@@ -385,8 +385,8 @@ export class NcSettings extends LitElement {
     ha-card {
       overflow: hidden;
     }
+    /* The list's own room at the sides, as the General list. */
     ha-list-item-button {
-      --ha-row-item-padding-inline: 8px 4px;
       border-top: 1px solid var(--divider-color);
     }
     ha-list-item-button:first-child {
