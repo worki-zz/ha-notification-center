@@ -32,6 +32,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### TV channel
 *Area: Channels.* Push notifications to the LG webOS TV (`notify.tv`) as a separate channel instead of a push device, since a TV needs other options than a phone (no buttons, short text, maybe only while it is on). *(Scope cut, 2026-11-15)*
 
+### Resume Cast music after a chime
+*Area: Channels.* A Google Cast speaker cannot announce, so a chime stops what it plays. Resume the music (or the stream) after the chime instead of leaving it stopped. *(Kristóf, 2026-11-22; phase 6.1)*
+
 ## Low priority
 
 ### On departure
@@ -43,8 +46,8 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### Large mode for displays
 *Area: Channels.* A larger card layout for wall or kitchen displays such as the Nest Hub, readable from a distance. Belongs with the Display channel. *(Phase 3, 2026-11-18)*
 
-### Silence button
-*Area: Buttons and interactions.* A built-in button that stops the sound and light channels of a notification while the card stays active. Left out of the 1.0 editor to keep the button set simple. *(Phase 4, 2026-11-19)*
+### Glow and pulse light effects
+*Area: Channels.* Own light effects besides Blink for a highlighted notification: a slow glow or a pulse of the brightness, for lights without effects of their own. *(Phase 6.1, 2026-11-22)*
 
 ### Confirmation for buttons
 *Area: Buttons and interactions.* Ask "Are you sure?" before a button runs its action, like the confirmation option of Home Assistant's tap actions. *(Phase 3, 2026-11-19)*

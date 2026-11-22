@@ -2,7 +2,7 @@
 
 A Home Assistant integration that manages every notification of your home in one place: when it shows, how it looks, which channels it uses (lights, speakers, phones), and when it goes away.
 
-> **Status: early development (0.x).** Notifications are stored, the engine decides when they show, and a dashboard card shows them; there is no light, sound or push yet. Each release in the [changelog](CHANGELOG.md) says what to try.
+> **Status: early development (0.x).** Notifications are stored, the engine decides when they show, and a dashboard card shows them; lights, speakers and sirens send them (0.6.2); push follows. Each release in the [changelog](CHANGELOG.md) says what to try.
 
 ## Requirements
 
@@ -59,19 +59,19 @@ The **Overview** shows the active cards meant for you, with their buttons. Below
 
 ## Settings
 
-The settings use Home Assistant's own layout and elements, with the tabs (with icons) in the header as on the Devices & services page. **Notifications** lists every notification with its category (and its number of steps), and a status chip: *Active*, *Upcoming* (due today), *Snoozed* or *Disabled*. Search and the *Category* filter chip narrow the list; drag a row by its handle to reorder (not while filtering). The row menu has Run now, Duplicate, Disable and Delete. **Categories** lists the categories in alphabetical order, with their number of notifications under the name; *Add category* and a row open the category editor (see [Categories](#categories)). **General** is laid out like Home Assistant's System settings, with a short line under each name: **Modes** (see [Modes](#modes)), **People** (see [People](#people)) and **Snooze** (*Default time*, the time a notification snoozed to another day comes back, 8:00 by default), then **Import and export** (YAML) in its own block, and the version. Each opens as a page of its own, with its header and what it does at the top.
+The settings use Home Assistant's own layout and elements, with the tabs (with icons) in the header as on the Devices & services page. **Notifications** lists every notification with its category (and its number of steps), and a status chip: *Active*, *Upcoming* (due today), *Snoozed* or *Disabled*. Search and the *Category* filter chip narrow the list; drag a row by its handle to reorder (not while filtering). The row menu has Run now, Duplicate, Disable and Delete. **Categories** lists the categories in alphabetical order, with their number of notifications under the name; *Add category* and a row open the category editor (see [Categories](#categories)). **General** is laid out like Home Assistant's System settings, with a short line under each name: **Modes** (see [Modes](#modes)), **People** (see [People](#people)), **Light** (see [Light](#light)), **Sound** (see [Sound](#sound)) and **Snooze** (*Default time*, the time a notification snoozed to another day comes back, 8:00 by default), then **Import and export** (YAML) in its own block, and the version. Each opens as a page of its own, with its header and what it does at the top.
 
 ### Categories
 
 The category editor is a page: in the header *Notifications* (the list filtered to this category) and Delete. A category that still has notifications cannot be deleted; *View notifications* opens them. The General category cannot be deleted. Under the header a preview card.
 
-- **Settings:** name (required), icon and card colour. A new category starts with the General category's icon, colour, audience and channels.
+- **Settings:** name (required), icon, **Color**, **Chime** and **Highlight**. *Color* is a system colour, or *Custom* at the end of the list, which opens *Card color* and *Light color* (the lights use the card colour until it is changed). A system colour shows on each light as its Colors tab sets it. *Chime* is what the speakers play (a speaker channel can change it). *Highlight* makes the lights blink, or show their effect. A new category starts with the General category's settings, audience and channels.
 - **Interactions:** the category's Tap behavior, built-in buttons and its own custom buttons (*Add button*), with their label, icon, Snooze times and push setting, but no action. New notifications of the category start with the category's buttons switched on or off as there. The General category has only Done switched on.
 
 - **Audience:** every person of Home Assistant with three ticks: **Home** (at home and awake), **Sleep** (at home and asleep, see [People](#people)) and **Away**. A person gets the category's notifications while in a ticked state; with nobody ticked nothing is sent (a warning says so). A person who is not listed (added later) gets what the listed people have in common.
-- **Channels:** a table with a tick per mode (Home first, then the Modes list's order) and a pencil per channel. A channel sends in the ticked modes; with no tick it is off, and a warning shows when no channel sends. The dialog has **Modes** and **Settings**: *When* is Immediately or After a delay, counted from when the card becomes active (for example the Dashboard at once, a light after 10 minutes, a push after an hour). On a phone each channel is a row with a summary (*Home, Away · Immediately*) that opens the dialog. 6.0 has the **Dashboard** channel: the panel's Overview and the dashboard cards. Lights, speakers and Push follow.
+- **Channels:** a table with a tick per mode (Home first, then the Modes list's order) and a pencil per channel. A channel sends in the ticked modes; with no tick it is off, and a warning shows when no channel sends. The dialog has **Modes** and **Settings**: *When* is Immediately or After a delay, counted from when the card becomes active (for example the Dashboard at once, a light after 10 minutes, a push after an hour). On a phone each channel is a row with a summary (*Home, Away · Immediately*) that opens the dialog. The channels are the **Dashboard** (the panel's Overview and the dashboard cards), then every light, speaker and siren of the General settings, each with its entity's icon. A device channel's dialog has a play icon in its header, **Test**: it runs the device once with the settings shown, regardless of the mode and *When*. A speaker's Settings also have *Chime* (the category's, None or another), *Repeat* (Once, or again and again every so often until the notification is done or silenced) and *Read the message* with three ticks: Name, Message (always) and Info. Push follows.
 
-A channel of an active card sends when the current mode is ticked, its delay has passed and a person of the audience is in a ticked state (a channel for one person, such as the Dashboard, asks each person). When one of these becomes true later (the mode changes, the delay ends, someone comes home or wakes up), the channel sends then, while the card is still active. *Run now* and the trigger action follow the same rules. The diagnostic sensor `sensor.nc_channel_dashboard` counts the cards the Dashboard shows; `upcoming` counts the active cards it holds back (they show under *Upcoming*), and the same cards by what they wait for: `upcoming_waiting_for_<mode>_mode` for each mode (a card ticked in two modes counts in both), `upcoming_waiting_for_delay` and `upcoming_waiting_for_audience`. `off` counts the cards with no mode ticked, which never show. `sensor.notification_center` counts every active card.
+A channel of an active card sends when the current mode is ticked, its delay has passed and a person of the audience is in a ticked state (a channel for one person, such as the Dashboard, asks each person). When one of these becomes true later (the mode changes, the delay ends, someone comes home or wakes up), the channel sends then, while the card is still active. *Run now* and the trigger action follow the same rules. The diagnostic sensor `sensor.nc_channel_dashboard` counts the cards the Dashboard shows; `upcoming` counts the active cards it holds back (they show under *Upcoming*), and the same cards by what they wait for: `upcoming_waiting_for_<mode>_mode` for each mode (a card ticked in two modes counts in both), `upcoming_waiting_for_delay` and `upcoming_waiting_for_audience`. `off` counts the cards with no mode ticked, which never show. `sensor.notification_center` counts every active card. Each light, speaker and siren has a diagnostic sensor too, `sensor.nc_channel_<light|speaker|siren>_<object id of its entity>`, with the same attributes and `silenced`.
 
 A notification uses its category's buttons live: in its Interactions they are in their own blocks, with amber icons. A label set in the category always applies (a notification can change it in YAML only); the icon and the Snooze times apply unless the notification sets its own. *Show button in the push notification* is a dropdown in the notification: empty follows the category, a choice overrides it, and X clears the override. A category's custom button cannot be deleted in a notification, only switched off; deleting it in the category turns it into an own custom button of every notification that used it. The action of every button is set in the notification. Moving a notification to another category does the same with the old category's custom buttons.
 
@@ -81,6 +81,24 @@ A mode tells which channels deliver a notification (the Channels table of the ca
 
 *Add mode* has two steps: the mode is saved first with the same channels as Home, then the next dialog lists the channels to switch on for it in every category (it starts with Home's and cannot be skipped). The icon of a mode is kept in YAML.
 
+### Light
+
+The lights of the Light channel: lights and switches (a lamp on a plug). *Add light* opens the dialog, then asks which modes the new light sends in, the same in every category (each category can change it later). The dialog's fields follow what the light can do:
+
+- **Settings:** the entity, *Brightness* (70% by default), *Color temperature* for a white-only light (empty: its own), *Highlight effect* when the light has effects of its own (Blink, one second on and one off, or an effect of the light), and **Dim when dark**: an illuminance sensor, *Dim below* (30 lx) and *Dim brightness* (30%). *Measure continuously* follows the sensor while the light is on (a sensor outside); off, it is read when the light turns on.
+- **Colors** (colour lights): each system colour as this light shows it, with a picker, a reset for a changed one and a Test per row.
+
+A light shows the colour of the first notification it sends, in the order of the Notifications list, and goes back to how it was (also after several colours) when no notification sends any more. If you change the light meanwhile, your change stays. A switch turns on, or blinks for a highlighted notification. The play icon in the header tests the light with the settings shown.
+
+### Sound
+
+- **Speakers:** a media player with an optional *Volume* (empty: its volume stays). A speaker that can announce plays the chime over what it plays; another one stops, plays the chime and gets its volume back.
+- **Sirens:** a siren (with tone, volume and duration when it has them), a switch, or a select with a *Sound option* and a *Stop option* (such as a smoke alarm's siren select).
+- **Chimes:** the built-in sounds (Chime, Attention, Doorbell, Alarm, Indoor alarm) and your own, any media of Home Assistant's media browser.
+- **Read the message:** the text-to-speech entity and its language that read the message on a speaker channel.
+
+A speaker plays the chime once when a notification starts to send there, then reads the message if asked, and repeats if set. A siren sounds while a notification sends. A button's **Silence** action stops the lights, speakers and sirens of the notification; the card stays.
+
 ### People
 
 Every person of Home Assistant is listed, with their state now (Home, Sleep or Away). The pencil sets when the person is asleep, like a mode's condition: None, an entity's state or a template (a `sleep_entity` or `toggle` from older YAML still works, as State *on*). Asleep counts only at home: a person away is Away.
@@ -89,7 +107,7 @@ Every person of Home Assistant is listed, with their state now (Home, Sleep or A
 
 Laid out like the automation editor: the name and status in the header, Undo and Redo (Ctrl+Z, Ctrl+Y), the Enabled switch (saved at once) and the menu: *Information* (the sensor's dialog, where its entity id can be changed), *Run now* (the selected step, like the Trigger action), *Clear notifications*, *Duplicate* (a disabled copy), *Edit in YAML* (the whole notification in Home Assistant's YAML editor, as it is saved; *Edit in visual editor* goes back, and Undo and Redo work in both), *Disable* and *Delete*. Under the header a preview of the selected step's card, with the templates rendered for the first listed entity. Save appears when something changed; leaving asks first.
 
-- **Settings:** name, category, icon and card colour. Left empty, the icon and the colour come from the category (shown in the fields). The light colour moves to the light channel settings (phase 6).
+- **Settings:** name, category, icon, **Color** (as a category's, with *Custom*) and **Highlight** (the category's, On or Off). Left empty, the icon and the colour come from the category (shown in the fields).
 - **Entities:** single entities and entity groups (a domain with an optional device class, floors, areas and labels). Entities are named as in Home Assistant's pickers, with their area and device; the pencil edits or deletes. Each group is its own list, always open, and each of its entities can be switched off on its own, and opens its dialog where an entity action can be a *Custom action* for that entity (`member_actions`, it replaces the group's); *Add new matching entities* off keeps the entities that matched when it was saved. A category that matches nothing yet is fine.
 Back (the browser's or the phone's) closes an open dialog first.
 
@@ -112,6 +130,7 @@ A card's buttons work the same in the panel and on both cards. What a built-in b
 - **More info** opens the entity's dialog (the button's entity, else the card's entity, else the notification's sensor).
 - **Action** (Home Assistant's action editor) and Entity action run in Home Assistant, as the user who pressed the button.
 - **Navigate** opens a page.
+- **Silence** stops the lights, speakers and sirens of the notification; the card stays.
 
 **Snooze times:** the Snooze button's dialog lists 15 and 30 minutes, 1, 2, 3, 6 and 12 hours, Tomorrow, 2 and 3 days, 1 and 2 weeks and 1 month; at least one is chosen (by default 1 h, 3 h and Tomorrow). With one, the button snoozes at once; with more, the card offers them (15 min, 1 h, Tomorrow, 2 d, 1 w, 1 mo). Minutes and hours count from the press; days come back on that day at the step's time (a scheduled step) or at 8:00 (*Snooze* in General, `snooze_tomorrow_at`).
 
