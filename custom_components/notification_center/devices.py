@@ -102,6 +102,13 @@ SYSTEM_COLORS: Final[dict[str, tuple[int, int, int]]] = {
     "black": (0, 0, 0),
     "white": (255, 255, 255),
 }
+# A light shows the greys white (a lamp has no grey): their defaults on a light.
+LIGHT_DEFAULTS: Final[dict[str, tuple[int, int, int]]] = {
+    **SYSTEM_COLORS,
+    "light-grey": (255, 255, 255),
+    "grey": (255, 255, 255),
+    "dark-grey": (255, 255, 255),
+}
 DEFAULT_COLOR: Final = "primary"
 DEFAULT_BRIGHTNESS: Final = 70
 
@@ -178,7 +185,7 @@ def light_rgb(light: Mapping[str, Any], name: str | None, custom: Rgb | None) ->
         return custom
     name = name or DEFAULT_COLOR
     own = parse_color((light.get("colors") or {}).get(name))
-    return own or SYSTEM_COLORS.get(name, SYSTEM_COLORS[DEFAULT_COLOR])
+    return own or LIGHT_DEFAULTS.get(name, LIGHT_DEFAULTS[DEFAULT_COLOR])
 
 
 @dataclass(slots=True)
@@ -198,6 +205,8 @@ class DeviceManager:
         self.engine = engine
         self.hass = engine.hass
         self.devices: dict[str, Device] = {}
+        # Devices not in the settings yet, while their tests run.
+        self._testing: dict[str, tuple[Device, int]] = {}
         self._store = Store[dict[str, Any]](self.hass, STORE_VERSION, STORE_KEY)
         self._saved: dict[str, Any] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -321,8 +330,14 @@ class DeviceManager:
     async def async_test(self, key: str, data: dict[str, Any]) -> None:
         """Run a device once, as its channel's Test button asks."""
         device = self.devices.get(key)
+        if device is not None:
+            await device.async_test(data)
+            return
         settings = data.get("device")
-        if device is None:
+        running = self._testing.get(key)
+        if running is not None:
+            device = running[0]
+        else:
             kind = {
                 CHANNEL_LIGHT_PREFIX: LightDevice,
                 CHANNEL_SPEAKER_PREFIX: SpeakerDevice,
@@ -331,7 +346,17 @@ class DeviceManager:
             if kind is None or not settings:
                 raise HomeAssistantError(f"No device '{key}'")
             device = kind(self, key, settings, standalone=True)
-        await device.async_test(data)
+        # The same device for tests one after the other, so the last one
+        # puts it back as it was before the first.
+        self._testing[key] = (device, (running[1] if running else 0) + 1)
+        try:
+            await device.async_test(data)
+        finally:
+            left = self._testing[key][1] - 1
+            if left:
+                self._testing[key] = (device, left)
+            else:
+                del self._testing[key]
 
 
 class Device:
@@ -424,6 +449,10 @@ class LightDevice(Device):
         # A change by hand: the light is left alone until no card is left.
         self._hand = False
         self._testing = False
+        # The tests running one after the other: what to go back to after
+        # the last one (the look and the light before the first one).
+        self._test_run = 0
+        self._test_before: tuple[Look | None, dict[str, Any] | None] | None = None
         self._unsub_state: CALLBACK_TYPE | None = None
         self._unsub_lux: CALLBACK_TYPE | None = None
         if not standalone:
@@ -705,8 +734,16 @@ class LightDevice(Device):
             highlight=bool(data.get("highlight"))
             or highlight_of(data.get("notification"), data.get("category")),
         )
-        previous = self.look
-        saved = self.manager.saved(self.key) or self._snapshot()
+        # A test while another runs: the light goes back to how it was
+        # before the first one, after the last one.
+        if self._test_before is None:
+            self._test_before = (
+                self.look,
+                self.manager.saved(self.key) or self._snapshot(),
+            )
+        previous, saved = self._test_before
+        self._test_run += 1
+        run = self._test_run
         self._testing = True
         self.look = look
         self._applied = None
@@ -720,16 +757,24 @@ class LightDevice(Device):
                 )
             await asyncio.sleep(TEST_SECONDS)
         finally:
-            self._stop_blink()
-            self._testing = False
-            if self.standalone:
-                self.settings = dict(self.settings)
-            self.look = previous
-            self._applied = None
-            if previous is not None and not self.standalone:
-                self._apply(previous)
-            else:
-                await self._async_restore(saved)
+            if run == self._test_run:
+                await self._async_end_test(previous, saved)
+
+    async def _async_end_test(
+        self, previous: Look | None, saved: dict[str, Any] | None
+    ) -> None:
+        """Go back after the last test: to the card shown, or the light before."""
+        self._test_before = None
+        self._stop_blink()
+        self._testing = False
+        if self.standalone:
+            self.settings = dict(self.settings)
+        self.look = previous
+        self._applied = None
+        if previous is not None and not self.standalone:
+            self._apply(previous)
+        else:
+            await self._async_restore(saved)
 
 
 # ---------------------------------------------------------------------------
