@@ -21,16 +21,12 @@ const PAGES: Record<string, { title: string; intro: string[] }> = {
   modes: {
     title: "Home modes",
     intro: [
-      "A home mode decides which channels of a category send a notification. One home mode is active at a time: the first in the list whose condition is true. Drag the rows to change the order.",
-      "Home without a condition is always true: it is shown on top, but checked last, so it applies when no other home mode does. With a condition, Home is ordered like the others. When no home mode is active, the channels ticked in at least one home mode send.",
+      "The active home mode decides on which channels a notification shows.",
     ],
   },
   people: {
     title: "People",
-    intro: [
-      "Every person of Home Assistant is listed here. A person is Home (at home and awake), Sleep (at home and asleep) or Away; the Audience of a category or step ticks the states each person gets its notifications in.",
-      "Sleep is set like a home mode's condition: an entity's state or a template. It counts only while the person is at home.",
-    ],
+    intro: [],
   },
   light: {
     title: "Light",
@@ -41,14 +37,12 @@ const PAGES: Record<string, { title: string; intro: string[] }> = {
   sound: {
     title: "Sound",
     intro: [
-      "The speakers and sirens of the Sound channels. A speaker plays the chime of a notification once when it starts to send, can read the message, and can repeat; a siren (such as a smoke alarm's) sounds while the notification sends. Silence (a button action) stops them.",
+      "The speakers and sirens of the Sound channels. A speaker plays the chime of a notification once when it starts to send, can read the message, and can repeat. A siren (such as a smoke alarm's) sounds while the notification sends. Silence action stops them.",
     ],
   },
   chimes: {
     title: "Chimes",
-    intro: [
-      "The chimes a speaker can play: the built-in ones and your own sound files. Drag the rows to change their order in the lists.",
-    ],
+    intro: [],
   },
   import: {
     title: "Import and export",

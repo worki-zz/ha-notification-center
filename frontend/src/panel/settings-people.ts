@@ -144,9 +144,7 @@ export class NcSettingsPeople extends LitElement {
       <div class="form">
         <div class="title">Sleep</div>
         <p class="hint">
-          When the person is asleep. It counts only while they are at home: the
-          Audience's Sleep column, instead of Home. With None the person is
-          never asleep.
+          It counts only while the person is at home.
         </p>
         <ha-button-toggle-group
           size="s"

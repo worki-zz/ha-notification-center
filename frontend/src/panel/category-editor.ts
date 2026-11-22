@@ -31,7 +31,7 @@ import type { HomeAssistant } from "../shared/types";
 import "./channel-tables";
 import { audienceCount, channelsOf, chimeOptions, sleepersOf } from "./channel-tables";
 import { confirmDialog } from "./confirm";
-import { colorField } from "./color-field";
+import { colorField, highlightField } from "./color-field";
 import { field } from "./fields";
 import { BLOCK_STYLES, block } from "./editor/block";
 import { INTERACTION_DEFAULTS } from "./editor/interaction-dialog";
@@ -405,7 +405,7 @@ export class NcCategoryEditor extends LitElement {
   // room for its message under the field. Save asks for it instead.
   private _renderSettings(draft: Draft) {
     return html`<div class="block">
-      <div class="fields">
+      <div class="row">
         ${field(
           this.hass,
           { text: {} },
@@ -413,6 +413,8 @@ export class NcCategoryEditor extends LitElement {
           "Category name*",
           (value) => this._change({ name: (value as string) ?? "" }),
         )}
+      </div>
+      <div class="row three">
         ${field(
           this.hass,
           { icon: { placeholder: "mdi:bell" } },
@@ -425,6 +427,9 @@ export class NcCategoryEditor extends LitElement {
           { card_color: draft.card_color, light_color: draft.light_color },
           (value) => this._change(value),
         )}
+        ${highlightField(!!draft.highlight, undefined, (value) => this._change({ highlight: !!value }))}
+      </div>
+      <div class="row">
         ${field(
           this.hass,
           {
@@ -438,16 +443,6 @@ export class NcCategoryEditor extends LitElement {
           (value) => this._change({ chime: value === "none" ? null : (value as string) }),
           { helper: "What the speakers play. A speaker channel can change it." },
         )}
-        <div class="switch-row">
-          <div>
-            <div>Highlight</div>
-            <div class="secondary">The lights blink, or show their effect.</div>
-          </div>
-          <ha-switch
-            .checked=${!!draft.highlight}
-            @change=${(ev: Event) => this._change({ highlight: (ev.target as HTMLInputElement).checked })}
-          ></ha-switch>
-        </div>
       </div>
     </div>`;
   }
@@ -710,6 +705,19 @@ export class NcCategoryEditor extends LitElement {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
       gap: 16px;
+    }
+    .block > .row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .block > .row > * {
+      flex: 1 1 240px;
+      min-width: 0;
+    }
+    /* Icon, Color and Highlight stay on one row down to a narrow screen. */
+    .row.three > * {
+      flex-basis: 160px;
     }
     .title {
       font-weight: var(--ha-font-weight-medium, 500);
