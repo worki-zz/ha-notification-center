@@ -1121,13 +1121,14 @@ class Engine:
         """Return what the Dashboard channel shows: its diagnostic sensor.
 
         Shown: the active cards on the dashboard for at least one person.
-        The others by the reason they are not shown: the mode, the delay,
-        the audience (nobody in a ticked state), or off (no mode ticked).
+        ``upcoming``: the active cards it holds back (shown under Upcoming),
+        then the same by what they wait for: each mode they are ticked in
+        (a card ticked in two modes counts in both), the delay, the
+        audience. ``off``: cards with no mode ticked, never shown.
         """
-        shown = 0
-        held = dict.fromkeys(
-            (REASON_MODE, REASON_DELAY, REASON_AUDIENCE, REASON_OFF), 0
-        )
+        modes = [mode["id"] for mode in self._config.get("modes", [])]
+        shown = upcoming = off = delay = audience = 0
+        by_mode = dict.fromkeys(modes, 0)
         for notification in self._config["notifications"]:
             if not notification.get("enabled", True):
                 continue
@@ -1137,9 +1138,38 @@ class Engine:
                 view = self.channel_view(card)
                 if view.sends:
                     shown += 1
-                elif view.reason in held:
-                    held[view.reason] += 1
-        return {"state": shown, **held}
+                    continue
+                if view.reason == REASON_OFF:
+                    off += 1
+                    continue
+                upcoming += 1
+                if view.reason == REASON_DELAY:
+                    delay += 1
+                elif view.reason == REASON_AUDIENCE:
+                    audience += 1
+                elif view.reason == REASON_MODE:
+                    settings = self._dashboard_settings(card) or {}
+                    for mode_id in settings.get("modes") or []:
+                        if mode_id in by_mode:
+                            by_mode[mode_id] += 1
+        return {
+            "state": shown,
+            "upcoming": upcoming,
+            **{
+                f"upcoming_waiting_for_{mode_id}_mode": count
+                for mode_id, count in by_mode.items()
+            },
+            "upcoming_waiting_for_delay": delay,
+            "upcoming_waiting_for_audience": audience,
+            "off": off,
+        }
+
+    def _dashboard_settings(self, card: Card) -> dict[str, Any] | None:
+        notification = self.notification_config(card.notification_id) or {}
+        step = self._step_config(card.notification_id, card.step_id)
+        return channel_settings(
+            self._category_of(notification), step, CHANNEL_DASHBOARD
+        )
 
     @callback
     def _schedule_delay_timer(self) -> None:

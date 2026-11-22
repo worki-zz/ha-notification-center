@@ -231,7 +231,9 @@ async def test_dashboard_follows_presence_and_sleep(center: Center) -> None:
     await center.set("input_boolean.a_sleeps", "on")
     assert _dashboard(center, nid)["reason"] == REASON_AUDIENCE
     assert center.state("sensor.nc_channel_dashboard") == "0"
-    assert center.attrs("sensor.nc_channel_dashboard")["audience"] == 1
+    attrs = center.attrs("sensor.nc_channel_dashboard")
+    assert attrs["upcoming"] == 1
+    assert attrs["upcoming_waiting_for_audience"] == 1
     # The notification itself stays active.
     assert center.state("sensor.nc_garbage") == "active"
     assert center.state("sensor.notification_center") == "1"
@@ -260,6 +262,26 @@ async def test_dashboard_mode_and_delay(
     assert _dashboard(center, nid)["reason"] is None
     assert center.state("sensor.nc_channel_dashboard") == "1"
 
+    # Ticked in a mode that is not active: waiting for that mode.
+    mode = await center.manager.async_create(
+        "modes",
+        {
+            "name": "Night",
+            "condition": {
+                "type": "state",
+                "entity_id": "input_boolean.night",
+                "state": "on",
+            },
+        },
+    )
+    await _set_category(center, channels={"dashboard": {"modes": [mode["id"]]}})
+    assert _dashboard(center, nid)["reason"] == REASON_MODE
+    attrs = center.attrs("sensor.nc_channel_dashboard")
+    assert attrs["upcoming"] == 1
+    assert attrs[f"upcoming_waiting_for_{mode['id']}_mode"] == 1
+    assert attrs["upcoming_waiting_for_home_mode"] == 0
+
     await _set_category(center, channels={"dashboard": {"modes": []}})
     assert _dashboard(center, nid)["reason"] == REASON_OFF
     assert center.attrs("sensor.nc_channel_dashboard")["off"] == 1
+    assert center.attrs("sensor.nc_channel_dashboard")["upcoming"] == 0

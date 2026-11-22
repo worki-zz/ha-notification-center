@@ -4,6 +4,7 @@ import { repeat } from "lit/directives/repeat.js";
 
 import "./dialog-back";
 import { loadDashboardElements } from "../card/elements";
+import { CHANNEL_DASHBOARD, type AudienceEntry, type AudienceState } from "../shared/config";
 import {
   cssColor,
   firstWeekday,
@@ -13,6 +14,7 @@ import {
   weekday,
 } from "../shared/format";
 import {
+  audienceOf,
   cardKey,
   categoryOf,
   doneEarly,
@@ -31,6 +33,7 @@ import { subscribeStore, type StoreData } from "../shared/store";
 import { isTemplate, replacePlaceholders } from "../shared/text";
 import type { HomeAssistant, PanelInfo } from "../shared/types";
 import "./category-editor";
+import { effectiveChannel, modeColumns, sleepersOf } from "./channel-tables";
 import "./general-page";
 import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";
@@ -314,16 +317,34 @@ export class NotificationCenterPanel extends LitElement {
     if (held.reason === "delay" && held.until) {
       return `Shows ${this._when(new Date(held.until))}`;
     }
+    const config = this._store.config;
     if (held.reason === "mode") {
-      const mode = this._store.config?.modes.find((item) => item.id === this._store.state?.mode);
-      return mode ? `Held back in ${mode.name} mode` : "Held back by the mode";
+      // The modes the Dashboard sends this card in, in the table's order.
+      const settings = effectiveChannel(
+        live.category?.channels?.[CHANNEL_DASHBOARD],
+        live.step?.channels?.[CHANNEL_DASHBOARD],
+      );
+      const names = modeColumns(config?.modes)
+        .filter((mode) => settings.modes?.includes(mode.id))
+        .map((mode) => mode.name);
+      return names.length ? `Waiting for ${orList(names)} mode` : "Waiting for the mode";
     }
-    const person = this.hass ? personOf(this.hass) : undefined;
-    const state = person ? this._store.state?.people?.[person] : undefined;
-    if (state === "away") return "Shows when you are home";
-    if (state === "sleep") return "Shows when you are awake";
-    if (state === "home") return "Not while you are home";
-    return "Waiting for the audience";
+    // The audience: what would make the card show (arrive, wake up, ...).
+    const states = this._store.state?.people ?? {};
+    const sleepers = sleepersOf(config?.people);
+    const viewer = this.hass ? personOf(this.hass) : undefined;
+    const people = viewer && viewer in states ? [viewer] : Object.keys(states);
+    const audience = audienceOf(live.category, live.step, people);
+    const changes = new Set<string>();
+    for (const person of people) {
+      for (const change of stateChanges(states[person], audience[person], sleepers.includes(person))) {
+        changes.add(change);
+      }
+    }
+    const order = ["arrive home", "wake up", "go to sleep", "arrive home and go to sleep", "go away"];
+    const list = order.filter((change) => changes.has(change));
+    if (!list.length) return "Waiting for the audience";
+    return viewer && people.length === 1 ? `Waiting to ${orList(list)}` : `Waiting for someone to ${orList(list)}`;
   }
 
   // An active card the Dashboard holds back: neutral, with the reason.
@@ -746,4 +767,24 @@ declare global {
   interface HTMLElementTagNameMap {
     "notification-center-panel": NotificationCenterPanel;
   }
+}
+
+/** "a", "a or b", "a, b or c". */
+function orList(items: string[]): string {
+  return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+}
+
+/**
+ * What a person has to do for a card to show to them: from their state now
+ * to a state ticked for them (asleep only with a sleep condition).
+ */
+function stateChanges(now: AudienceState | undefined, entry: AudienceEntry | undefined, canSleep: boolean): string[] {
+  if (!now || !entry) return [];
+  const changes: string[] = [];
+  if (entry.home && now !== "home") changes.push(now === "away" ? "arrive home" : "wake up");
+  if (entry.sleep && canSleep && now !== "sleep") {
+    changes.push(now === "away" ? "arrive home and go to sleep" : "go to sleep");
+  }
+  if (entry.away && now !== "away") changes.push("go away");
+  return changes;
 }

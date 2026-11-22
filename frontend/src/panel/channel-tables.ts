@@ -525,7 +525,7 @@ export class NcChannelTable extends LitElement {
           : this._renderTable(modes)}</ha-card
       >
       <p class="hint secondary">
-        The columns are the house's state (its mode).
+        The columns are the house's mode.
       </p>
       ${silent
         ? html`<ha-alert alert-type="warning"

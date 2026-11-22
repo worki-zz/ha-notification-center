@@ -4,10 +4,11 @@
 
 ### Changed
 
-- Diagnostic sensor `sensor.nc_channel_dashboard`: the cards not shown are counted by reason, `mode`, `delay`, `audience` and `off` (instead of `held_back` and `waiting`).
+- Diagnostic sensor `sensor.nc_channel_dashboard`: `upcoming` (the held back cards, as under Upcoming), `upcoming_waiting_for_<mode>_mode` for each mode, `upcoming_waiting_for_delay`, `upcoming_waiting_for_audience` and `off`, instead of `held_back` and `waiting`.
+- Overview, Upcoming: a held back card says what it waits for: *Waiting for Home or Away mode*, *Waiting to arrive home, wake up or go away* (without a person: *Waiting for someone to …*).
 - Audience: the Sleep column shows only when someone has a sleep condition (People page), and only those people have a Sleep tick.
-- Audience and Channels: one line under each table (the person's state, the house's state); the warnings read *No condition ticked* and *No mode ticked*. The delay's help reads *Delay after the notification becomes active*.
-- General, Snooze: the list shows only the time; the field is *Default time*, and the page says it is the default time when a notification is snoozed to another day.
+- Audience and Channels: one line under each table (the person's state, the house's mode); the warnings read *No condition ticked* and *No mode ticked*. The delay's help reads *Delay after the notification becomes active*.
+- General, Snooze: the list shows the time (*At 09:00*); the field is *Default time*, and the page says it is the default time when a notification is snoozed to another day.
 
 ## 0.6.0
 
