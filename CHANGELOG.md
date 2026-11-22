@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.5
+
+### Added
+
+- General › Colors: the system colours, and your own colours (*Add color*: a name and a colour). Own colours show in every Color field and on each light's Colors tab.
+
+### Changed
+
+- Color is a system colour or an own colour; *Custom* with its Card color and Light color is gone. Existing custom colours become own colours (*Custom 1* and on), and a different light colour goes to every light's Colors tab. In YAML, `card_color` is now `color` and `light_color` is gone.
+- Chime is a setting of the category and the notification (the notification follows its category until it sets its own, with an X to go back), shown only when there is a speaker. A speaker channel no longer has a chime of its own.
+- Settings rows: Name, Category and Icon on the first row, Color, Highlight and Chime on the second. No hint under Chime.
+
 ## 0.6.4
 
 ### Changed

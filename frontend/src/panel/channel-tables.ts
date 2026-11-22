@@ -22,7 +22,6 @@ import {
   type Duration,
   type Mode,
   type NotificationCenterConfig,
-  orderedChimes,
 } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
@@ -155,11 +154,6 @@ export function durationText(delay: Duration | null | undefined): string {
   add(delay.minutes, "minute");
   add(delay.seconds, "second");
   return parts.join(" ");
-}
-
-/** The chimes a speaker can play: the built-in ones, then the Chimes list. */
-export function chimeOptions(config: NotificationCenterConfig | undefined): { value: string; label: string }[] {
-  return orderedChimes(config).map((chime) => ({ value: chime.id, label: chime.name }));
 }
 
 function hasDelay(delay: Duration | null | undefined): boolean {
@@ -764,17 +758,10 @@ export class NcChannelTable extends LitElement {
     }
   }
 
-  // A speaker: the chime (the category's unless changed), its repeat, and
-  // whether the message is read out (with the name and the Info line).
+  // A speaker: whether the message is read out (with the name and the Info
+  // line). The chime is the notification's or its category's.
   private _renderSpeaker(key: string, settings: ChannelSettings) {
     const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
-    const chime = "chime" in settings ? (settings.chime === null ? "none" : String(settings.chime)) : "category";
-    const categoryChime = this._chimeName(this.testContext.category as { chime?: string | null } | undefined);
-    const options = [
-      { value: "category", label: `Same as the category${categoryChime ? ` (${categoryChime})` : ""}` },
-      { value: "none", label: "None" },
-      ...chimeOptions(this.config),
-    ];
     const reading = !!settings.read_the_message;
     const check = (label: string, name: "read_name" | "read_info") =>
       html`<label class="check">
@@ -785,12 +772,6 @@ export class NcChannelTable extends LitElement {
         ${label}
       </label>`;
     return html`
-      ${field(this.hass, { select: { mode: "dropdown", options } }, chime, "Chime", (value) => {
-        const own = { ...this._own(key) };
-        if (value === "category") delete own.chime;
-        else own.chime = value === "none" ? null : value;
-        this._store(key, own);
-      })}
       <div class="switch-row">
         <div>Read the message</div>
         <ha-switch
@@ -838,12 +819,6 @@ export class NcChannelTable extends LitElement {
             set({ repeat: { type: "until_muted", every: (value as Duration | undefined) ?? { minutes: 1 } } }),
           )
         : nothing}`;
-  }
-
-  private _chimeName(category: { chime?: string | null } | undefined): string | undefined {
-    const id = category?.chime;
-    if (!id) return category ? "None" : undefined;
-    return chimeOptions(this.config).find((option) => option.value === id)?.label ?? id;
   }
 
   static override styles = [

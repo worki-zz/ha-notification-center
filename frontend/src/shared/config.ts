@@ -49,12 +49,11 @@ export interface Category {
   id: string;
   name: string;
   icon?: string | null;
-  // A system colour by name, or a custom colour (#rrggbb) with the lights'
-  // own colour (empty: the card colour).
-  card_color?: string | null;
-  light_color?: number[] | null;
+  // A system colour by name, or an own colour (the Colors list) by its id.
+  color?: string | null;
   // The lights blink (or show their effect) for its notifications.
   highlight?: boolean;
+  // What the speakers play.
   chime?: string | null;
   // The built-in buttons (always there) and the category's custom ones.
   buttons: CategoryButton[];
@@ -141,9 +140,10 @@ export interface Notification {
   category: string;
   enabled: boolean;
   icon?: string | null;
-  card_color?: string | null;
-  light_color?: number[] | null;
+  // Left out: the category's. A chime of "none" plays nothing.
+  color?: string | null;
   highlight?: boolean | null;
+  chime?: string | null;
   steps: Step[];
 }
 
@@ -176,6 +176,33 @@ export interface NotificationCenterConfig {
   speakers: Speaker[];
   sirens: Siren[];
   chimes: Chime[];
+  colors: OwnColor[];
+}
+
+/** An own colour of the Colors list. */
+export interface OwnColor {
+  id: string;
+  name: string;
+  rgb: number[];
+}
+
+/** A notification's chime that plays nothing, even when its category has one. */
+export const CHIME_NONE = "none";
+
+/**
+ * The CSS colour of a category's or notification's colour: a system colour
+ * by name, or an own colour by its id.
+ */
+export function colorCss(config: { colors?: OwnColor[] } | undefined, color: string | null | undefined): string | undefined {
+  if (!color) return undefined;
+  const own = config?.colors?.find((item) => item.id === color);
+  return own ? `rgb(${own.rgb.join(", ")})` : color;
+}
+
+/** The RGB of a colour: a system colour's or an own colour's. */
+export function colorRgb(config: { colors?: OwnColor[] } | undefined, color: string | null | undefined): number[] {
+  const own = config?.colors?.find((item) => item.id === color);
+  return own?.rgb ?? SYSTEM_COLORS[color ?? "primary"] ?? SYSTEM_COLORS.primary;
 }
 
 /** A light (or a switch) of the Light channel. */
@@ -190,7 +217,7 @@ export interface Light {
   dim_continuously?: boolean;
   // "blink" or one of the light's effects.
   effect?: string;
-  // The light's own RGB of the system colours (only what differs).
+  // The light's own RGB of the system and own colours (only what differs).
   colors?: Record<string, number[]>;
 }
 

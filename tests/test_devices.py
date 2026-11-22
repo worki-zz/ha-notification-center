@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.notification_center import devices as devices_module
 from custom_components.notification_center.devices import (
+    chime_of,
     color_of,
     highlight_of,
     light_rgb,
@@ -44,18 +45,17 @@ def test_colors() -> None:
     assert parse_color("#ff8000") == (255, 128, 0)
     assert parse_color("1, 2, 3") == (1, 2, 3)
     assert parse_color("red") is None
-    assert color_of({}, {"card_color": "red"}) == ("red", None)
-    assert color_of({"card_color": "#010203"}, {"card_color": "red"}) == (
-        None,
-        (1, 2, 3),
-    )
-    assert color_of({"card_color": "#010203", "light_color": [9, 9, 9]}, {}) == (
-        None,
-        (9, 9, 9),
-    )
-    assert color_of({}, {}) == ("primary", None)
-    assert light_rgb({"colors": {"red": [200, 0, 0]}}, "red", None) == (200, 0, 0)
-    assert light_rgb({}, "red", None) == (244, 67, 54)
+    assert color_of({}, {"color": "red"}) == "red"
+    assert color_of({"color": "c1"}, {"color": "red"}) == "c1"
+    assert color_of({}, {}) == "primary"
+    own = [{"id": "c1", "name": "Custom 1", "rgb": [1, 2, 3]}]
+    assert light_rgb({"colors": {"red": [200, 0, 0]}}, "red") == (200, 0, 0)
+    assert light_rgb({}, "red") == (244, 67, 54)
+    assert light_rgb({}, "c1", own) == (1, 2, 3)
+    assert light_rgb({"colors": {"c1": [9, 9, 9]}}, "c1", own) == (9, 9, 9)
+    assert chime_of({}, {"chime": "nc_chime"}) == "nc_chime"
+    assert chime_of({"chime": "none"}, {"chime": "nc_chime"}) is None
+    assert chime_of({"chime": "nc_alarm"}, {"chime": None}) == "nc_alarm"
     assert highlight_of({"highlight": False}, {"highlight": True}) is False
     assert highlight_of({}, {"highlight": True}) is True
 
@@ -92,7 +92,7 @@ async def test_light_shows_and_goes_back(center: Center, hass: HomeAssistant) ->
     key = await _light(center)
     await _category(
         center,
-        card_color="red",
+        color="red",
         channels={"dashboard": {"modes": ["home"]}, key: {"modes": ["home"]}},
     )
     await center.add("Leak", step())
@@ -125,10 +125,10 @@ async def test_light_restores_after_several_colours(
     )
     on = async_mock_service(hass, "light", "turn_on")
     key = await _light(center)
-    await _category(center, card_color="red", channels={key: {"modes": ["home"]}})
+    await _category(center, color="red", channels={key: {"modes": ["home"]}})
     blue = await center.manager.async_create(
         "categories",
-        {"name": "Blue", "card_color": "blue", "channels": {key: {"modes": ["home"]}}},
+        {"name": "Blue", "color": "blue", "channels": {key: {"modes": ["home"]}}},
     )
     await center.add("Second", step(), category=blue["id"])
     await center.add("First", step())
@@ -164,7 +164,7 @@ async def test_light_dims_and_custom_colour(
         dim_continuously=True,
         colors={"red": [200, 0, 0]},
     )
-    await _category(center, card_color="red", channels={key: {"modes": ["home"]}})
+    await _category(center, color="red", channels={key: {"modes": ["home"]}})
     nid = await center.add("Leak", step())
     await center.call("trigger", "sensor.nc_leak")
     assert on[-1].data["rgb_color"] == [200, 0, 0]
@@ -173,11 +173,14 @@ async def test_light_dims_and_custom_colour(
     await center.set("sensor.lux", "10")
     assert on[-1].data["brightness_pct"] == 20
 
+    own = await center.manager.async_create(
+        "colors", {"name": "Custom 1", "rgb": [16, 32, 48]}
+    )
     notification = dict(center.manager.config["notifications"][0])
-    notification.update(card_color="#102030", light_color=[1, 2, 3])
+    notification.update(color=own["id"])
     await center.manager.async_update("notifications", nid, notification)
     await hass.async_block_till_done()
-    assert on[-1].data["rgb_color"] == [1, 2, 3]
+    assert on[-1].data["rgb_color"] == [16, 32, 48]
 
 
 async def test_switch_blinks_for_highlight(
@@ -435,8 +438,8 @@ async def test_channel_test_light_several_times(
 
 def test_greys_are_white_on_a_light() -> None:
     """A lamp has no grey: the greys show white unless the light sets its own."""
-    assert light_rgb({}, "grey", None) == (255, 255, 255)
-    assert light_rgb({"colors": {"grey": [100, 100, 100]}}, "grey", None) == (
+    assert light_rgb({}, "grey") == (255, 255, 255)
+    assert light_rgb({"colors": {"grey": [100, 100, 100]}}, "grey") == (
         100,
         100,
         100,

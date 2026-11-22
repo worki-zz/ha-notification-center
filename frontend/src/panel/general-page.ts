@@ -1,6 +1,6 @@
 // A page of the General settings on its own, with Home Assistant's subpage
 // header and what it does at the top: Home modes, People, Light, Sound, Chimes,
-// Import and export.
+// Colors, Import and export.
 
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -12,6 +12,7 @@ import {
 } from "../shared/config";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
+import "./settings-colors";
 import "./settings-modes";
 import "./settings-lights";
 import "./settings-people";
@@ -43,6 +44,12 @@ const PAGES: Record<string, { title: string; intro: string[] }> = {
   chimes: {
     title: "Chimes",
     intro: [],
+  },
+  colors: {
+    title: "Colors",
+    intro: [
+      "The colors of the categories and notifications: the system colors, and your own ones. Each light can show a color with its own RGB, on its Colors tab.",
+    ],
   },
   import: {
     title: "Import and export",
@@ -118,6 +125,8 @@ export class NcGeneralPage extends LitElement {
                       .config=${this.config}
                       .base=${this.base}
                     ></nc-settings-sound>`
+            : this.page === "colors"
+              ? html`<nc-settings-colors .hass=${this.hass} .config=${this.config}></nc-settings-colors>`
             : this.page === "import"
                 ? this._renderImportExport()
                 : nothing}

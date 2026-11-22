@@ -314,14 +314,19 @@ export class NcSettingsLights extends LitElement {
       </div>`;
   }
 
-  // Each system colour as this light shows it: changed ones have a reset.
+  // Each system and own colour as this light shows it: changed ones have a
+  // reset.
   private _renderColors(edit: Draft) {
     const own = edit.colors ?? {};
+    const all: [string, string, number[]][] = [
+      ...Object.entries(LIGHT_DEFAULTS).map(([name, rgb]): [string, string, number[]] => [name, colorName(name), rgb]),
+      ...(this.config?.colors ?? []).map((color): [string, string, number[]] => [color.id, color.name, color.rgb]),
+    ];
     return html`<p class="hint">
-        How this light shows each system color. Lights show colors differently: set the ones that look wrong.
+        How this light shows each color. Lights show colors differently: set the ones that look wrong.
       </p>
       <ha-card outlined class="colors">
-        ${Object.entries(LIGHT_DEFAULTS).map(([name, rgb]) => {
+        ${all.map(([name, label, rgb]) => {
           const value = own[name] ?? rgb;
           const changed = !!own[name];
           return html`<div class="color-row">
@@ -340,7 +345,7 @@ export class NcSettingsLights extends LitElement {
               />
             </label>
             <div class="text">
-              <div>${colorName(name)}</div>
+              <div>${label}</div>
               <div class="secondary">${value.join(", ")}${changed ? "" : " (default)"}</div>
             </div>
             ${changed

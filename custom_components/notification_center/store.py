@@ -457,13 +457,15 @@ def _remove_references(config: ConfigData, section: str, item_id: str) -> None:
         for channels in channel_lists:
             channels.pop(prefix + item_id, None)
     elif section == "chimes":
-        for category in config["categories"]:
-            if category.get("chime") == item_id:
-                category["chime"] = None
-        for channels in channel_lists:
-            for channel in channels.values():
-                if channel.get("chime") == item_id:
-                    channel["chime"] = None
+        for item in [*config["categories"], *config["notifications"]]:
+            if item.get("chime") == item_id:
+                item["chime"] = None
+    elif section == "colors":
+        for item in [*config["categories"], *config["notifications"]]:
+            if item.get("color") == item_id:
+                item["color"] = None
+        for light in config["lights"]:
+            light.get("colors", {}).pop(item_id, None)
 
 
 @callback

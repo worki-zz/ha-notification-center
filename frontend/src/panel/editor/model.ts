@@ -100,9 +100,9 @@ export interface EditorNotification {
   category: string;
   enabled: boolean;
   icon?: string | null;
-  card_color?: string | null;
-  light_color?: number[] | null;
+  color?: string | null;
   highlight?: boolean | null;
+  chime?: string | null;
   entities: EntityItem[];
   entity_groups: EntityGroup[];
   steps: EditorStep[];
@@ -393,8 +393,8 @@ export function toSaved(draft: EditorNotification): EditorNotification {
       return copy as unknown as Button;
     });
   }
-  for (const key of ["icon", "card_color", "light_color"] as const) {
-    if (saved[key] === undefined || saved[key] === "") delete saved[key];
+  for (const key of ["icon", "color", "chime"] as const) {
+    if (saved[key] === undefined || saved[key] === null || saved[key] === "") delete saved[key];
   }
   return saved;
 }

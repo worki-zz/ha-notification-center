@@ -15,6 +15,7 @@ import {
   type CategoryButton,
   type Notification,
   type NotificationCenterConfig,
+  colorCss,
 } from "../shared/config";
 import { cssColor } from "../shared/format";
 import {
@@ -29,9 +30,9 @@ import type { NotificationViewData } from "../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../shared/text";
 import type { HomeAssistant } from "../shared/types";
 import "./channel-tables";
-import { audienceCount, channelsOf, chimeOptions, sleepersOf } from "./channel-tables";
+import { audienceCount, channelsOf, sleepersOf } from "./channel-tables";
 import { confirmDialog } from "./confirm";
-import { colorField, highlightField } from "./color-field";
+import { chimeField, colorField, highlightField } from "./color-field";
 import { field } from "./fields";
 import { BLOCK_STYLES, block } from "./editor/block";
 import { INTERACTION_DEFAULTS } from "./editor/interaction-dialog";
@@ -154,8 +155,7 @@ export class NcCategoryEditor extends LitElement {
       this._draft = {
         name: "",
         icon: general?.icon ?? null,
-        card_color: general?.card_color ?? null,
-        light_color: general?.light_color ?? null,
+        color: general?.color ?? null,
         highlight: general?.highlight ?? false,
         chime: general?.chime ?? null,
         buttons: categoryButtons(undefined),
@@ -234,7 +234,7 @@ export class NcCategoryEditor extends LitElement {
             ? plainPlaceholders(step.message)
             : "") || "Message",
       icon: notification?.icon || draft.icon || "mdi:bell",
-      color: cssColor(notification?.card_color ?? draft.card_color),
+      color: cssColor(colorCss(this.config, notification?.color ?? draft.color)),
       buttons: liveButtons(live).map((button) => ({
         key: button.key || button.button.type,
         label: button.label,
@@ -413,8 +413,6 @@ export class NcCategoryEditor extends LitElement {
           "Category name*",
           (value) => this._change({ name: (value as string) ?? "" }),
         )}
-      </div>
-      <div class="row three">
         ${field(
           this.hass,
           { icon: { placeholder: "mdi:bell" } },
@@ -422,27 +420,13 @@ export class NcCategoryEditor extends LitElement {
           "Icon",
           (value) => this._change({ icon: (value as string) || null }),
         )}
-        ${colorField(
-          this.hass,
-          { card_color: draft.card_color, light_color: draft.light_color },
-          (value) => this._change(value),
-        )}
-        ${highlightField(!!draft.highlight, undefined, (value) => this._change({ highlight: !!value }))}
       </div>
-      <div class="row">
-        ${field(
-          this.hass,
-          {
-            select: {
-              mode: "dropdown",
-              options: [{ value: "none", label: "None" }, ...chimeOptions(this.config)],
-            },
-          },
-          draft.chime ?? "none",
-          "Chime",
-          (value) => this._change({ chime: value === "none" ? null : (value as string) }),
-          { helper: "What the speakers play. A speaker channel can change it." },
-        )}
+      <div class="row three">
+        ${colorField(this.hass, this.config, draft.color, (value) => this._change({ color: value }))}
+        ${highlightField(!!draft.highlight, undefined, (value) => this._change({ highlight: !!value }))}
+        ${this.config?.speakers.length
+          ? chimeField(this.config, draft.chime, undefined, (value) => this._change({ chime: value }))
+          : nothing}
       </div>
     </div>`;
   }

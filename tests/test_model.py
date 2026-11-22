@@ -209,7 +209,9 @@ async def test_interval_zero_and_entity(hass: HomeAssistant) -> None:
             ),
             "no mode 'away'",
         ),
-        (lambda c: c["categories"][0].update(light_color=[255, 0]), "three numbers"),
+        (lambda c: c["colors"].append({"name": "X", "rgb": [255, 0]}), "three numbers"),
+        (lambda c: c["categories"][0].update(color="nope"), "no colour 'nope'"),
+        (lambda c: c["notifications"][0].update(chime="nope"), "no chime 'nope'"),
         (lambda c: c["notifications"][0].update(colour="red"), "colour"),
         (
             lambda c: c["notifications"][0]["steps"][0].update(
@@ -383,3 +385,32 @@ async def test_categories_of_0_4_get_buttons(hass: HomeAssistant) -> None:
     assert "snooze" not in stored["snooze"]
     assert "show_in_push" not in stored["snooze"]
     assert stored["done"]["show_in_push"] is False
+
+
+async def test_custom_colours_become_own_colours(hass: HomeAssistant) -> None:
+    """0.6.4's card and light colours become ``color`` and the Colors list."""
+    config = _with_notification()
+    config["lights"] = [{"id": "lamp", "entity_id": "light.lamp"}]
+    config["categories"][0].pop("color")
+    config["categories"][0]["card_color"] = "red"
+    config["categories"][0]["channels"]["speaker:x"] = {"chime": "nc_chime"}
+    config["speakers"] = [{"id": "x", "entity_id": "media_player.x"}]
+    config["categories"].append(
+        {"id": "c2", "name": "Two", "card_color": "#102030", "light_color": [1, 2, 3]}
+    )
+    config["notifications"][0].update(card_color="#102030", light_color=[1, 2, 3])
+    config["notifications"].append(
+        {**copy.deepcopy(config["notifications"][0]), "id": "n2", "name": "Two"}
+    )
+    config["notifications"][1].update(card_color="#ffffff", light_color=None)
+    result = await async_validate_config(hass, config)
+    assert result["categories"][0]["color"] == "red"
+    assert "card_color" not in result["categories"][0]
+    assert "chime" not in result["categories"][0]["channels"]["speaker:x"]
+    assert [color["name"] for color in result["colors"]] == ["Custom 1", "Custom 2"]
+    first, second = result["colors"]
+    assert first["rgb"] == [16, 32, 48]
+    assert result["categories"][1]["color"] == first["id"]
+    assert result["notifications"][0]["color"] == first["id"]
+    assert result["notifications"][1]["color"] == second["id"]
+    assert result["lights"][0]["colors"] == {first["id"]: [1, 2, 3]}

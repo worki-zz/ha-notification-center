@@ -14,6 +14,7 @@ import {
   type Notification,
   type NotificationCenterConfig,
   type StateMessage,
+  colorCss,
 } from "../../shared/config";
 import { cssColor } from "../../shared/format";
 import { cardData, categoryOf, errorText, liveButtons, navigate } from "../../shared/live";
@@ -21,7 +22,7 @@ import "../../shared/notification-view";
 import type { NotificationViewData } from "../../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
-import { colorField, highlightField } from "../color-field";
+import { chimeField, colorField, highlightField } from "../color-field";
 import { confirmDialog } from "../confirm";
 import { addEntityButton } from "../devices";
 import { type FieldOptions, field, iconSelect } from "../fields";
@@ -347,7 +348,7 @@ export class NcNotificationEditor extends LitElement {
       info: info?.text ?? step.info ?? undefined,
       icon,
       stateObj: icon || !entity ? undefined : hass.states[entity],
-      color: cssColor(draft.card_color ?? category?.card_color),
+      color: cssColor(colorCss(this.config, draft.color ?? category?.color)),
       buttons,
     };
   }
@@ -595,7 +596,7 @@ export class NcNotificationEditor extends LitElement {
   private _renderSettings(draft: EditorNotification) {
     const category = categoryOf(this.config!, draft as unknown as Notification);
     return html`<div class="block">
-      <div class="row">
+      <div class="row three">
         ${this._selector(
           { text: {} },
           draft.name,
@@ -612,25 +613,28 @@ export class NcNotificationEditor extends LitElement {
           })),
           (value) => this._changeCategory(value || "general"),
         )}
-      </div>
-      <div class="row three">
         ${this._selector(
           { icon: { placeholder: category?.icon ?? "mdi:bell" } },
           draft.icon ?? "",
           "Icon",
           (value) => this._change({ icon: (value as string) || null }),
         )}
-        ${colorField(
-          this.hass,
-          { card_color: draft.card_color, light_color: draft.light_color },
-          (value) => this._change({ ...value }),
-          { defaultColor: category?.card_color ?? "primary", inherits: true },
-        )}
+      </div>
+      <div class="row three">
+        ${colorField(this.hass, this.config, draft.color, (value) => this._change({ color: value }), {
+          defaultColor: category?.color ?? "primary",
+          inherits: true,
+        })}
         ${highlightField(
           draft.highlight ?? undefined,
           !!category?.highlight,
           (value) => this._change({ highlight: value ?? null }),
         )}
+        ${this.config!.speakers.length
+          ? chimeField(this.config, draft.chime, category?.chime ?? null, (value) => this._change({ chime: value }), {
+              inherits: true,
+            })
+          : nothing}
       </div>
     </div>`;
   }
