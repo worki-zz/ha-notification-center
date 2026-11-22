@@ -205,10 +205,10 @@ async def test_deleting_a_mode_removes_it_from_channels(
     )
     # A new mode starts with Home's channels.
     channels = (await client.config())["categories"][0]["channels"]
-    assert channels["notification_center"]["modes"] == ["home", away["id"]]
+    assert channels["dashboard"]["modes"] == ["home", away["id"]]
     await client.ok("item/delete", section="modes", item_id=away["id"])
     channels = (await client.config())["categories"][0]["channels"]
-    assert channels["notification_center"]["modes"] == ["home"]
+    assert channels["dashboard"]["modes"] == ["home"]
 
 
 async def test_duplicate(hass: HomeAssistant, client: Client) -> None:

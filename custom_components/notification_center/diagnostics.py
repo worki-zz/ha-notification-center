@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant
 if TYPE_CHECKING:
     from . import NotificationCenterConfigEntry
 
-TO_REDACT = {"notify", "person", "audience", "sleep_entity", "user_id"}
+TO_REDACT = {"notify", "person", "audience", "sleep", "user_id"}
 
 
 async def async_get_config_entry_diagnostics(

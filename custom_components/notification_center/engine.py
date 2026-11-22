@@ -60,6 +60,16 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.hass_dict import HassKey
 import voluptuous as vol
 
+from .channels import (
+    CHANNEL_DASHBOARD,
+    REASON_AUDIENCE,
+    REASON_DELAY,
+    ChannelView,
+    audience_of,
+    channel_settings,
+    channel_view,
+    person_state,
+)
 from .const import (
     CLOSED_DISMISSED,
     CLOSED_DONE,
@@ -86,16 +96,6 @@ from .const import (
     STATE_UPCOMING,
     UNIQUE_ID_NOTIFICATION_PREFIX,
 )
-from .channels import (
-    CHANNEL_DASHBOARD,
-    REASON_AUDIENCE,
-    REASON_DELAY,
-    ChannelView,
-    audience_of,
-    channel_settings,
-    channel_view,
-    person_state,
-)
 from .issues import IssueTracker
 from .listed import EntityList, ListedMatcher, ListedTracker, matching_entities
 from .model import (
@@ -107,7 +107,7 @@ from .model import (
     effective_buttons,
     entities_references,
 )
-from .modes import ModeTracker
+from .modes import ConditionTracker, ModeTracker
 from .render import TextTracker, render_text
 from .schedule import calendar_between
 from .scheduler import HISTORY_SKIPPED, StepSchedule
@@ -878,6 +878,9 @@ class Engine:
         self._delay_timer: CALLBACK_TYPE | None = None
         self._delay_at: datetime | None = None
         self._person_states: dict[str, str] = {}
+        self._sleep = ConditionTracker(
+            hass, self._sleep_conditions(), self._presence_changed
+        )
 
     # -- Life cycle ---------------------------------------------------------
 
@@ -920,6 +923,8 @@ class Engine:
     async def _async_started(self, _hass: HomeAssistant) -> None:
         self._started = True
         self.modes.async_start()
+        self._sleep.async_start()
+        self._person_states = self._read_person_states()
         for notification in self._config["notifications"]:
             await self._async_start_notification(notification)
         for card in list(self.cards.values()):
@@ -957,6 +962,7 @@ class Engine:
             runner.async_stop()
         self.runners.clear()
         self.modes.async_stop()
+        self._sleep.async_stop()
         if self._delay_timer is not None:
             self._delay_timer()
             self._delay_timer = None
@@ -973,6 +979,12 @@ class Engine:
     def _config_changed(self, config: ConfigData) -> None:
         old = {item["id"]: item for item in self._config["notifications"]}
         self._config = config
+        sleep = self._sleep_conditions()
+        if sleep != self._sleep.conditions:
+            self._sleep.async_stop()
+            self._sleep = ConditionTracker(self.hass, sleep, self._presence_changed)
+            if self._started:
+                self._sleep.async_start()
         self._person_states = self._read_person_states()
         if config["modes"] != self.modes.modes:
             self.modes.async_stop()
@@ -1048,31 +1060,29 @@ class Engine:
 
     # -- Channels -----------------------------------------------------------
 
-    def _sleep_entities(self) -> dict[str, str]:
+    def _sleep_conditions(self) -> dict[str, dict[str, Any]]:
         return {
-            person["person"]: person["sleep_entity"]
+            person["person"]: person["sleep"]
             for person in self._config.get("people", [])
-            if person.get("sleep_entity")
+            if person.get("sleep")
         }
 
     def _read_person_states(self) -> dict[str, str]:
-        sleep = self._sleep_entities()
         return {
             state.entity_id: person_state(
-                self.hass, state.entity_id, sleep.get(state.entity_id)
+                self.hass, state.entity_id, self._sleep.is_true(state.entity_id)
             )
             for state in self.hass.states.async_all("person")
         }
 
     @callback
     def _is_presence_event(self, event_data: EventStateChangedData) -> bool:
-        entity_id = event_data["entity_id"]
-        return entity_id.startswith("person.") or entity_id in set(
-            self._sleep_entities().values()
-        )
+        return event_data["entity_id"].startswith("person.")
 
     @callback
-    def _presence_changed(self, _event: Event[EventStateChangedData]) -> None:
+    def _presence_changed(
+        self, _event: Event[EventStateChangedData] | None = None
+    ) -> None:
         states = self._read_person_states()
         if states != self._person_states:
             self._person_states = states
@@ -1137,7 +1147,11 @@ class Engine:
             if card.status != STATE_ACTIVE:
                 continue
             until = self.channel_view(card).until
-            if until is not None and until > now and (soonest is None or until < soonest):
+            if (
+                until is not None
+                and until > now
+                and (soonest is None or until < soonest)
+            ):
                 soonest = until
         if soonest == self._delay_at:
             return

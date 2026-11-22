@@ -26,7 +26,7 @@ people:
   - person: person.parent
     notify: notify.mobile_app_parent_phone
     device_type: android
-    sleep_entity: binary_sensor.bedroom_bed_occupied
+    sleep: {type: state, entity_id: binary_sensor.bedroom_bed_occupied, state: "on"}
   - person: person.child
     notify: notify.mobile_app_child_phone
     device_type: ios
@@ -73,7 +73,7 @@ categories:
     chime: alarm
     snooze: {type: not_allowed}
     channels:
-      notification_center: {modes: [away, sleep, guest, home]}
+      dashboard: {modes: [away, sleep, guest, home]}
       light:kitchen_strip: {modes: [away, sleep, guest, home]}
       speaker:kitchen_speaker:
         modes: [home]
@@ -90,7 +90,7 @@ categories:
     chime: chime
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
-      notification_center: {modes: [away, home]}
+      dashboard: {modes: [away, home]}
       push: {modes: [away, home]}
   - id: devices
     name: Devices
@@ -99,10 +99,10 @@ categories:
     light_color: [255, 165, 0]
     snooze: {type: fixed, duration: {days: 1}}
     channels:
-      notification_center: {modes: [away, home]}
+      dashboard: {modes: [away, home]}
       push:
         modes: [away, home]
-        when: {type: after, delay: {hours: 1}}
+        delay: {hours: 1}
   - id: home_category
     name: Home
     icon: mdi:home-alert
@@ -110,7 +110,7 @@ categories:
     light_color: [255, 191, 0]
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
-      notification_center: {modes: [away, home]}
+      dashboard: {modes: [away, home]}
   - id: family
     name: Family
     icon: mdi:account-group
@@ -118,7 +118,7 @@ categories:
     light_color: [160, 0, 255]
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
-      notification_center: {modes: [away, home]}
+      dashboard: {modes: [away, home]}
   - id: household
     name: Household
     icon: mdi:broom
@@ -127,7 +127,7 @@ categories:
     chime: soft_chime
     snooze: {type: ask}
     channels:
-      notification_center: {modes: [away, home]}
+      dashboard: {modes: [away, home]}
   - id: garden
     name: Garden
     icon: mdi:flower
@@ -135,13 +135,13 @@ categories:
     light_color: [0, 255, 0]
     snooze: {type: fixed, duration: {hours: 1}}
     channels:
-      notification_center: {modes: [away, home]}
+      dashboard: {modes: [away, home]}
   - id: general
     name: General
     icon: mdi:bell
     card_color: blue
     channels:
-      notification_center: {modes: [home]}
+      dashboard: {modes: [home]}
 
 notifications:
   # --- Emergency ---------------------------------------------------------

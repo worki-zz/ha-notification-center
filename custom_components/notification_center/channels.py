@@ -96,21 +96,19 @@ def audience_of(
         else dict(_EVERY_STATE)
     )
     return {
-        person: dict(own.get(person) or base.get(person) or common)
-        for person in people
+        person: dict(own.get(person) or base.get(person) or common) for person in people
     }
 
 
-def person_state(hass: HomeAssistant, person: str, sleep_entity: str | None) -> str:
-    """Return whether a person is at home and awake, asleep, or away."""
+def person_state(hass: HomeAssistant, person: str, asleep: bool) -> str:
+    """Return whether a person is at home and awake, asleep, or away.
+
+    Asleep counts only at home: a person away is away.
+    """
     state = hass.states.get(person)
     if state is None or state.state != PERSON_HOME:
         return PERSON_AWAY
-    if sleep_entity:
-        sleep = hass.states.get(sleep_entity)
-        if sleep is not None and sleep.state == "on":
-            return PERSON_SLEEP
-    return PERSON_HOME
+    return PERSON_SLEEP if asleep else PERSON_HOME
 
 
 @dataclass(slots=True)

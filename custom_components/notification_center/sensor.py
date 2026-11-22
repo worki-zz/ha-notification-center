@@ -77,7 +77,9 @@ async def async_setup_entry(
             else:
                 sensors[nid].config_changed(wanted[nid])
 
-    async_add_entities([SummarySensor(engine, info), DashboardChannelSensor(engine, info)])
+    async_add_entities(
+        [SummarySensor(engine, info), DashboardChannelSensor(engine, info)]
+    )
     sync(runtime.manager.config)
     entry.async_on_unload(runtime.manager.async_add_listener(sync))
     _remove_orphans(hass, entry, set(sensors))

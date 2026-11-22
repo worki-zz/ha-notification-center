@@ -250,7 +250,9 @@ PERSON_SCHEMA = vol.Schema(
         vol.Optional("device_type", default="other"): vol.In(
             ("ios", "android", "other")
         ),
-        vol.Optional("sleep_entity"): _optional(cv.entity_id),
+        # When the person is asleep (only counted at home), set like the
+        # condition of a mode.
+        vol.Optional("sleep"): _optional(MODE_CONDITION_SCHEMA),
     }
 )
 
@@ -394,9 +396,7 @@ def _audience(value: Any) -> dict[str, dict[str, bool]]:
         raise vol.Invalid("expected a mapping of people to their states")
     result: dict[str, dict[str, bool]] = {}
     for person, states in value.items():
-        result[cv.entity_domain("person")(person)] = AUDIENCE_ENTRY_SCHEMA(
-            states or {}
-        )
+        result[cv.entity_domain("person")(person)] = AUDIENCE_ENTRY_SCHEMA(states or {})
     return result
 
 
@@ -1264,6 +1264,7 @@ def upgrade_channels(data: dict[str, Any], people: Iterable[str]) -> None:
       Dashboard in every mode, so that nothing disappears after the update.
     - A step's audience, a list of people (empty: everyone), becomes the
       people it leaves out, with no state.
+    - A person's Sleep entity becomes a Sleep condition (the entity is on).
     """
     categories = data.get("categories")
     categories = categories if isinstance(categories, list) else []
@@ -1287,6 +1288,11 @@ def upgrade_channels(data: dict[str, Any], people: Iterable[str]) -> None:
             channels = category.setdefault("channels", {})
             if isinstance(channels, dict) and CHANNEL_DASHBOARD not in channels:
                 channels[CHANNEL_DASHBOARD] = {"modes": list(modes)}
+    for person in data.get("people") or []:
+        if isinstance(person, dict) and "sleep_entity" in person:
+            entity = person.pop("sleep_entity")
+            if entity and "sleep" not in person:
+                person["sleep"] = {"type": "state", "entity_id": entity, "state": "on"}
     everyone = set(people)
     for notification in data.get("notifications") or []:
         if not isinstance(notification, dict):

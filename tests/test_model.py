@@ -204,7 +204,7 @@ async def test_interval_zero_and_entity(hass: HomeAssistant) -> None:
             "unknown channel",
         ),
         (
-            lambda c: c["categories"][0]["channels"]["notification_center"].update(
+            lambda c: c["categories"][0]["channels"]["dashboard"].update(
                 modes=["away"]
             ),
             "no mode 'away'",
@@ -255,13 +255,13 @@ async def test_invalid_configs(hass: HomeAssistant, change: Any, message: str) -
 
 async def test_step_channels_store_only_changes(hass: HomeAssistant) -> None:
     config = await async_validate_config(
-        hass, _with_notification(channels={"notification_center": {"modes": []}})
+        hass, _with_notification(channels={"dashboard": {"modes": []}})
     )
     assert config["notifications"][0]["steps"][0]["channels"] == {
-        "notification_center": {"modes": []}
+        "dashboard": {"modes": []}
     }
-    category = config["categories"][0]["channels"]["notification_center"]
-    assert category == {"modes": ["home"], "when": {"type": "immediately"}}
+    category = config["categories"][0]["channels"]["dashboard"]
+    assert category == {"modes": ["home"]}
 
 
 async def test_start_conditions_and_hide_while_become_show_when(

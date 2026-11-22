@@ -809,12 +809,15 @@ async def test_example_config_runs(
         state
         for state in hass.states.async_all("sensor")
         if state.entity_id.startswith("sensor.nc_")
+        and not state.entity_id.startswith("sensor.nc_channel_")
     ]
     assert len(sensors) == 28
-    # A scheduled step due later today makes its notification "upcoming".
+    # A scheduled step due later today makes its notification "upcoming";
+    # a card outside its time window (by the time of day of the run) is hidden.
     assert {state.state for state in sensors} <= {
         "idle",
         "active",
+        "hidden",
         "upcoming",
         "disabled",
     }
