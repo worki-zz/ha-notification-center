@@ -102,6 +102,7 @@ export interface EditorNotification {
   icon?: string | null;
   card_color?: string | null;
   light_color?: number[] | null;
+  highlight?: boolean | null;
   entities: EntityItem[];
   entity_groups: EntityGroup[];
   steps: EditorStep[];

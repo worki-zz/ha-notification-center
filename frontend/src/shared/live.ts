@@ -365,7 +365,8 @@ export async function pressButton(
   const backend =
     ["done", "dismiss", "snooze"].includes(button.type) ||
     action.type === "ha_action" ||
-    action.type === "entity_action";
+    action.type === "entity_action" ||
+    action.type === "silence";
   if (backend) {
     await hass.callWS({
       type: `${DOMAIN}/card/press`,

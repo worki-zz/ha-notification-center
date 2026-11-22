@@ -11,10 +11,11 @@ import { LitElement, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
-import { CHANNEL_DASHBOARD, DOMAIN, type Mode, type NotificationCenterConfig, type StateMessage } from "../shared/config";
+import { DOMAIN, type Mode, type NotificationCenterConfig, type StateMessage } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
+import { type ChannelInfo, channelIcon, channelsOf } from "./devices";
 import { field } from "./fields";
 import { STATUS_STYLES, renderStatus } from "./status";
 
@@ -305,10 +306,9 @@ export class NcSettingsModes extends LitElement {
 
   // -- Step 2: the channels of a new mode ------------------------------------------
 
-  // Every channel, as in the editors. 6.0 has the Dashboard only; the lights,
-  // the speakers and Push join in 6.1 and 6.2.
-  private _channelList(): { key: string; name: string; icon: string }[] {
-    return [{ key: CHANNEL_DASHBOARD, name: "Dashboard", icon: "mdi:view-dashboard-outline" }];
+  // Every channel, as in the editors.
+  private _channelList(): ChannelInfo[] {
+    return channelsOf(this.hass, this.config);
   }
 
   // The channels Home is on for, in any category.
@@ -349,7 +349,7 @@ export class NcSettingsModes extends LitElement {
               .checked=${step.on.has(channel.key)}
               @change=${(ev: Event) => toggle(channel.key, (ev.target as HTMLInputElement).checked)}
             ></ha-switch>
-            <ha-icon class="mode-icon" .icon=${channel.icon}></ha-icon>
+            <span class="mode-icon">${channelIcon(this.hass, channel)}</span>
             <div class="text">${channel.name}</div>
           </label>`,
         )}

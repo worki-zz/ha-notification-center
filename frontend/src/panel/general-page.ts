@@ -1,5 +1,6 @@
 // A page of the General settings on its own, with Home Assistant's subpage
-// header and what it does at the top: Modes, Snooze, Import and export.
+// header and what it does at the top: Modes, People, Light, Sound, Snooze,
+// Import and export.
 
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -13,7 +14,9 @@ import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { field } from "./fields";
 import "./settings-modes";
+import "./settings-lights";
 import "./settings-people";
+import "./settings-sound";
 
 const PAGES: Record<string, { title: string; intro: string[] }> = {
   modes: {
@@ -28,6 +31,19 @@ const PAGES: Record<string, { title: string; intro: string[] }> = {
     intro: [
       "Every person of Home Assistant is listed here. A person is Home (at home and awake), Sleep (at home and asleep) or Away; the Audience of a category or step ticks the states each person gets its notifications in.",
       "Asleep is set like a mode's condition: an entity's state or a template. It counts only while the person is at home.",
+    ],
+  },
+  light: {
+    title: "Light",
+    intro: [
+      "The lights of the Light channel. A light shows the color of the first notification it sends (in the order of the Notifications list), and goes back to how it was when no notification sends; if you change the light meanwhile, your change stays.",
+      "A highlighted notification (a setting of the category or the notification) blinks, or shows an effect of the light. A switch turns on, or blinks.",
+    ],
+  },
+  sound: {
+    title: "Sound",
+    intro: [
+      "The speakers and sirens of the Sound channels. A speaker plays the chime of a notification once when it starts to send, can read the message, and can repeat; a siren sounds while the notification sends. Silence (a button action) stops them.",
     ],
   },
   snooze: {
@@ -102,6 +118,10 @@ export class NcGeneralPage extends LitElement {
                 .config=${this.config}
                 .state=${this.state}
               ></nc-settings-people>`
+            : this.page === "light"
+              ? html`<nc-settings-lights .hass=${this.hass} .config=${this.config}></nc-settings-lights>`
+              : this.page === "sound"
+                ? html`<nc-settings-sound .hass=${this.hass} .config=${this.config}></nc-settings-sound>`
             : this.page === "snooze"
               ? this._renderSnooze()
               : this.page === "import"

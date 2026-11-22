@@ -49,8 +49,12 @@ export interface Category {
   id: string;
   name: string;
   icon?: string | null;
+  // A system colour by name, or a custom colour (#rrggbb) with the lights'
+  // own colour (empty: the card colour).
   card_color?: string | null;
   light_color?: number[] | null;
+  // The lights blink (or show their effect) for its notifications.
+  highlight?: boolean;
   chime?: string | null;
   // The built-in buttons (always there) and the category's custom ones.
   buttons: CategoryButton[];
@@ -68,7 +72,9 @@ export type ButtonAction =
   | { type: "entity_action" }
   | { type: "more_info"; entity_id?: string | null }
   | { type: "navigate"; path: string }
-  | { type: "show_attachment" };
+  | { type: "show_attachment" }
+  // Stop the lights, speakers and sirens; the card stays.
+  | { type: "silence" };
 
 /**
  * A button of a step. Left out fields come from the category's button of
@@ -136,6 +142,8 @@ export interface Notification {
   enabled: boolean;
   icon?: string | null;
   card_color?: string | null;
+  light_color?: number[] | null;
+  highlight?: boolean | null;
   steps: Step[];
 }
 
@@ -151,6 +159,8 @@ export interface Person {
 
 export interface GeneralSettings {
   snooze_tomorrow_at: string;
+  // Read the message: the text-to-speech entity and its language.
+  read_the_message?: { tts_service?: string | null; language?: string | null; volume?: number | null };
   [key: string]: unknown;
 }
 
@@ -160,10 +170,113 @@ export interface NotificationCenterConfig {
   categories: Category[];
   notifications: Notification[];
   people: Person[];
-  lights: { id: string; entity_id: string; name?: string }[];
-  speakers: { id: string; entity_id: string; name?: string }[];
-  chimes: { id: string; name: string }[];
+  lights: Light[];
+  speakers: Speaker[];
+  sirens: Siren[];
+  chimes: Chime[];
 }
+
+/** A light (or a switch) of the Light channel. */
+export interface Light {
+  id: string;
+  entity_id: string;
+  brightness?: number | null;
+  color_temp_kelvin?: number | null;
+  illuminance_sensor?: string | null;
+  dim_below?: number | null;
+  dim_brightness?: number | null;
+  dim_continuously?: boolean;
+  // "blink" or one of the light's effects.
+  effect?: string;
+  // The light's own RGB of the system colours (only what differs).
+  colors?: Record<string, number[]>;
+}
+
+export interface Speaker {
+  id: string;
+  entity_id: string;
+  volume?: number | null;
+}
+
+/** A siren, a switch, or a select (an option sounds, another stops it). */
+export interface Siren {
+  id: string;
+  entity_id: string;
+  tone?: string | null;
+  volume?: number | null;
+  duration?: number | null;
+  option?: string | null;
+  stop_option?: string | null;
+}
+
+export interface Chime {
+  id: string;
+  name: string;
+  media: { media_content_id: string; media_content_type: string; metadata?: unknown };
+}
+
+/** The sounds that come with the integration, by chime id. */
+export const BUILTIN_CHIMES: { id: string; name: string }[] = [
+  { id: "nc_chime", name: "Chime" },
+  { id: "nc_attention", name: "Attention" },
+  { id: "nc_doorbell", name: "Doorbell" },
+  { id: "nc_alarm", name: "Alarm" },
+  { id: "nc_alarm_indoor", name: "Indoor alarm" },
+];
+
+/** The RGB of the system colours, as the lights show them by default. */
+export const SYSTEM_COLORS: Record<string, [number, number, number]> = {
+  primary: [3, 169, 244],
+  accent: [255, 152, 0],
+  red: [244, 67, 54],
+  pink: [233, 30, 99],
+  purple: [146, 107, 199],
+  "deep-purple": [110, 65, 171],
+  indigo: [63, 81, 181],
+  blue: [33, 150, 243],
+  "light-blue": [3, 169, 244],
+  cyan: [0, 188, 212],
+  teal: [0, 150, 136],
+  green: [76, 175, 80],
+  "light-green": [139, 195, 74],
+  lime: [205, 220, 57],
+  yellow: [255, 235, 59],
+  amber: [255, 193, 7],
+  orange: [255, 152, 0],
+  "deep-orange": [255, 111, 34],
+  brown: [121, 85, 72],
+  "light-grey": [189, 189, 189],
+  grey: [158, 158, 158],
+  "dark-grey": [96, 96, 96],
+  "blue-grey": [96, 125, 139],
+  black: [0, 0, 0],
+  white: [255, 255, 255],
+};
+
+/** "#rrggbb" of an RGB. */
+export function rgbToHex(rgb: number[]): string {
+  return `#${rgb.map((part) => Math.max(0, Math.min(255, Math.round(part))).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** The RGB of "#rrggbb" or "r, g, b"; undefined for anything else. */
+export function parseRgb(value: unknown): [number, number, number] | undefined {
+  if (Array.isArray(value) && value.length === 3) return [Number(value[0]), Number(value[1]), Number(value[2])];
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(text);
+  if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+  const parts = text.split(",").map((part) => Number(part.trim()));
+  return parts.length === 3 && parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)
+    ? (parts as [number, number, number])
+    : undefined;
+}
+
+/** Device sections and the prefix of their channel keys. */
+export const DEVICE_PREFIXES = {
+  lights: "light:",
+  speakers: "speaker:",
+  sirens: "siren:",
+} as const;
 
 export interface ConfigMessage {
   config: NotificationCenterConfig;
