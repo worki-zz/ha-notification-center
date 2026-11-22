@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The entity dialogs in the editor show the room (and the device) above the entity's name, as Home Assistant's more info dialog.
+- The entity dialogs in the editor show the room, the parent device and the device above the entity's name, as Home Assistant's more info dialog; the entity rows say the same.
 - Notifications and Categories lists: rows have the same room at the sides as the General list.
 - Button dialogs in a notification: a label that comes from the category can be changed in YAML only again (as before 0.5.1); a notification's own custom buttons keep their label field. In the category, a built-in button's label still has X to go back to the default.
 
