@@ -539,7 +539,11 @@ export function entityDisplay(
   if (name === deviceName) name = "";
   const areaId = entry?.area_id || device?.area_id;
   const area = areaId ? hass.areas?.[areaId]?.name : undefined;
+  const parentId = device?.parent_device_id ?? device?.via_device_id;
+  const parent = parentId ? hass.devices?.[parentId] : undefined;
+  const parentName = parent ? parent.name_by_user || parent.name || "" : "";
   const primary = name || deviceName || friendly || entityId;
-  const secondary = [area, name ? deviceName : ""].filter(Boolean).join(" ▸ ");
+  // As Home Assistant's more info dialog: area ▸ parent device ▸ device.
+  const secondary = [area, parentName, name ? deviceName : ""].filter(Boolean).join(" ▸ ");
   return { primary, secondary };
 }

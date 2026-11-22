@@ -44,6 +44,9 @@ export interface HassDevice {
   name_by_user?: string | null;
   area_id?: string | null;
   labels?: string[];
+  // The device this one is part of (older Home Assistant: via_device_id).
+  parent_device_id?: string | null;
+  via_device_id?: string | null;
 }
 
 export interface HassArea {
