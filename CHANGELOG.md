@@ -1,9 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
+
+Phase 6.0: the channel basics and the Dashboard channel.
+
+### Added
+
+- **Channels** of a category: a table with a tick per mode (Home first, then the Modes list's order) and a pencil that opens the channel's dialog with **Modes** and **Settings** (*When*: Immediately or After a delay, counted from when the card becomes active). A channel with no tick is off; a warning shows when no channel sends. On a phone each channel is a row with a summary (*Home, Away · Immediately*) that opens the dialog. 6.0 has the **Dashboard** channel (the panel's Overview and the dashboard cards); lights, speakers and Push follow.
+- **Audience** of a category: a table of every Home Assistant person with **Home** (at home and awake), **Sleep** (at home and asleep) and **Away**. A person gets the notifications while in a ticked state; with nobody ticked nothing is sent (warning). A person added later gets what the listed people have in common.
+- Steps change the category's Channels and Audience only where they differ. A changed channel row or person row has a reset icon: a channel row's icon resets its mode ticks (after a confirmation); the dialog's *Reset* buttons reset Modes or Settings; a person's icon resets that person.
+- When a rule becomes true later (the mode changes, the delay ends, someone comes home or wakes up), the channel sends then, while the card is still active.
+- **People** page (General): every Home Assistant person with their current state, and when they are asleep, set like a mode's condition (None, State or Template). Asleep counts only at home.
+- The Dashboard shows each user the cards meant for their person in their current state; a user without a person sees what at least one person of the audience gets. Cards held back show under **Upcoming** with the reason (*Shows 7:41*, *Held back in Away mode*, *Waiting for the audience*). With *Ignore audience* the list card shows what the Dashboard shows anyone.
+- Diagnostic sensor `sensor.nc_channel_dashboard`: the cards the Dashboard shows, with `held_back` (mode, off) and `waiting` (delay, audience). `sensor.notification_center` still counts every active card.
 
 ### Changed
 
+- With no active mode, only the channels ticked in at least one mode send (no longer every channel).
+- A new category starts with General's channels and audience; *Run now* and the trigger action follow the channel rules.
+- Data: the *Notification center* channel is now `dashboard`; `when` is replaced by `delay`; a step's `audience` list becomes per-person states; a person's `sleep_entity` becomes a `sleep` condition (State *on*). Older data is upgraded once on load; every category gets the Dashboard in every mode.
 - The entity dialogs in the editor show the room (and the device) above the entity's name, as Home Assistant's more info dialog.
 - Notifications and Categories lists: rows have the same room at the sides as the General list.
 - Button dialogs in a notification: a label that comes from the category can be changed in YAML only again (as before 0.5.1); a notification's own custom buttons keep their label field. In the category, a built-in button's label still has X to go back to the default.
