@@ -21,8 +21,9 @@ import "../../shared/notification-view";
 import type { NotificationViewData } from "../../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
-import { colorField } from "../color-field";
+import { colorField, highlightField } from "../color-field";
 import { confirmDialog } from "../confirm";
+import { addEntityButton } from "../devices";
 import { type FieldOptions, field, iconSelect } from "../fields";
 import { STATUS_STYLES, renderStatus, statusOf } from "../status";
 import { domainName, groupName, newGroup } from "./group-dialog";
@@ -96,7 +97,6 @@ export class NcNotificationEditor extends LitElement {
   @state() private _group?: { index: number; group: EntityGroup };
 
   // Add entity shows the picker in place of the button, open.
-  @state() private _addingEntity = false;
 
   @state() private _entity?: { index: number; entityId: string; actions: Obj };
 
@@ -624,25 +624,12 @@ export class NcNotificationEditor extends LitElement {
           this.hass,
           { card_color: draft.card_color, light_color: draft.light_color },
           (value) => this._change({ ...value }),
-          { defaultColor: category?.card_color ?? "primary" },
+          { defaultColor: category?.card_color ?? "primary", inherits: true },
         )}
-      </div>
-      <div class="row">
-        ${this._selector(
-          {
-            select: {
-              mode: "dropdown",
-              options: [
-                { value: "category", label: `Same as the category (${category?.highlight ? "On" : "Off"})` },
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ],
-            },
-          },
-          draft.highlight === undefined || draft.highlight === null ? "category" : draft.highlight ? "on" : "off",
-          "Highlight",
-          (value) => this._change({ highlight: value === "category" ? null : value === "on" }),
-          { helper: "The lights blink, or show their effect." },
+        ${highlightField(
+          draft.highlight ?? undefined,
+          !!category?.highlight,
+          (value) => this._change({ highlight: value ?? null }),
         )}
       </div>
     </div>`;
@@ -717,28 +704,15 @@ export class NcNotificationEditor extends LitElement {
         : nothing}
       ${draft.entity_groups.map((group, index) => this._renderGroup(draft, group, index))}
       <div class="buttons">
-        ${this._addingEntity
-          ? html`<ha-entity-picker
-              class="add-entity"
-              .hass=${hass}
-              .value=${""}
-              .excludeEntities=${draft.entities.map((item) => item.entity_id)}
-              @picker-closed=${() => (this._addingEntity = false)}
-              @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-                ev.stopPropagation();
-                const entityId = ev.detail.value;
-                if (entityId) {
-                  this._change({
-                    entities: [...draft.entities, { entity_id: entityId, enabled: true, actions: {} }],
-                  });
-                }
-                this._addingEntity = false;
-              }}
-            ></ha-entity-picker>`
-          : html`<ha-button appearance="filled" size="s" @click=${this._addEntity}>
-              <ha-icon slot="start" icon="mdi:plus"></ha-icon>
-              Add entity
-            </ha-button>`}
+        ${addEntityButton({
+          hass,
+          label: "Add entity",
+          exclude: draft.entities.map((item) => item.entity_id),
+          picked: (entityId) =>
+            this._change({
+              entities: [...draft.entities, { entity_id: entityId, enabled: true, actions: {} }],
+            }),
+        })}
         <ha-button
           appearance="filled"
           size="s"
@@ -749,17 +723,6 @@ export class NcNotificationEditor extends LitElement {
         </ha-button>
       </div>
     </div>`;
-  }
-
-  private async _addEntity(): Promise<void> {
-    this._addingEntity = true;
-    await this.updateComplete;
-    // After the click is over, or the picker takes it as a click outside.
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
-    const picker = this.shadowRoot?.querySelector("ha-entity-picker.add-entity") as
-      | (HTMLElement & { open?: () => Promise<void> })
-      | null;
-    await picker?.open?.();
   }
 
   private _renderGroup(draft: EditorNotification, group: EntityGroup, index: number) {

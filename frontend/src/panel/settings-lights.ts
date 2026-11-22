@@ -25,7 +25,6 @@ import {
   channelIcon,
   entityName,
   entityState,
-  openEntityPicker,
   testButton,
   testChannel,
 } from "./devices";
@@ -95,9 +94,6 @@ export class NcSettingsLights extends LitElement {
 
   @state() private _busy = false;
 
-  // The Add light picker is open.
-  @state() private _adding = false;
-
   protected override render() {
     const lights = this.config?.lights ?? [];
     return html`
@@ -110,19 +106,10 @@ export class NcSettingsLights extends LitElement {
       <div class="buttons">
         ${addEntityButton({
           hass: this.hass,
-          adding: this._adding,
           label: "Add light",
-          className: "add-light",
           domains: ["light", "switch"],
           exclude: lights.map((light) => light.entity_id),
-          start: () => {
-            this._adding = true;
-            void openEntityPicker(this, "add-light");
-          },
-          picked: (entityId) => {
-            this._adding = false;
-            if (entityId) void this._add(entityId);
-          },
+          picked: (entityId) => void this._add(entityId),
         })}
       </div>
       ${this._edit ? this._renderDialog(this._edit) : nothing}
@@ -244,13 +231,10 @@ export class NcSettingsLights extends LitElement {
 
   private _renderSettings(edit: Draft, can: Capabilities) {
     const effects = [
-      { value: BLINK, label: "Blink (1 second on, 1 second off)" },
+      { value: BLINK, label: "Blink" },
       ...can.effects.map((effect) => ({ value: effect, label: effect })),
     ];
     return html`
-      ${!can.dims && !can.effects.length
-        ? html`<p class="hint">A switch (a lamp on a plug) turns on, or blinks for a highlighted notification.</p>`
-        : nothing}
       ${can.dims
         ? field(
             this.hass,
@@ -278,16 +262,14 @@ export class NcSettingsLights extends LitElement {
             { helper: "Empty: the light's own." },
           )
         : nothing}
-      ${can.effects.length
-        ? field(
-            this.hass,
-            { select: { mode: "dropdown", options: effects } },
-            edit.effect ?? BLINK,
-            "Highlight effect",
-            (value) => this._set({ effect: (value as string) || BLINK }),
-            { helper: "How a highlighted notification shows." },
-          )
-        : nothing}
+      ${field(
+        this.hass,
+        { select: { mode: "dropdown", options: effects } },
+        can.effects.includes(edit.effect ?? "") ? edit.effect : BLINK,
+        "Highlight effect",
+        (value) => this._set({ effect: (value as string) || BLINK }),
+        { helper: "How a highlighted notification shows." },
+      )}
       ${can.dims ? this._renderDim(edit) : nothing}
     `;
   }
@@ -297,12 +279,13 @@ export class NcSettingsLights extends LitElement {
       this.hass,
       { entity: { filter: [{ domain: "sensor", device_class: "illuminance" }] } },
       edit.illuminance_sensor ?? undefined,
-      "Illuminance sensor",
+      "",
       (value) => this._set({ illuminance_sensor: (value as string) || null }),
+      { placeholder: "Illuminance sensor" },
     );
     if (!edit.illuminance_sensor) return html`<div class="title">Dim when dark</div>${sensor}`;
     return html`<div class="title">Dim when dark</div>
-      <div class="row-fields bottom">
+      <div class="row-fields top">
         ${sensor}
         ${field(
           this.hass,
@@ -502,8 +485,8 @@ export function DEVICE_PAGE_STYLES() {
       gap: 16px;
       flex-wrap: wrap;
     }
-    .row-fields.bottom {
-      align-items: flex-end;
+    .row-fields.top {
+      align-items: flex-start;
     }
     .row-fields > * {
       flex: 1 1 200px;
@@ -533,23 +516,11 @@ export function DEVICE_PAGE_STYLES() {
     .rows + .group-header {
       border-top: 1px solid var(--divider-color);
     }
-    .group-header .info {
-      --mdc-icon-button-size: 36px;
-      --mdc-icon-size: 20px;
-    }
-    .group-hint {
-      padding: 8px 16px;
-      border-bottom: 1px solid var(--divider-color);
-      font-size: var(--ha-font-size-s, 12px);
-    }
     .buttons {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
-    }
-    .buttons ha-entity-picker {
-      flex: 1 1 280px;
     }
     .row.static {
       cursor: default;

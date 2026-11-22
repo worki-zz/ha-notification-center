@@ -700,41 +700,51 @@ export class NcChannelTable extends LitElement {
             </label>`,
         )}
       </ha-card>
+      <div class="separator"></div>
       ${section("Settings", ownSettings, "settings")}
       <div class="fields">
-        ${field(
-          this.hass,
-          {
-            select: {
-              mode: "dropdown",
-              options: [
-                { value: "now", label: "Immediately" },
-                { value: "after", label: "After a delay" },
-              ],
-            },
-          },
-          after ? "after" : "now",
-          "When",
-          (value) =>
-            this._store(key, {
-              ...this._own(key),
-              delay: value === "after" ? { minutes: 5 } : null,
-            }),
-          { helper: "Delay after the notification becomes active." },
-        )}
-        ${after
-          ? field(
+        <div class="columns">
+          <div class="column">
+            ${field(
               this.hass,
-              { duration: {} },
-              settings.delay,
-              "Delay",
+              {
+                select: {
+                  mode: "dropdown",
+                  options: [
+                    { value: "now", label: "Immediately" },
+                    { value: "after", label: "Delayed" },
+                  ],
+                },
+              },
+              after ? "after" : "now",
+              "When",
               (value) =>
                 this._store(key, {
                   ...this._own(key),
-                  delay: (value as Duration | undefined) ?? null,
+                  delay: value === "after" ? { minutes: 5 } : null,
                 }),
-            )
-          : nothing}
+              { helper: "After the notification becomes active." },
+            )}
+          </div>
+          ${after || channel.kind === "speaker"
+            ? html`<div class="column">
+            ${after
+              ? field(
+                  this.hass,
+                  { duration: {} },
+                  settings.delay,
+                  "Delay",
+                  (value) =>
+                    this._store(key, {
+                      ...this._own(key),
+                      delay: (value as Duration | undefined) ?? null,
+                    }),
+                )
+              : nothing}
+            ${channel.kind === "speaker" ? this._renderRepeat(key, settings) : nothing}
+              </div>`
+            : nothing}
+        </div>
         ${channel.kind === "speaker" ? this._renderSpeaker(key, settings) : nothing}
       </div>
       <ha-dialog-footer slot="footer">
@@ -765,13 +775,11 @@ export class NcChannelTable extends LitElement {
       { value: "none", label: "None" },
       ...chimeOptions(this.config),
     ];
-    const repeat = (settings.repeat as { type: string; every?: Duration } | undefined) ?? { type: "once" };
     const reading = !!settings.read_the_message;
     const check = (label: string, name: "read_name" | "read_info") =>
       html`<label class="check">
         <ha-checkbox
           .checked=${!!settings[name]}
-          .disabled=${!reading}
           @change=${(ev: Event) => set({ [name]: (ev.target as HTMLInputElement).checked })}
         ></ha-checkbox>
         ${label}
@@ -783,43 +791,53 @@ export class NcChannelTable extends LitElement {
         else own.chime = value === "none" ? null : value;
         this._store(key, own);
       })}
-      ${field(
+      <div class="switch-row">
+        <div>Read the message</div>
+        <ha-switch
+          .checked=${reading}
+          @change=${(ev: Event) => set({ read_the_message: (ev.target as HTMLInputElement).checked })}
+        ></ha-switch>
+      </div>
+      ${reading
+        ? html`<div class="checks-block">
+            <div class="checks-label">Read</div>
+            <div class="checks">
+              ${check("Name", "read_name")}
+              <label class="check"><ha-checkbox checked disabled></ha-checkbox>Message</label>
+              ${check("Info", "read_info")}
+            </div>
+          </div>`
+        : nothing}
+    `;
+  }
+
+  // A speaker's repeat: Once, or Loop every so often until done or silenced.
+  private _renderRepeat(key: string, settings: ChannelSettings) {
+    const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
+    const repeat = (settings.repeat as { type: string; every?: Duration } | undefined) ?? { type: "once" };
+    const loop = repeat.type === "until_muted";
+    return html`${field(
         this.hass,
         {
           select: {
             mode: "dropdown",
             options: [
               { value: "once", label: "Once" },
-              { value: "until_muted", label: "Again and again" },
+              { value: "until_muted", label: "Loop" },
             ],
           },
         },
         repeat.type,
         "Repeat",
-        (value) => set({ repeat: value === "until_muted" ? { type: "until_muted", every: { minutes: 1 } } : { type: "once" } }),
-        { helper: "Again and again: until the notification is done or silenced." },
+        (value) =>
+          set({ repeat: value === "until_muted" ? { type: "until_muted", every: { minutes: 1 } } : { type: "once" } }),
+        { helper: "Until done or silenced." },
       )}
-      ${repeat.type === "until_muted"
+      ${loop
         ? field(this.hass, { duration: {} }, repeat.every ?? { minutes: 1 }, "Every", (value) =>
             set({ repeat: { type: "until_muted", every: (value as Duration | undefined) ?? { minutes: 1 } } }),
           )
-        : nothing}
-      <div class="switch-row">
-        <div>
-          <div>Read the message</div>
-          <div class="secondary">After the chime, with the text-to-speech of the Sound settings.</div>
-        </div>
-        <ha-switch
-          .checked=${reading}
-          @change=${(ev: Event) => set({ read_the_message: (ev.target as HTMLInputElement).checked })}
-        ></ha-switch>
-      </div>
-      <div class="checks">
-        ${check("Name", "read_name")}
-        <label class="check"><ha-checkbox checked disabled></ha-checkbox>Message</label>
-        ${check("Info", "read_info")}
-      </div>
-    `;
+        : nothing}`;
   }
 
   private _chimeName(category: { chime?: string | null } | undefined): string | undefined {
@@ -884,8 +902,33 @@ export class NcChannelTable extends LitElement {
         display: flex;
         flex-wrap: wrap;
         gap: 8px 24px;
+      }
+      .checks-block {
         margin-top: -8px;
       }
+      .checks-label {
+        color: var(--secondary-text-color);
+        font-size: var(--ha-font-size-s, 12px);
+        margin-bottom: 4px;
+      }
+      .separator {
+        border-top: 1px solid var(--divider-color);
+        margin: 16px 0 0;
+      }
+      .columns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .column {
+        flex: 1 1 220px;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
       .check {
         display: flex;
         align-items: center;

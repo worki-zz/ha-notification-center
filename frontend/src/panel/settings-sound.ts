@@ -33,7 +33,6 @@ import {
   entityName,
   entityState,
   features,
-  openEntityPicker,
   testButton,
   testChannel,
 } from "./devices";
@@ -90,11 +89,6 @@ export class NcSettingsSound extends LitElement {
 
   @state() private _busy = false;
 
-  // The Add button whose entity picker is open.
-  @state() private _adding?: DeviceSection;
-
-  @state() private _sirenInfo = false;
-
   // The Read the message dialog, while open.
   @state() private _reading?: Reading;
 
@@ -135,14 +129,13 @@ export class NcSettingsSound extends LitElement {
                   <div class="rows">${speakers.map((item) => this._deviceRow("speakers", item))}</div>`
               : nothing}
             ${sirens.length
-              ? html`${this._sirenHeader()}
+              ? html`<div class="group-header">Sirens</div>
                   <div class="rows">${sirens.map((item) => this._deviceRow("sirens", item))}</div>`
               : nothing}
           </ha-card>`
         : html`<ha-alert alert-type="info">No speakers or sirens yet.</ha-alert>`}
       <div class="buttons">
-        ${this._addButton("speakers", "Add speaker", "mdi:speaker")}
-        ${this._addButton("sirens", "Add siren", "mdi:alarm-light-outline")}
+        ${this._addButton("speakers", "Add speaker")} ${this._addButton("sirens", "Add siren")}
       </div>
       <ha-card outlined>
         <ha-list-base>
@@ -168,22 +161,6 @@ export class NcSettingsSound extends LitElement {
     `;
   }
 
-  private _sirenHeader() {
-    return html`<div class="group-header">
-        Sirens
-        <ha-icon-button
-          class="info"
-          .label=${"What can be a siren"}
-          @click=${() => (this._sirenInfo = !this._sirenInfo)}
-        >
-          <ha-icon icon="mdi:information-outline"></ha-icon>
-        </ha-icon-button>
-      </div>
-      ${this._sirenInfo
-        ? html`<p class="hint group-hint">A siren, a switch, or a select whose option sounds the siren.</p>`
-        : nothing}`;
-  }
-
   private _deviceRow(section: DeviceSection, item: Speaker | Siren) {
     const name = entityName(this.hass, item.entity_id);
     const icon = section === "speakers" ? "mdi:speaker" : "mdi:alarm-light-outline";
@@ -202,24 +179,14 @@ export class NcSettingsSound extends LitElement {
     </div>`;
   }
 
-  private _addButton(section: DeviceSection, label: string, icon: string) {
+  private _addButton(section: DeviceSection, label: string) {
     const used = [...(this.config?.speakers ?? []), ...(this.config?.sirens ?? [])].map((item) => item.entity_id);
     return addEntityButton({
       hass: this.hass,
-      adding: this._adding === section,
       label,
-      icon,
-      className: `add-${section}`,
       domains: DOMAINS[section],
       exclude: used,
-      start: () => {
-        this._adding = section;
-        void openEntityPicker(this, `add-${section}`);
-      },
-      picked: (entityId) => {
-        this._adding = undefined;
-        if (entityId) void this._add(section, entityId);
-      },
+      picked: (entityId) => void this._add(section, entityId),
     });
   }
 
@@ -480,16 +447,27 @@ export class NcSettingsSound extends LitElement {
     </ha-dialog>`;
   }
 
+  // The volume, with an X that empties it (the device's own volume).
   private _volume(value: number | null | undefined, helper: string) {
-    return field(
-      this.hass,
-      { number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" } },
-      value === undefined || value === null ? undefined : Math.round(value * 100),
-      "Volume",
-      (volume) =>
-        this._set({ volume: volume === undefined || volume === null || volume === "" ? null : Number(volume) / 100 }),
-      { helper },
-    );
+    const set = value !== undefined && value !== null;
+    return html`<div class="clearable">
+      ${field(
+        this.hass,
+        { number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" } },
+        set ? Math.round(value * 100) : undefined,
+        "Volume",
+        (volume) =>
+          this._set({
+            volume: volume === undefined || volume === null || volume === "" ? null : Number(volume) / 100,
+          }),
+        { helper },
+      )}
+      ${set
+        ? html`<ha-icon-button class="clear" .label=${"Clear"} @click=${() => this._set({ volume: null })}>
+            <ha-icon icon="mdi:close"></ha-icon>
+          </ha-icon-button>`
+        : nothing}
+    </div>`;
   }
 
   private _renderSpeaker(item: Partial<Speaker>) {
@@ -681,6 +659,19 @@ export class NcSettingsSound extends LitElement {
         margin-inline-end: -4px;
       }
       .nav-icon {
+        color: var(--secondary-text-color);
+      }
+      /* A line between the rows, as in the General list. */
+      ha-list-item-button + ha-list-item-button {
+        border-top: 1px solid var(--divider-color);
+      }
+      .clearable {
+        position: relative;
+      }
+      .clearable .clear {
+        position: absolute;
+        top: 4px;
+        inset-inline-end: 40px;
         color: var(--secondary-text-color);
       }
     `,

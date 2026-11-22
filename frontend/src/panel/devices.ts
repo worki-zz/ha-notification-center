@@ -104,48 +104,32 @@ export function testButton(label: string, run: () => void, disabled = false) {
 }
 
 /**
- * An Add button that turns into Home Assistant's entity picker when pressed,
- * as the notification editor's Add entity: the entity is chosen at once.
+ * An Add button that opens Home Assistant's entity picker under it, as
+ * the Add target button of an action: the entity is chosen at once.
  */
 export function addEntityButton(options: {
   hass: HomeAssistant | undefined;
-  adding: boolean;
   label: string;
-  icon?: string;
-  className: string;
-  domains: string[];
+  domains?: string[];
   exclude: string[];
-  start: () => void;
-  picked: (entityId: string | undefined) => void;
+  picked: (entityId: string) => void;
 }) {
-  return options.adding
-    ? html`<ha-entity-picker
-        class=${`add-entity ${options.className}`}
-        .hass=${options.hass}
-        .value=${""}
-        .includeDomains=${options.domains}
-        .excludeEntities=${options.exclude}
-        @picker-closed=${() => options.picked(undefined)}
-        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-          ev.stopPropagation();
-          options.picked(ev.detail.value || undefined);
-        }}
-      ></ha-entity-picker>`
-    : html`<ha-button appearance="filled" size="s" @click=${options.start}>
-        <ha-icon slot="start" .icon=${options.icon ?? "mdi:plus"}></ha-icon>
-        ${options.label}
-      </ha-button>`;
-}
-
-/** Open the entity picker of an Add button, once it is drawn. */
-export async function openEntityPicker(host: LitElement, className: string): Promise<void> {
-  await host.updateComplete;
-  // After the click is over, or the picker takes it as a click outside.
-  await new Promise((resolve) => window.setTimeout(resolve, 50));
-  const picker = host.shadowRoot?.querySelector(`ha-entity-picker.${className}`) as
-    | (HTMLElement & { open?: () => Promise<void> })
-    | null;
-  await picker?.open?.();
+  return html`<ha-entity-picker
+    add-button
+    .addButtonLabel=${options.label}
+    .hass=${options.hass}
+    .value=${""}
+    .includeDomains=${options.domains}
+    .excludeEntities=${options.exclude}
+    @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+      ev.stopPropagation();
+      const picker = ev.currentTarget as HTMLElement & { value?: string };
+      const entityId = ev.detail.value;
+      // Back to the button, for the next one.
+      picker.value = "";
+      if (entityId) options.picked(entityId);
+    }}
+  ></ha-entity-picker>`;
 }
 
 /** The modes as Home Assistant's order shows them: the unconditional Home first. */

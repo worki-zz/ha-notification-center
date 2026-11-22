@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.6.4
 
 ### Changed
 
+- Settings rows: the notification's and the category's name (and category) on the first row; Icon, Color and Highlight on the second. Highlight is a Normal / Highlighted dropdown in both; a notification's own colour or Highlight has an X that goes back to the category's.
+- Add light, Add speaker, Add siren and Add entity are buttons like Home Assistant's Add target, which open an entity picker.
+- Channel dialog: a line between Home modes and Settings; *Delayed* in place of *After a delay*; Repeat (Once / Loop) beside When, under Delay when delayed; the Read the message ticks show only when it is on, under a *Read* label.
+- Light: Highlight effect always shows (Blink only when the light has no effects); the illuminance sensor has a placeholder in place of a label and lines up with Dim below.
+- Sound: a line between the rows; no info on the Sirens header; Volume has an X to clear it.
+- Shorter texts: Home modes, Sound and the sleep hint; no intro on People and Chimes; General shows *5 modes* and *YAML configuration*.
 - Settings pages, the editors and the Overview all have 24 px under the header.
 - General: a line between the rows of the list.
 

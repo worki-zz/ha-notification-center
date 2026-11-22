@@ -58,7 +58,7 @@ export class NcSettingsGeneral extends LitElement {
       {
         key: "modes",
         name: "Home modes",
-        description: count(config.modes.length, "home mode", "home modes"),
+        description: count(config.modes.length, "mode", "modes"),
         icon: "mdi:home-switch-outline",
         color: "#43A047",
       },
@@ -95,7 +95,7 @@ export class NcSettingsGeneral extends LitElement {
       {
         key: "import",
         name: "Import and export",
-        description: "The configuration as YAML",
+        description: "YAML configuration",
         icon: "mdi:swap-vertical",
         color: "#607D8B",
       },
