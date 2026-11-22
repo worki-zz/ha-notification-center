@@ -29,7 +29,7 @@ import type { NotificationViewData } from "../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../shared/text";
 import type { HomeAssistant } from "../shared/types";
 import "./channel-tables";
-import { CHANNELS, audienceCount } from "./channel-tables";
+import { CHANNELS, audienceCount, sleepersOf } from "./channel-tables";
 import { confirmDialog } from "./confirm";
 import { field } from "./fields";
 import { BLOCK_STYLES, block } from "./editor/block";
@@ -335,6 +335,7 @@ export class NcCategoryEditor extends LitElement {
         () =>
           html`<nc-audience-table
             .hass=${this.hass}
+            .sleepers=${sleepersOf(this.config?.people)}
             .value=${draft.audience ?? {}}
             @value-changed=${(
               ev: CustomEvent<{ value: Category["audience"] }>,
@@ -368,7 +369,12 @@ export class NcCategoryEditor extends LitElement {
   }
 
   private _audienceCount(draft: Draft): string | undefined {
-    return audienceCount(this.hass, draft.audience, undefined);
+    return audienceCount(
+      this.hass,
+      draft.audience,
+      undefined,
+      sleepersOf(this.config?.people),
+    );
   }
 
   private _panel(

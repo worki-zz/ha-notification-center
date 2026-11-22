@@ -189,6 +189,9 @@ export class NcStepEditor extends LitElement {
   // The modes, for the Channels table.
   @property({ attribute: false }) public modes: Mode[] = [];
 
+  // The people with a sleep condition (the Audience's Sleep ticks).
+  @property({ attribute: false }) public sleepers: string[] = [];
+
   // The interaction whose dialog is open: the step's own entry for it, the
   // category's button it inherits from, and whether it is a new own button.
   @state() private _interaction?: {
@@ -293,7 +296,12 @@ export class NcStepEditor extends LitElement {
         "audience",
         "mdi:account-multiple",
         "Audience",
-        audienceCount(this.hass, this.category?.audience, step.audience),
+        audienceCount(
+          this.hass,
+          this.category?.audience,
+          step.audience,
+          this.sleepers,
+        ),
         this._renderAudience(step),
       )}
       ${this._panel(
@@ -849,6 +857,7 @@ export class NcStepEditor extends LitElement {
     return html`<div class="block">
       <nc-audience-table
         .hass=${this.hass}
+        .sleepers=${this.sleepers}
         .base=${this.category?.audience ?? {}}
         .value=${step.audience ?? {}}
         @value-changed=${(
