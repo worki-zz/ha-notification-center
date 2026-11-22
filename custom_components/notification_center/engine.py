@@ -64,6 +64,8 @@ from .channels import (
     CHANNEL_DASHBOARD,
     REASON_AUDIENCE,
     REASON_DELAY,
+    REASON_MODE,
+    REASON_OFF,
     ChannelView,
     audience_of,
     channel_settings,
@@ -1119,10 +1121,13 @@ class Engine:
         """Return what the Dashboard channel shows: its diagnostic sensor.
 
         Shown: the active cards on the dashboard for at least one person.
-        Held back: not in this mode. Waiting: for the delay, or for someone
-        of the audience to be in a ticked state.
+        The others by the reason they are not shown: the mode, the delay,
+        the audience (nobody in a ticked state), or off (no mode ticked).
         """
-        shown = held_back = waiting = 0
+        shown = 0
+        held = dict.fromkeys(
+            (REASON_MODE, REASON_DELAY, REASON_AUDIENCE, REASON_OFF), 0
+        )
         for notification in self._config["notifications"]:
             if not notification.get("enabled", True):
                 continue
@@ -1132,11 +1137,9 @@ class Engine:
                 view = self.channel_view(card)
                 if view.sends:
                     shown += 1
-                elif view.reason in (REASON_DELAY, REASON_AUDIENCE):
-                    waiting += 1
-                else:
-                    held_back += 1
-        return {"state": shown, "held_back": held_back, "waiting": waiting}
+                elif view.reason in held:
+                    held[view.reason] += 1
+        return {"state": shown, **held}
 
     @callback
     def _schedule_delay_timer(self) -> None:

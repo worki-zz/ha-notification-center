@@ -231,7 +231,7 @@ async def test_dashboard_follows_presence_and_sleep(center: Center) -> None:
     await center.set("input_boolean.a_sleeps", "on")
     assert _dashboard(center, nid)["reason"] == REASON_AUDIENCE
     assert center.state("sensor.nc_channel_dashboard") == "0"
-    assert center.attrs("sensor.nc_channel_dashboard")["waiting"] == 1
+    assert center.attrs("sensor.nc_channel_dashboard")["audience"] == 1
     # The notification itself stays active.
     assert center.state("sensor.nc_garbage") == "active"
     assert center.state("sensor.notification_center") == "1"
@@ -262,4 +262,4 @@ async def test_dashboard_mode_and_delay(
 
     await _set_category(center, channels={"dashboard": {"modes": []}})
     assert _dashboard(center, nid)["reason"] == REASON_OFF
-    assert center.attrs("sensor.nc_channel_dashboard")["held_back"] == 1
+    assert center.attrs("sensor.nc_channel_dashboard")["off"] == 1

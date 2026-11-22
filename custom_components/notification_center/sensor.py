@@ -241,7 +241,7 @@ class DashboardChannelSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the cards held back by the mode and the waiting ones."""
+        """Return the cards not shown, by reason: mode, delay, audience, off."""
         summary = self._engine.dashboard_summary()
         summary.pop("state")
         return summary
