@@ -298,7 +298,7 @@ class EngineActions:
         if step is None or step.schedule is None:
             raise ServiceValidationError("The step has no schedule")
         if self.select(notification_id, step_id, None):
-            raise ServiceValidationError("The step has an open card")
+            raise ServiceValidationError("The step has an open notification")
         schedule = step.schedule
         if schedule.is_calendar and schedule.next is not None:
             self._record(notification_id, step_id, HISTORY_SKIPPED, schedule.next)

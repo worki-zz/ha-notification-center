@@ -576,7 +576,7 @@ def ws_card_action(
         if card.entity_id == msg.get("entity_id")
     ]
     if not cards:
-        connection.send_error(msg["id"], "not_found", "The card is not open")
+        connection.send_error(msg["id"], "not_found", "The notification is not open")
         return
     context = connection.context(msg)
     action = msg["action"]
@@ -630,7 +630,7 @@ async def ws_card_press(
         None,
     )
     if card is None:
-        connection.send_error(msg["id"], "not_found", "The card is not open")
+        connection.send_error(msg["id"], "not_found", "The notification is not open")
         return
     until = None
     if msg.get("until"):

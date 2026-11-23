@@ -24,7 +24,7 @@
         },
         "state_attributes": {
           "active_count": {
-            "name": "Aktív kártyák"
+            "name": "Aktív értesítések"
           },
           "active_step": {
             "name": "Aktív lépés"
@@ -95,7 +95,7 @@
         },
         "entity": {
           "name": "Entitás",
-          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+          "description": "Egy Notification entities által indított értesítés entitása. Nélküle a lépés minden értesítése."
         },
         "message": {
           "name": "Üzenet",
@@ -125,7 +125,7 @@
         },
         "entity": {
           "name": "Entitás",
-          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+          "description": "Egy Notification entities által indított értesítés entitása. Nélküle a lépés minden értesítése."
         }
       }
     },
@@ -139,7 +139,7 @@
         },
         "entity": {
           "name": "Entitás",
-          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+          "description": "Egy Notification entities által indított értesítés entitása. Nélküle a lépés minden értesítése."
         }
       }
     },
@@ -153,7 +153,7 @@
         },
         "entity": {
           "name": "Entitás",
-          "description": "Egy Listed entities kártya entitása. Nélküle a lépés minden kártyája."
+          "description": "Egy Notification entities által indított értesítés entitása. Nélküle a lépés minden értesítése."
         },
         "duration": {
           "name": "Időtartam",
@@ -376,7 +376,7 @@
     },
     "template_error": {
       "title": "{name}: hiba az üzenetben",
-      "description": "A(z) **{name}** {step}. lépésének üzenetében vagy info sorában template hiba van, ezért a kártya a template nélkül mutatja a szöveget: {error}"
+      "description": "A(z) **{name}** {step}. lépésének üzenetében vagy info sorában template hiba van, ezért az értesítés a template nélkül mutatja a szöveget: {error}"
     },
     "setup_error": {
       "title": "{name}: egy trigger vagy feltétel nem működik",
