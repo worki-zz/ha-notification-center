@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- A Repairs issue is no longer fixable (Home Assistant's *Submit* button did not work here). Its description ends with the link to the notification's editor (or the settings page of the light, speaker or siren) on a line of its own.
+
 ## 0.7.3
 
 ### Added

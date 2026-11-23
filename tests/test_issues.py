@@ -41,7 +41,9 @@ async def test_missing_entity_issue(hass: HomeAssistant, center: Center) -> None
     assert len(issues) == 1
     issue = next(iter(issues.values()))
     assert issue.translation_key == "missing_entity"
-    assert issue.translation_placeholders == {
+    placeholders = dict(issue.translation_placeholders or {})
+    link = placeholders.pop("link")
+    assert placeholders == {
         "name": "Bell",
         "entities": "binary_sensor.bell, lock.front",
     }
@@ -51,7 +53,7 @@ async def test_missing_entity_issue(hass: HomeAssistant, center: Center) -> None
     )
     # The description ends with the link to the editor.
     assert not issue.is_fixable
-    assert issue.translation_placeholders["link"] == issue.learn_more_url
+    assert link == issue.learn_more_url
 
     await center.set("binary_sensor.bell", "off")
     await center.set("lock.front", "locked")
