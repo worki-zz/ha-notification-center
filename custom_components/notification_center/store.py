@@ -116,6 +116,9 @@ class ConfigManager:
             await self._store.async_save(self._config)
         else:
             self._config = await async_validate_config(self.hass, stored)
+            if self._config != stored:
+                # Keep what the upgrades changed, so that it is done once.
+                await self._store.async_save(self._config)
         self._unsub_registry = self.hass.bus.async_listen(
             er.EVENT_ENTITY_REGISTRY_UPDATED, self._async_entity_registry_updated
         )
