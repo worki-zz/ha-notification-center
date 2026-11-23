@@ -604,7 +604,10 @@ export class NcStepEditor extends LitElement {
           class="builtin"
           icon="mdi:format-list-checks"
         ></ha-icon>
-        <div slot="header" class="pinned-title">Notification entities</div>
+        <div slot="header" class="pinned-title">
+          Notification entities
+          <span class="pinned-state">· ${pinnedFilled(step) ? "Set" : "Not in use"}</span>
+        </div>
         <nc-entities-form
           kind-switch
           .hass=${this.hass}
@@ -919,11 +922,10 @@ export class NcStepEditor extends LitElement {
       const index = this._entryIndex(step, button, button.category);
       return index >= 0
         ? step.buttons[index]
-        : ({
-            id: button.id,
-            type: button.type,
-            actions: button.actions,
-          } as Button);
+        : // The Tap keeps following the category's Tap behavior.
+          (button.type === "tap"
+            ? { id: button.id, type: button.type }
+            : { id: button.id, type: button.type, actions: button.actions }) as Button;
     };
     const open = () =>
       (this._interaction = { button: entry(), inherited, isNew: false });

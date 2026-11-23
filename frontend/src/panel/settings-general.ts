@@ -321,13 +321,20 @@ export class NcSettingsGeneral extends LitElement {
 
   private async _download(): Promise<void> {
     if (!this.hass) return;
-    const { yaml } = await this.hass.callWS<{ yaml: string }>({ type: `${DOMAIN}/config/export` });
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    // From a signed address, as Home Assistant downloads its backups: the
+    // Companion app downloads a file only from an address, not from memory.
+    const { path } = await this.hass.callWS<{ path: string }>({
+      type: "auth/sign_path",
+      path: `/api/${DOMAIN}/export`,
+    });
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([yaml], { type: "text/yaml" }));
-    link.download = `notification_center_${stamp}.yaml`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    link.href = path;
+    link.target = "_blank";
+    link.download = "";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.dispatchEvent(new MouseEvent("click"));
+    link.remove();
   }
 
   private _pickFile(): void {

@@ -15,6 +15,7 @@ from custom_components.notification_center.model import (
     default_config,
     effective_buttons,
 )
+from custom_components.notification_center.store import upgrade_tap_behavior
 
 
 def _effective(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -286,3 +287,98 @@ async def test_speaker_repeat_volume_and_chime(hass: HomeAssistant) -> None:
     config["categories"][0]["channels"]["speaker:x"]["repeat"] = {"type": "recurring"}
     with pytest.raises(ConfigValidationError):
         await async_validate_config(hass, config)
+
+
+def _with_category_tap(tap: dict[str, Any], **step: Any) -> dict[str, Any]:
+    config = _with_notification(**step)
+    config["categories"][0]["buttons"] = [{"type": "tap", "enabled": True, **tap}]
+    return config
+
+
+async def test_tap_behavior_follows_the_category(hass: HomeAssistant) -> None:
+    """A step's Tap without its own Tap behavior has the category's."""
+    actions = {"silence": True, "navigation": {"type": "navigate", "path": "/x"}}
+    config = await async_validate_config(hass, _with_category_tap({"actions": actions}))
+    tap = next(b for b in _effective(config) if b["type"] == "tap")
+    assert tap["actions"] == actions
+    assert tap["run_button"] is None
+
+    config = await async_validate_config(
+        hass, _with_category_tap({"actions": actions, "run_button": "done"})
+    )
+    category_tap = config["categories"][0]["buttons"][0]
+    # Button action: the actions are not used, so not kept.
+    assert "actions" not in category_tap
+    tap = next(b for b in _effective(config) if b["type"] == "tap")
+    assert tap["run_button"] == "done"
+
+
+async def test_tap_behavior_of_a_step_is_one_block(hass: HomeAssistant) -> None:
+    """A step's own actions or button replace the category's whole block."""
+    own = {"navigation": {"type": "more_info"}, "entity_action": True}
+    config = await async_validate_config(
+        hass,
+        _with_category_tap(
+            {"run_button": "done"}, buttons=[{"type": "tap", "actions": own}]
+        ),
+    )
+    tap = next(b for b in _effective(config) if b["type"] == "tap")
+    assert tap["actions"] == own
+    assert tap["run_button"] is None
+
+    config = await async_validate_config(
+        hass,
+        _with_category_tap(
+            {"actions": {"silence": True}},
+            buttons=[{"type": "tap", "run_button": "dismiss", "actions": own}],
+        ),
+    )
+    step_tap = next(
+        b
+        for b in config["notifications"][0]["steps"][0]["buttons"]
+        if b["type"] == "tap"
+    )
+    assert "actions" not in step_tap
+    tap = next(b for b in _effective(config) if b["type"] == "tap")
+    assert tap["run_button"] == "dismiss"
+    assert tap["actions"] == {"navigation": {"type": "more_info"}}
+
+
+def test_upgrade_tap_behavior() -> None:
+    """Stored Taps that showed the category's behavior follow it again."""
+    more_info = {"navigation": {"type": "more_info"}}
+    own = {"silence": True}
+
+    def data(category_tap: dict[str, Any], *taps: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "categories": [
+                {"id": "general", "buttons": [{"type": "tap", **category_tap}]}
+            ],
+            "notifications": [
+                {
+                    "category": "general",
+                    "steps": [{"buttons": [{"type": "tap", **tap}]} for tap in taps],
+                }
+            ],
+        }
+
+    def taps(value: dict[str, Any]) -> list[dict[str, Any]]:
+        return [step["buttons"][0] for step in value["notifications"][0]["steps"]]
+
+    value = data(
+        {},
+        {"actions": more_info},
+        {"actions": own},
+        {"actions": own, "run_button": ""},
+    )
+    upgrade_tap_behavior(value)
+    assert taps(value) == [
+        {"type": "tap"},
+        {"type": "tap", "actions": own},
+        {"type": "tap", "actions": own, "run_button": ""},
+    ]
+
+    # The category's Button action used to win over a step's actions.
+    value = data({"run_button": "done"}, {"actions": own})
+    upgrade_tap_behavior(value)
+    assert taps(value) == [{"type": "tap"}]

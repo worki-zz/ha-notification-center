@@ -46,7 +46,8 @@ STORAGE_VERSION: Final = 1
 # 2: the Push channel starts switched off (0.6.8).
 # 3: a button has a list of actions instead of one action (0.7.1).
 # 4: the unused fields attachments, confirm and the read volume are gone.
-STORAGE_MINOR_VERSION: Final = 4
+# 5: the Tap behavior is one block, the step's or the category's.
+STORAGE_MINOR_VERSION: Final = 5
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -55,7 +56,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # migrated when it is imported.
 # 2: a button has a list of actions instead of one action (0.7.1).
 # 3: the unused fields attachments, confirm and the read volume are gone.
-EXPORT_VERSION: Final = 3
+# 4: the Tap behavior is one block, the step's or the category's.
+EXPORT_VERSION: Final = 4
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -77,6 +79,8 @@ class _ConfigStore(Store[ConfigData]):
             upgrade_button_actions(old_data)
         if old_major_version == 1 and old_minor_version < 4:
             drop_unused_fields(old_data)
+        if old_major_version == 1 and old_minor_version < 5:
+            upgrade_tap_behavior(old_data)
         return old_data
 
 
@@ -139,6 +143,40 @@ def drop_unused_fields(data: dict[str, Any]) -> None:
         for button in buttons or []:
             if isinstance(button, dict):
                 button.pop("confirm", None)
+
+
+def upgrade_tap_behavior(data: dict[str, Any]) -> None:
+    """Make a step's Tap follow the category's Tap behavior as before.
+
+    The Tap behavior is now one block: a step's Tap that stores its actions
+    has its own. A Tap that ran the category's button, or stored only the
+    default (more info), follows the category again.
+    """
+    runs = {
+        category.get("id"): bool(button.get("run_button"))
+        for category in data.get("categories") or []
+        if isinstance(category, dict)
+        for button in category.get("buttons") or []
+        if isinstance(button, dict) and button.get("type") == "tap"
+    }
+    for notification in data.get("notifications") or []:
+        if not isinstance(notification, dict):
+            continue
+        category_runs = runs.get(notification.get("category", "general"), False)
+        for step in notification.get("steps") or []:
+            buttons = step.get("buttons") if isinstance(step, dict) else None
+            for button in buttons or []:
+                if (
+                    not isinstance(button, dict)
+                    or button.get("type") != "tap"
+                    or "run_button" in button
+                    or "actions" not in button
+                ):
+                    continue
+                if category_runs or button["actions"] == {
+                    "navigation": {"type": "more_info"}
+                }:
+                    button.pop("actions")
 
 
 def switch_push_off(data: dict[str, Any]) -> None:
@@ -497,12 +535,14 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, EXPORT_VERSION):
+        if version not in (1, 2, 3, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
         if version < 3:
             drop_unused_fields(data)
+        if version < 4:
+            upgrade_tap_behavior(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.2
+
+Code review fixes, button dialog order, Tap behavior as one block, export in the Companion app.
 
 ### Fixed
 
@@ -16,6 +18,7 @@
 - A snooze that ended while Home Assistant was starting wakes the card once Home Assistant has started, not before.
 - The setup of the integration stops everything it started when it fails; the panel's commands find the loaded integration through its config entry.
 - A template error is logged once per text, not at every redraw.
+- *Export* downloads the YAML file in the Home Assistant Companion app too (it is downloaded from a signed address, as Home Assistant's backups).
 
 ### Removed
 
@@ -24,6 +27,9 @@
 
 ### Changed
 
+- A button's dialog shows its Actions in this order: *Notification state* (fixed on Done, Dismiss and Snooze), *Entity action* (a switch, always there), *Silence* (added with *Add silence*, deleted from its row), the Home Assistant actions and *Navigation*. They still run Silence first.
+- **Tap behavior** is one block, in the category too: *Action* (the Tap's Actions, edited as a button's, with the Navigation always in it) or *Button action* (only the button is chosen). A notification follows the category's whole block, or has its own; *Reset* beside Tap behavior follows the category again. Saved Taps that only showed more info, or ran the category's button, follow the category (storage minor 5, export version 4).
+- The *Notification entities* trigger at the top of Activation says in its title whether it is *Set* or *Not in use*.
 - The push and the engine take a card's buttons from the same place (one copy of the code); the same for the condition of a mode.
 
 ## 0.7.1

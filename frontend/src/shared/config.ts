@@ -28,6 +28,8 @@ export interface CategoryButton {
   snooze?: string[] | null;
   show_in_push?: boolean;
   open_on_tap?: string | null;
+  // Tap: the actions of its notifications' Tap (left out: more info).
+  actions?: ButtonActions;
   // Tap: the button its notifications' Tap runs (a built-in one by its
   // type, a custom one by its id; empty: their own actions).
   run_button?: string | null;
@@ -97,8 +99,8 @@ export interface ButtonState {
 }
 
 /**
- * The actions of a button. They run in this fixed order: the entity
- * action, the notification state, Silence, the Home Assistant actions, then
+ * The actions of a button. They run in this fixed order: Silence, the
+ * entity action, the notification state, the Home Assistant actions, then
  * the navigation. Left out: not used.
  */
 export interface ButtonActions {
@@ -121,7 +123,8 @@ export interface Button {
   enabled?: boolean;
   label?: string | null;
   icon?: string | null;
-  actions: ButtonActions;
+  // Left out on a step's Tap: the category's Tap behavior.
+  actions?: ButtonActions;
   // The Snooze button's times (keys of SNOOZE_CHOICES): one snoozes at
   // once, more are offered on the card.
   snooze?: string[] | null;
@@ -139,6 +142,7 @@ export interface Button {
 /** A button as it works: the step's settings over the category's. */
 export interface EffectiveButton extends Button {
   enabled: boolean;
+  actions: ButtonActions;
   // Inherited from the category (built-in buttons and its custom ones).
   category: boolean;
 }

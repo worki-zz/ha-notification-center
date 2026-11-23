@@ -149,7 +149,8 @@ export function newStep(category?: Category): EditorStep {
     conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
     done_when: { triggers: [], activation_conditions_no_longer_true: false },
     buttons: [
-      builtin("tap", enabled("tap"), { navigation: { type: "more_info" } }),
+      // The Tap follows the category's Tap behavior: no actions stored.
+      { id: newId(), type: "tap", enabled: enabled("tap") } as Button,
       builtin("done", enabled("done")),
       builtin("dismiss", enabled("dismiss")),
       builtin("snooze", enabled("snooze")),

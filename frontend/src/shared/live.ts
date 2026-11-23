@@ -177,10 +177,13 @@ export function effectiveButtons(
       actions: entry.actions ?? (base.type === "tap" ? { navigation: { type: "more_info" } } : {}),
       category: true,
     };
+    // The Tap behavior is one block: the step's, or the category's.
+    const ownTap = base.type === "tap" && tapBehaviorOwn(entry);
+    if (base.type === "tap" && !ownTap && base.actions) merged.actions = base.actions;
     if (base.type === "snooze") merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze;
     if (base.type === "tap") {
       merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
-      merged.run_button = (entry.run_button !== undefined ? entry.run_button : base.run_button) || null;
+      merged.run_button = (ownTap ? entry.run_button : base.run_button) || null;
     }
     else merged.show_in_push = entry.show_in_push ?? base.show_in_push;
     return merged;
@@ -190,6 +193,7 @@ export function effectiveButtons(
     result.push({
       ...entry,
       enabled: entry.enabled ?? true,
+      actions: entry.actions ?? {},
       show_in_push: entry.show_in_push ?? true,
       category: false,
     });
@@ -225,6 +229,14 @@ export function tapButton(live: LiveCard): Button | undefined {
   if (target) return tap;
   if (!hasActions(tap.actions)) return undefined;
   return tap;
+}
+
+/**
+ * Whether a step's Tap has its own Tap behavior (its actions, or the button
+ * it runs), as `tap_behavior_own` in Home Assistant. Else the category's.
+ */
+export function tapBehaviorOwn(tap: Partial<Pick<Button, "actions" | "run_button">>): boolean {
+  return tap.actions !== undefined || tap.run_button !== undefined;
 }
 
 /** The key a Tap names a button by: a built-in one's type, a custom one's id. */

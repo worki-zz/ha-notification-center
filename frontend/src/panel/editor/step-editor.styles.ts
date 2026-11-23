@@ -103,6 +103,10 @@ export const STEP_EDITOR_STYLES = css`
     ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {
       margin-inline-end: 12px;
     }
+    .pinned-state {
+      color: var(--secondary-text-color);
+      font-weight: normal;
+    }
     .pinned-title {
       flex: 1;
     }
