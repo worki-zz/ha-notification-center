@@ -1,6 +1,6 @@
 // The Channels table of a category and of a step.
 
-import { LitElement, html, nothing } from "lit";
+import { LitElement, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { PUSH_PRIORITIES, PUSH_PRIORITY_DEFAULT, type PushPriority, type ChannelSettings, type Duration, type Mode, type NotificationCenterConfig } from "../shared/config";
@@ -9,6 +9,7 @@ import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
 import { type ChannelInfo, channelIcon, testButton, testChannel } from "./devices";
 import { field } from "./fields";
+import { STATUS_STYLES, renderStatus } from "./status";
 
 import { CHANNEL_PAGE_STYLES, TABLE_STYLES } from "./table-styles";
 import { type LiveTone, PUSH_PRIORITY_INFO, channelSummary, effectiveChannel, hasDelay, liveBadge, modeColumns, whenText } from "./channel-helpers";
@@ -26,7 +27,7 @@ export class NcChannelTable extends LitElement {
   @property({ attribute: false }) public channels: ChannelInfo[] = [];
 
   // The home mode now (a notification's editor only): its column is marked,
-  // its ticks are green and a delay that applies now is orange.
+  // its ticks are green (orange where not ticked) and the icons get a badge.
   @property({ attribute: false }) public currentMode?: string | null;
 
   // The configuration: the chimes a speaker can play.
@@ -128,6 +129,15 @@ export class NcChannelTable extends LitElement {
     return html`<span class="avatar-wrap">${icon}${liveBadge(tone, title)}</span>`;
   }
 
+  /**
+   * The live colour of a tick in the home mode's column now: green when
+   * ticked, orange when not, none when the channel is off in every mode.
+   */
+  private _liveClass(settings: ChannelSettings, modeId: string): string {
+    if (modeId !== this.currentMode || !(settings.modes ?? []).length) return "";
+    return settings.modes!.includes(modeId) ? "now" : "now-off";
+  }
+
   /** Whether a channel is ticked in the home mode now. */
   private _sendsNow(settings: ChannelSettings): boolean {
     return !!this.currentMode && (settings.modes ?? []).includes(this.currentMode);
@@ -183,13 +193,12 @@ export class NcChannelTable extends LitElement {
         const settings = this._effective(channel.key);
         const own = this._isStep && this._own(channel.key).modes !== undefined;
         const delay = whenText(settings);
-        const late = this._sendsNow(settings) && hasDelay(settings.delay);
         return html`<div class="row">
           <div class="cell name">
             ${this._icon(channel, settings)}
             <div class="name-text">
               <div>${channel.name}</div>
-              <div class="secondary ${late ? "late" : ""}">
+              <div class="secondary">
                 ${(settings.modes ?? []).length ? delay : "Off"}
               </div>
             </div>
@@ -198,7 +207,7 @@ export class NcChannelTable extends LitElement {
             (mode) =>
               html`<div class="cell tick">
                 <ha-checkbox
-                  class=${mode.id === this.currentMode ? "now" : ""}
+                  class=${this._liveClass(settings, mode.id)}
                   .checked=${(settings.modes ?? []).includes(mode.id)}
                   .label=${`${channel.name}: ${mode.name}`}
                   @change=${(ev: Event) =>
@@ -251,7 +260,7 @@ export class NcChannelTable extends LitElement {
           ${this._icon(channel, settings)}
           <div class="name-text">
             <div>${channel.name}</div>
-            <div class="secondary ${this._sendsNow(settings) && hasDelay(settings.delay) ? "late" : ""}">
+            <div class="secondary">
               ${channelSummary(settings, modes)}
             </div>
           </div>
@@ -323,7 +332,6 @@ export class NcChannelTable extends LitElement {
           (mode) =>
             html`<label class="list-row">
               <ha-checkbox
-                class=${mode.id === this.currentMode ? "now" : ""}
                 .checked=${(settings.modes ?? []).includes(mode.id)}
                 @change=${(ev: Event) =>
                   this._tick(
@@ -333,11 +341,10 @@ export class NcChannelTable extends LitElement {
                   )}
               ></ha-checkbox>
               <ha-icon .icon=${mode.icon || "mdi:home-outline"}></ha-icon>
-              <div class="name-text">
-                ${mode.name}${mode.id === this.currentMode
-                  ? html`<ha-icon class="now-dot" icon="mdi:circle-medium" title="The home mode now"></ha-icon>`
-                  : nothing}
-              </div>
+              <div class="name-text">${mode.name}</div>
+              ${mode.id === this.currentMode
+                ? renderStatus({ label: "Active", tone: "green" })
+                : nothing}
             </label>`,
         )}
       </ha-card>
@@ -374,7 +381,7 @@ export class NcChannelTable extends LitElement {
                   this.hass,
                   { duration: {} },
                   settings.delay,
-                  "Delay",
+                  "",
                   (value) =>
                     this._store(key, {
                       ...this._own(key),
@@ -545,7 +552,7 @@ export class NcChannelTable extends LitElement {
         : nothing}`;
   }
 
-  static override styles = [TABLE_STYLES, CHANNEL_PAGE_STYLES];
+  static override styles = [TABLE_STYLES, CHANNEL_PAGE_STYLES, unsafeCSS(STATUS_STYLES)];
 }
 
 declare global {

@@ -156,10 +156,15 @@ export class NcAudienceTable extends LitElement {
               </div>
               ${states.map((state) =>
                 state === "sleep" && !this.sleepers.includes(person.id)
-                  ? html`<div class="cell tick"></div>`
+                  ? html`<div class="cell tick">
+                      <ha-checkbox
+                        disabled
+                        title="No sleep condition is set for ${person.name} on the People page"
+                      ></ha-checkbox>
+                    </div>`
                   : html`<div class="cell tick">
                       <ha-checkbox
-                        class=${state === now ? "now" : ""}
+                        class=${state === now ? (entry[state] ? "now" : "now-off") : ""}
                         title=${state === now ? `${person.name} is ${STATE_NAMES[state].toLowerCase()} now` : ""}
                         .checked=${entry[state]}
                         .label=${`${person.name}: ${STATE_NAMES[state]}`}

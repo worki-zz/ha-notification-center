@@ -72,7 +72,7 @@ export class NcNotificationEditor extends LitElement {
 
   @state() private _preview: PreviewText[] = [];
 
-  // The Information dialog: open for the notification, or for one step.
+  // The Status dialog: open for the notification, or for one step.
   @state() private _info?: { stepId?: string };
 
   // The draft as it was loaded or saved, to tell whether it changed.
@@ -385,7 +385,7 @@ export class NcNotificationEditor extends LitElement {
               class="status-button"
               role="button"
               tabindex="0"
-              title="Information"
+              title="Status"
               @click=${() => (this._info = {})}
               @keydown=${(ev: KeyboardEvent) => {
                 if (ev.key === "Enter" || ev.key === " ") this._info = {};
@@ -443,8 +443,8 @@ export class NcNotificationEditor extends LitElement {
             <wa-divider></wa-divider>`
         : nothing}
       <ha-dropdown-item value="info" .disabled=${!saved}>
-        <ha-icon slot="icon" icon="mdi:information-outline"></ha-icon>
-        Information
+        <ha-icon slot="icon" icon="mdi:list-status"></ha-icon>
+        Status
       </ha-dropdown-item>
       <ha-dropdown-item value="run_me" .disabled=${!runnable}>
         <ha-icon slot="icon" icon="mdi:play"></ha-icon>
@@ -744,8 +744,8 @@ export class NcNotificationEditor extends LitElement {
             Run this step, only me
           </ha-dropdown-item>
           <ha-dropdown-item value="info" .disabled=${this._isNew || !this._storedStep(step.id)}>
-            <ha-icon slot="icon" icon="mdi:information-outline"></ha-icon>
-            Step information
+            <ha-icon slot="icon" icon="mdi:list-status"></ha-icon>
+            Step status
           </ha-dropdown-item>
           <ha-dropdown-item value="duplicate">
             <ha-icon slot="icon" icon="mdi:content-duplicate"></ha-icon>

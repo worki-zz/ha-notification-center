@@ -27,7 +27,7 @@ export const NOTIFICATION_EDITOR_STYLES = css`
     .toolbar .status {
       margin-inline-end: 8px;
     }
-    /* The status chip opens the Information dialog. */
+    /* The status chip opens the Status dialog. */
     .status-button {
       display: inline-flex;
       cursor: pointer;

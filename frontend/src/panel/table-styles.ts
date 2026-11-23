@@ -108,8 +108,11 @@ export const TABLE_STYLES = css`
       var(--success-color, #4caf50)
     );
   }
-  .secondary.late {
-    color: var(--ha-color-fill-warning-loud-resting, var(--warning-color, #ff9800));
+  ha-checkbox.now-off {
+    --ha-checkbox-border-color: var(
+      --ha-color-fill-warning-loud-resting,
+      var(--warning-color, #ff9800)
+    );
   }
   .avatar-wrap {
     position: relative;

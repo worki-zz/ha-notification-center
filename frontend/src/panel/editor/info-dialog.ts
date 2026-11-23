@@ -1,4 +1,4 @@
-// The Information dialog of a notification (or of one of its steps): its
+// The Status dialog of a notification (or of one of its steps): its
 // status, and for each active step what every channel does now and why.
 // Opened from the editor's menu, its status chip and the step menu.
 
@@ -16,7 +16,7 @@ import type {
 import { formatWhen } from "../../shared/format";
 import { categoryOf } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
-import { effectiveChannel, haPeople } from "../channel-helpers";
+import { STATE_NAMES, effectiveChannel, haPeople } from "../channel-helpers";
 import { type ChannelInfo, channelIcon, channelsOf } from "../devices";
 
 const STATE_PHRASES: Record<AudienceState, string> = {
@@ -30,7 +30,20 @@ type Tone = "sends" | "waits" | "off";
 interface ChannelLine {
   text: string;
   tone: Tone;
+  icon: string;
 }
+
+const TONE_ICONS: Record<Tone, string> = {
+  sends: "mdi:check-circle",
+  waits: "mdi:pause-circle-outline",
+  off: "mdi:close-circle-outline",
+};
+
+const PERSON_ICONS: Record<AudienceState, string> = {
+  home: "mdi:home-account",
+  sleep: "mdi:sleep",
+  away: "mdi:account-arrow-right",
+};
 
 /** "Anna", "Anna and Béla", "Anna, Béla and Cecil". */
 function names(list: string[]): string {
@@ -100,7 +113,7 @@ export class NcInfoDialog extends LitElement {
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
-      header-title="Information"
+      header-title="Status"
       header-subtitle=${subtitle}
       @closed=${this._closed}
     >
@@ -189,38 +202,65 @@ export class NcInfoDialog extends LitElement {
           if (!view) return nothing;
           const line = this._channelLine(card, channel, view);
           return html`<ha-list-item-base>
-            <span slot="start" class="channel-icon">${channelIcon(this.hass, channel)}</span>
-            <span slot="headline">${channel.name}</span>
-            <span slot="supporting-text" class=${line.tone}>${line.text}</span>
-            <ha-icon
-              slot="end"
-              class="row-icon ${line.tone}"
-              .icon=${line.tone === "sends"
-                ? "mdi:check-circle"
-                : line.tone === "waits"
-                  ? "mdi:pause-circle-outline"
-                  : "mdi:close-circle-outline"}
-            ></ha-icon>
-          </ha-list-item-base>`;
+              <span slot="start" class="channel-icon">${channelIcon(this.hass, channel)}</span>
+              <span slot="headline">${channel.name}</span>
+              <span slot="supporting-text">${line.text}</span>
+              <ha-icon slot="end" class="row-icon ${line.tone}" .icon=${line.icon}></ha-icon>
+            </ha-list-item-base>
+            ${this._renderPeople(card, channel, view)}`;
         })}
       </ha-list-base>`;
+  }
+
+  /**
+   * Dashboard and Push: one row per person under the channel, when the
+   * audience decides (not the home mode, the delay or a channel off).
+   */
+  private _renderPeople(card: CardState, channel: ChannelInfo, view: ChannelView) {
+    if (channel.kind !== "dashboard" && channel.kind !== "push") return nothing;
+    if (view.reason !== null && view.reason !== "audience") return nothing;
+    if (card.silenced && channel.kind === "push") return nothing;
+    const people = haPeople(this.hass);
+    if (!people.length) return nothing;
+    const states = this.state?.people ?? {};
+    return people.map((person) => {
+      const state = states[person.id] ?? "away";
+      const gets = view.people.includes(person.id);
+      const noPhone = gets && !!view.no_phone?.includes(person.id);
+      let text: string = STATE_NAMES[state];
+      if (noPhone) text += " · No phone set";
+      else if (!view.audience.includes(person.id)) text += " · Not in the audience";
+      else if (!gets) text += ` · Not in the audience while ${STATE_NAMES[state].toLowerCase()}`;
+      const ok = gets && !noPhone;
+      return html`<ha-list-item-base class="person">
+        <ha-icon slot="start" class="row-icon" .icon=${PERSON_ICONS[state]}></ha-icon>
+        <span slot="headline">${person.name}</span>
+        <span slot="supporting-text">${text}</span>
+        <ha-icon
+          slot="end"
+          class="row-icon ${ok ? "sends" : "waits"}"
+          .icon=${ok ? "mdi:check-circle" : "mdi:close-circle-outline"}
+        ></ha-icon>
+      </ha-list-item-base>`;
+    });
   }
 
   private _channelLine(card: CardState, channel: ChannelInfo, view: ChannelView): ChannelLine {
     const everyone = !haPeople(this.hass).length;
     switch (view.reason) {
       case "off":
-        return { text: "Off", tone: "off" };
+        return { text: "Off", tone: "off", icon: TONE_ICONS.off };
       case "mode": {
         const modes = this._modesOf(card, channel.key);
         const now = this.config?.modes.find((mode) => mode.id === this.state?.mode)?.name;
         return {
-          text: `Only when the home mode is ${modes.join(" or ")}${now ? ` (now ${now})` : ""}`,
+          text: `Waiting for home mode: ${modes.join(" or ")}${now ? ` (now ${now})` : ""}`,
           tone: "waits",
+          icon: TONE_ICONS.waits,
         };
       }
       case "delay":
-        return { text: `Delay until ${this._when(view.until)}`, tone: "waits" };
+        return { text: `Delay until ${this._when(view.until)}`, tone: "waits", icon: "mdi:timer-sand" };
       case "audience": {
         const people = this.state?.people ?? {};
         const why = view.audience.map(
@@ -229,23 +269,26 @@ export class NcInfoDialog extends LitElement {
         return {
           text: why.length ? `Nobody in the audience: ${names(why)}` : "Nobody in the audience",
           tone: "waits",
+          icon: "mdi:account-off-outline",
         };
       }
       default:
         break;
     }
-    if (card.silenced && channel.kind !== "dashboard") return { text: "Silenced", tone: "off" };
+    if (card.silenced && channel.kind !== "dashboard") {
+      return { text: "Silenced", tone: "off", icon: "mdi:volume-off" };
+    }
     const to = view.people.map((id) => this._personName(id));
     const verb = channel.kind === "dashboard" ? "Shows" : "Sends";
     let text = everyone || !to.length ? verb : `${verb} to ${names(to)}`;
     if (channel.kind === "push" && view.no_phone?.length) {
       const missing = view.no_phone.map((id) => this._personName(id));
       if (missing.length === to.length) {
-        return { text: `No phone set: ${names(missing)}`, tone: "waits" };
+        return { text: `No phone set: ${names(missing)}`, tone: "waits", icon: "mdi:cellphone-off" };
       }
       text += ` · No phone set: ${names(missing)}`;
     }
-    return { text, tone: "sends" };
+    return { text, tone: "sends", icon: TONE_ICONS.sends };
   }
 
   /** The home modes a channel is ticked in, for the card's step. */
@@ -296,8 +339,11 @@ export class NcInfoDialog extends LitElement {
     .row-icon.sends {
       color: var(--ha-color-fill-success-loud-resting, var(--success-color, #4caf50));
     }
-    .row-icon.waits,
-    [slot="supporting-text"].waits {
+    /* A person under Dashboard or Push: indented to the channel's name. */
+    ha-list-item-base.person {
+      margin-inline-start: 40px;
+    }
+    .row-icon.waits {
       color: var(--ha-color-fill-warning-loud-resting, var(--warning-color, #ff9800));
     }
   `;
