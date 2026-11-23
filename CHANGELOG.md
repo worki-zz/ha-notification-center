@@ -5,7 +5,7 @@
 ### Fixed
 
 - Conditions with a *Notification state* or *Notification entities* condition on other cards (Show when, Hide while, Done when activation conditions no longer true) are checked again when a card changes; entity conditions also every minute.
-- A *Notification state* trigger or condition on *Dismissed* or *Expired* with *For* fired never: the card is gone at once. It fires now, unless a newer card took its place.
+- A *Notification state* trigger on *Dismissed* or *Expired* with *For* never fired: the card is gone at once. It fires now, unless a newer card took its place.
 
 ## 0.7.1
 
