@@ -189,7 +189,7 @@ def _done_id(center: Center, card: Any) -> str:
         item for item in notification["steps"] if item["id"] == card.step_id
     )
     return next(
-        button["id"]
+        str(button["id"])
         for button in effective_buttons(category, step_config)
         if button["type"] == "done"
     )
