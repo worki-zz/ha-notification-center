@@ -9,7 +9,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 
 - Never read a file over ~400 lines in full. Find the spot with `grep -n` and read a
   line range. Large files: `engine.py`, `model.py`, `websocket_api.py`, `push.py`,
-  `notification-editor.ts`, `step-editor.ts`, `channel-tables.ts`, and the big test
+  `notification-editor.ts`, `step-editor.ts`, and the big test
   files. Engine tests are split: `tests/test_engine*.py` (core, listed, causes, actions).
 - `CHANGELOG.md`: read only the top section (`head -40`). `README.md` and `BACKLOG.md`:
   grep for the heading you need.
@@ -54,11 +54,12 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 - `card/`: dashboard cards and their editors.
 - `panel/notification-center-panel.ts`: the panel shell; `settings-page.ts`: Notifications
   list and settings tabs; `settings-*.ts`: General subpages (general, modes, people, lights,
-  sound, colors); `category-editor.ts`; `channel-tables.ts` (Audience and Channels tables);
+  sound, colors); `category-editor.ts`; `audience-table.ts`, `channel-table.ts` (Audience and Channels tables), `channel-helpers.ts` (their counts, names and summaries), `table-styles.ts`;
   `ha-elements.ts`, `fields.ts`, `confirm.ts`, `dialog-back.ts`: shared UI helpers.
-- `panel/editor/`: notification editor (`notification-editor.ts`), one step
-  (`step-editor.ts`), schedule, interaction (button) dialog, entity groups, `model.ts`
-  (editor form and conversions).
+- `panel/editor/`: notification editor (`notification-editor.ts`), its Entities block
+  (`entities-block.ts`), one step (`step-editor.ts`), schedule, interaction (button)
+  dialog, entity groups, `model.ts` (editor form and conversions). Styles and help texts
+  of the big components are in `*.styles.ts` and `step-editor.help.ts` next to them.
 - `shared/version.ts` must match the release version.
 
 ## Commands

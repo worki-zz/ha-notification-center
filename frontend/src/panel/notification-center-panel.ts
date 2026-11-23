@@ -35,7 +35,7 @@ import { subscribeStore, type StoreData } from "../shared/store";
 import { isTemplate, replacePlaceholders } from "../shared/text";
 import type { HomeAssistant, PanelInfo } from "../shared/types";
 import "./category-editor";
-import { effectiveChannel, modeColumns, sleepersOf } from "./channel-tables";
+import { effectiveChannel, modeColumns, sleepersOf } from "./channel-helpers";
 import "./general-page";
 import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";

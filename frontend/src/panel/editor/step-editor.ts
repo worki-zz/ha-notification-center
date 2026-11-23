@@ -2,7 +2,7 @@
 // and when it is done. Starts, conditions and Done when are Home
 // Assistant's own trigger and condition editors.
 
-import { LitElement, css, html, nothing } from "lit";
+import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { field } from "../fields";
@@ -24,7 +24,7 @@ import {
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
 import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
-import { BLOCK_STYLES, block } from "./block";
+import { block } from "./block";
 import "./schedule-editor";
 import type {
   AudienceEntry,
@@ -36,8 +36,9 @@ import type {
   Mode,
   NotificationCenterConfig,
 } from "../../shared/config";
-import "../channel-tables";
-import { audienceCount, channelCount, channelsOf } from "../channel-tables";
+import "../audience-table";
+import "../channel-table";
+import { audienceCount, channelCount, channelsOf } from "../channel-helpers";
 import {
   categoryButtons,
   effectiveButtons,
@@ -45,61 +46,8 @@ import {
 } from "../../shared/live";
 import { INTERACTION_DEFAULTS, actionText } from "./interaction-dialog";
 import "./interaction-dialog";
-
-type StartKind = "triggers" | "schedule" | "repeat";
-
-const HELP: Record<
-  StartKind | "show" | "done" | "interactions",
-  { title: string; text: string[] }
-> = {
-  triggers: {
-    title: "Triggers",
-    text: [
-      "The step is activated when one of its triggers fires, like an automation.",
-      "Notification entities, at the top, watches the entities of the Entities block: every entity gets its own card when it starts to match, for example when a leak sensor turns on. State tests the state or an attribute; Numeric state tests a number against a limit. Left empty, it is not used.",
-      "The Notification entities triggers in the list do the same with the entities of any notification, and Notification state activates the step when this or another notification (or one of its steps) reaches a state, for example when step 1 is snoozed.",
-      "Without triggers, only the Trigger action (or Run now) activates the step.",
-    ],
-  },
-  schedule: {
-    title: "Schedule",
-    text: [
-      "The step comes on the calendar: every N days, weeks on the chosen days, months on a day, or years, at a time.",
-      "Expires closes a card nobody did, after a while or on a day at a time.",
-    ],
-  },
-  repeat: {
-    title: "Repeat after done",
-    text: [
-      "The step comes again N days, weeks, months or years after it was last done, at a time if one is set. Watering plants or changing a filter are typical.",
-      "A new step counts from when it was made. The pencil sets the next time: it is stored as when the step was last done.",
-      "Every can be a number or the value of an entity, such as an input number.",
-    ],
-  },
-  show: {
-    title: "Conditions",
-    text: [
-      "One set of conditions, used as switched on above them.",
-      "Activate only while conditions are met: the step is activated only when they are all true at that moment, for example the door card only while the alarm is armed. A scheduled card waits for them, hidden, until it expires.",
-      "Hide active notification while conditions are not met: an active card is hidden while any of them is false, and shows again when they are all true, for example the window card only while the heating is on. Push and light come again when it shows.",
-    ],
-  },
-  interactions: {
-    title: "Interactions",
-    text: [
-      "The buttons of the card and what a tap on it does. Done marks the card done, Dismiss dismisses it and Snooze snoozes it, for one of its times; the tap and the own buttons leave the card as it is.",
-      "Every one can also run an action: the entity action set for the card's entity in the Entities block, More info, a Home Assistant action or Navigate.",
-      "Show in push puts the button on the push notification too (with the push channel). Android shows at most 3.",
-    ],
-  },
-  done: {
-    title: "Done",
-    text: [
-      "The card closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
-      "Done when activation conditions no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a card closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
-    ],
-  },
-};
+import { HELP, type StartKind } from "./step-editor.help";
+import { STEP_EDITOR_STYLES } from "./step-editor.styles";
 
 // The Data field: empty is nothing; the time of the notification, an
 // entity's state (or attribute, last changed, last updated), or a template.
@@ -1089,181 +1037,7 @@ export class NcStepEditor extends LitElement {
     </ha-dialog>`;
   }
 
-  static override styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    /* More room before Activation and after Done. */
-    .group-gap {
-      height: 0;
-    }
-    .block {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    ha-button-toggle-group {
-      align-self: flex-start;
-    }
-    .row.data {
-      align-items: flex-start;
-    }
-    .row > .data-type {
-      flex: 0 1 220px;
-    }
-    /* On a phone each Data field takes the whole width. */
-    @media (max-width: 600px) {
-      .row.data > *,
-      .row.data > .data-type {
-        flex: 1 1 100%;
-      }
-    }
-    .param {
-      font-family: var(--ha-font-family-code, monospace);
-      font-size: var(--ha-font-size-s, 12px);
-      color: var(--primary-color);
-      background-color: rgb(from var(--primary-color) r g b / 0.1);
-      border: none;
-      border-radius: 4px;
-      padding: 3px 6px;
-      cursor: pointer;
-    }
-    .param:hover {
-      background-color: rgb(from var(--primary-color) r g b / 0.2);
-    }
-    .row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .row > * {
-      flex: 1 1 200px;
-      min-width: 0;
-    }
-    /* Close to the message they go in, more room before Info. */
-    .chips {
-      margin: -6px 0 6px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px;
-    }
-    .chips-label {
-      color: var(--secondary-text-color);
-      margin-inline-end: 4px;
-    }
-    .title {
-      min-height: 32px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin: 4px 0 -4px;
-      font-weight: var(--ha-font-weight-medium, 500);
-    }
-    .title ha-icon-button {
-      --ha-icon-button-size: 32px;
-      --mdc-icon-size: 18px;
-      color: var(--secondary-text-color);
-    }
-    /* Full width across the panel's padding. */
-    .divider {
-      height: 1px;
-      background-color: var(--divider-color);
-      margin: 4px -16px 0;
-    }
-    /* Like a trigger row of Home Assistant's list. */
-    ha-card.pinned-card {
-      overflow: hidden;
-    }
-    ha-expansion-panel.pinned {
-      display: block;
-      --expansion-panel-summary-padding: 0 8px 0 16px;
-      /* The panel pads its content even while closed, so the form does. */
-      --expansion-panel-content-padding: 0;
-    }
-    ha-expansion-panel.pinned nc-entities-form {
-      padding: 16px;
-    }
-    ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {
-      margin-inline-end: 12px;
-    }
-    .pinned-title {
-      flex: 1;
-    }
-    /* The built-in rows, which are not Home Assistant's triggers. */
-    ha-icon.builtin {
-      color: var(--amber-color, #ffc107);
-    }
-    /* Side by side where there is room. */
-    .show-switches {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 8px;
-    }
-    ha-card.interactions {
-      overflow: hidden;
-    }
-    .interaction {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 12px 16px;
-      cursor: pointer;
-    }
-    .interaction + .interaction {
-      border-top: 1px solid var(--divider-color);
-    }
-    .interaction:hover,
-    .interaction:focus-visible {
-      background-color: var(--secondary-background-color);
-      outline: none;
-    }
-    .interaction.off .own-text,
-    .interaction.off ha-icon {
-      opacity: 0.6;
-    }
-    .interaction ha-icon {
-      flex: none;
-    }
-    .own-row {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 12px 16px;
-    }
-    .own-row ha-icon {
-      flex: none;
-    }
-    .own-row + .own-row {
-      border-top: 1px solid var(--divider-color);
-    }
-    /* As Home Assistant draws a person: the picture, or the initials. */
-    .avatar {
-      flex: none;
-      width: 40px;
-      height: 40px;
-      border-radius: var(--ha-border-radius-circle, 50%);
-      object-fit: cover;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background-color: var(--light-primary-color);
-      color: var(--text-light-primary-color, var(--primary-text-color));
-      font-size: var(--ha-font-size-m, 14px);
-      overflow: hidden;
-    }
-    .own-text {
-      flex: 1;
-      min-width: 0;
-    }
-    .secondary {
-      color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s, 12px);
-    }
-    ${BLOCK_STYLES}
-  `;
+  static override styles = STEP_EDITOR_STYLES;
 }
 
 /** The text field inside an element, through the shadow roots. */
