@@ -122,8 +122,8 @@ export class NotificationCenterPanel extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has("hass")) this._follow();
-    if (!this._haReady && this._page === "settings") {
-      void loadSettingsElements().then((ready) => {
+    if (!this._haReady && this._page === "settings" && this.hass) {
+      void loadSettingsElements(this.hass, this).then((ready) => {
         this._haReady = ready;
       });
       // The texts of the trigger and condition editors.
