@@ -91,8 +91,8 @@ export class NcInfoDialog extends LitElement {
     const live = this.state?.notifications[notification.id];
     const steps = notification.steps.length;
     const step = this.stepId ? notification.steps.findIndex((item) => item.id === this.stepId) : -1;
-    const title =
-      step >= 0 && steps > 1 ? `${notification.name}: step ${step + 1}` : notification.name;
+    const subtitle =
+      step >= 0 && steps > 1 ? `${notification.name} · Step ${step + 1}` : notification.name;
     const cards = (live?.cards ?? []).filter(
       (card) => !this.stepId || card.step_id === this.stepId,
     );
@@ -100,19 +100,19 @@ export class NcInfoDialog extends LitElement {
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
-      header-title=${title}
-      header-subtitle="Information"
+      header-title="Information"
+      header-subtitle=${subtitle}
       @closed=${this._closed}
     >
+      ${live?.entity_id
+        ? html`<ha-icon-button slot="headerActionItems" .label=${"More info"} @click=${this._moreInfo}>
+            <ha-icon icon="mdi:information-outline"></ha-icon>
+          </ha-icon-button>`
+        : nothing}
       <div class="section">Status</div>
       <ha-list-base>${this._renderStatus(cards)}</ha-list-base>
       ${active.map((card) => this._renderCard(card, steps > 1 && !this.stepId))}
       <ha-dialog-footer slot="footer">
-        ${live?.entity_id
-          ? html`<ha-button slot="secondaryAction" appearance="plain" @click=${this._moreInfo}>
-              Entity
-            </ha-button>`
-          : nothing}
         <ha-button slot="primaryAction" @click=${() => (this._open = false)}>Close</ha-button>
       </ha-dialog-footer>
     </ha-dialog>`;
@@ -199,7 +199,7 @@ export class NcInfoDialog extends LitElement {
                 ? "mdi:check-circle"
                 : line.tone === "waits"
                   ? "mdi:pause-circle-outline"
-                  : "mdi:minus-circle-outline"}
+                  : "mdi:close-circle-outline"}
             ></ha-icon>
           </ha-list-item-base>`;
         })}
@@ -213,8 +213,9 @@ export class NcInfoDialog extends LitElement {
         return { text: "Off", tone: "off" };
       case "mode": {
         const modes = this._modesOf(card, channel.key);
+        const now = this.config?.modes.find((mode) => mode.id === this.state?.mode)?.name;
         return {
-          text: modes.length ? `Waiting for ${modes.join(" or ")} home mode` : "Waiting for a home mode",
+          text: `Only when the home mode is ${modes.join(" or ")}${now ? ` (now ${now})` : ""}`,
           tone: "waits",
         };
       }

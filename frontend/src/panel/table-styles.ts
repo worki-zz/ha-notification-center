@@ -95,6 +95,10 @@ export const TABLE_STYLES = css`
     margin-inline-start: 2px;
   }
   ha-checkbox.now {
+    --ha-checkbox-border-color: var(
+      --ha-color-fill-success-loud-resting,
+      var(--success-color, #4caf50)
+    );
     --ha-checkbox-checked-background-color: var(
       --ha-color-fill-success-loud-resting,
       var(--success-color, #4caf50)
@@ -105,21 +109,39 @@ export const TABLE_STYLES = css`
     );
   }
   .secondary.late {
-    color: var(--ha-color-on-warning-normal, var(--warning-color, #ff9800));
+    color: var(--ha-color-fill-warning-loud-resting, var(--warning-color, #ff9800));
   }
   .avatar-wrap {
     position: relative;
     display: inline-flex;
     flex: none;
   }
-  .avatar-wrap .gets {
+  /* As the badge of Home Assistant's tile card. */
+  .live-badge {
     position: absolute;
     right: -3px;
     bottom: -3px;
-    --mdc-icon-size: 16px;
-    color: var(--ha-color-fill-success-loud-resting, var(--success-color, #4caf50));
-    background-color: var(--card-background-color, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
+    --mdc-icon-size: 12px;
+    color: var(--white-color, #fff);
+    background-color: var(--ha-color-fill-success-loud-resting, var(--success-color, #4caf50));
+  }
+  .name .live-badge ha-icon,
+  .list-row .live-badge ha-icon {
+    color: var(--white-color, #fff);
+  }
+  .live-badge.waits,
+  .live-badge.no {
+    background-color: var(--ha-color-fill-warning-loud-resting, var(--warning-color, #ff9800));
+  }
+  .channel-icon + .live-badge {
+    right: -6px;
+    bottom: -6px;
   }
   .hint {
     margin: 0;

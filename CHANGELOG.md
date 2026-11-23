@@ -4,9 +4,9 @@
 
 ### Added
 
-- *Information* in the notification editor's menu (and a click on its status chip) opens a dialog of the notification's status: active since, snoozed until, hidden, last active, last done, next due. For each active step it lists every channel and what it does now: *Sends to Anna and Béla*, *Waiting for Night home mode*, *Delay until 18:40*, *Nobody in the audience: Anna is not home*, *Off*, and for Push the people with no phone set. *Step information* in the step menu shows the same for one step. The entity's more-info is a button of the dialog.
+- *Information* in the notification editor's menu (and a click on its status chip) opens a dialog of the notification's status: active since, snoozed until, hidden, last active, last done, next due. For each active step it lists every channel and what it does now: *Sends to Anna and Béla*, *Only when the home mode is Night (now Away)*, *Delay until 18:40*, *Nobody in the audience: Anna is not home*, *Off*, and for Push the people with no phone set. *Step information* in the step menu shows the same for one step. The entity's more-info is a button in the dialog's header.
 - A single-step notification shows a green dot on its step tab while it is active, as a numbered step shows a green number.
-- Live marks in the editor's Channels and Audience tables: a green dot before the home mode now, green ticks that apply now, the delay text in orange where it applies now, and a check on the avatar of each person who gets the notification in their state now.
+- Live marks in the editor's Channels and Audience tables and the channel dialog: a green dot at the home mode now, the checkboxes of the home mode or person state now in green, the delay text in orange where it applies now, and a badge on each channel icon and person avatar (as on a tile card): a green check when it sends or gets the notification now, an orange timer while a delay applies, an orange cross when not.
 - The *Test* item of a condition row works for Notification state and Notification entities conditions without a notification set: they test this (saved) notification.
 
 ### Changed

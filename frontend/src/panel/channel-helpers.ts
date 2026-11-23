@@ -1,5 +1,6 @@
 // Helpers of the Audience and Channels tables: names, counts and summaries.
 
+import { html, nothing } from "lit";
 
 import { AUDIENCE_STATES, PUSH_PRIORITY_DEFAULT, type PushPriority, type AudienceEntry, type AudienceState, type ChannelSettings, type Duration, type Mode } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
@@ -174,4 +175,23 @@ export function whenText(settings: ChannelSettings): string {
   return priority && priority !== PUSH_PRIORITY_DEFAULT
     ? `${when} · ${PUSH_PRIORITY_INFO[priority].name}`
     : when;
+}
+
+export type LiveTone = "sends" | "waits" | "no";
+
+const LIVE_ICONS: Record<LiveTone, string> = {
+  sends: "mdi:check",
+  waits: "mdi:timer-sand",
+  no: "mdi:close",
+};
+
+/**
+ * A live mark on an avatar or a channel icon, drawn like the badge of Home
+ * Assistant's tile card: a small coloured circle with a white icon.
+ */
+export function liveBadge(tone: LiveTone | undefined, title: string) {
+  if (!tone) return nothing;
+  return html`<span class="live-badge ${tone}" title=${title}
+    ><ha-icon .icon=${LIVE_ICONS[tone]}></ha-icon
+  ></span>`;
 }

@@ -12,6 +12,7 @@ import {
   type PersonInfo,
   effectiveAudience,
   haPeople,
+  liveBadge,
   personStates,
   visibleStates,
 } from "./channel-helpers";
@@ -145,8 +146,11 @@ export class NcAudienceTable extends LitElement {
             return html`<div class="row">
               <div class="cell name">
                 <span class="avatar-wrap"
-                  >${avatar(person)}${gets
-                    ? html`<ha-icon class="gets" icon="mdi:check-circle" title="Gets it now"></ha-icon>`
+                  >${avatar(person)}${now
+                    ? liveBadge(
+                        gets ? "sends" : "no",
+                        `${STATE_NAMES[now]} now: ${gets ? "gets it" : "does not get it"}`,
+                      )
                     : nothing}</span
                 ><span class="name-text">${person.name}</span>
               </div>
