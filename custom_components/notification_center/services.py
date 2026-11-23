@@ -17,6 +17,7 @@ from homeassistant.helpers.service import async_extract_entity_ids
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
+from .cards import Overrides
 from .const import (
     CLOSED_DISMISSED,
     CLOSED_DONE,
@@ -28,7 +29,7 @@ from .const import (
     SERVICE_TRIGGER,
     SOURCE_ACTION,
 )
-from .engine import Engine, Overrides, async_get_engine
+from .engine import Engine, async_get_engine
 from .model import ATTACHMENT_SCHEMA
 
 _STEP = vol.All(vol.Coerce(int), vol.Range(min=1))

@@ -28,15 +28,17 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, UNIQUE_ID_NOTIFICATION_PREFIX
 from .listed import group_members
+from .migrations import (
+    upgrade_buttons,
+    upgrade_listed,
+    upgrade_show_when,
+    upgrade_terms,
+)
 from .model import (
     ENTITIES_KINDS,
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
     new_id,
-    upgrade_buttons,
-    upgrade_listed,
-    upgrade_show_when,
-    upgrade_terms,
 )
 
 _GROUP_FILTER = ("domain", "device_class", "areas", "floors", "labels")

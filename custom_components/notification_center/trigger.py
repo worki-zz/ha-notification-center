@@ -24,7 +24,8 @@ from homeassistant.helpers.trigger import (
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from .engine import StateWatch, async_add_state_watch, async_get_engine
+from .cards import StateWatch
+from .engine import async_add_state_watch, async_get_engine
 from .listed import EntityList, ListedTracker
 from .model import ENTITIES_NUMERIC_FIELDS, ENTITIES_STATE_FIELDS, NOTIFICATION_STATES
 

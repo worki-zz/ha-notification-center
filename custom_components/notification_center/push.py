@@ -39,7 +39,10 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.util import dt as dt_util, slugify
 
 from .const import PANEL_URL_PATH
-from .devices import Device, DeviceManager, _token, color_of, parse_color
+from .device_base import Device
+from .device_colors import color_of, parse_color
+from .device_speaker import _token
+from .devices import DeviceManager
 from .model import (
     CHANNEL_PUSH,
     PUSH_PRIORITY_DEFAULT,
@@ -48,7 +51,7 @@ from .model import (
 )
 
 if TYPE_CHECKING:
-    from .engine import Card
+    from .cards import Card
 
 _LOGGER = logging.getLogger(__name__)
 
