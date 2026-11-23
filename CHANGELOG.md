@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0
+## Unreleased
 
 First round of phase 7 (moving a real setup into the panel).
 
