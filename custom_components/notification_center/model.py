@@ -1451,33 +1451,10 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
 
     Raises ConfigValidationError with a readable message on the first error.
     """
-    # Imported here: migrations.py uses the constants of this module.
-    from .migrations import (  # noqa: PLC0415
-        upgrade_buttons,
-        upgrade_category_buttons,
-        upgrade_channels,
-        upgrade_colors,
-        upgrade_devices,
-        upgrade_listed,
-        upgrade_show_when,
-        upgrade_terms,
-    )
-
     if not isinstance(data, dict):
         raise ConfigValidationError("the configuration must be a mapping")
-    upgrade_category_buttons(data)
-    upgrade_channels(data, _known_people(hass, data))
-    upgrade_devices(data)
-    upgrade_colors(data)
-    for notification in data.get("notifications") or []:
-        # Before the structure check: the earlier fields are not in it.
-        if isinstance(notification, dict):
-            upgrade_show_when(notification)
-            upgrade_terms(notification)
-            upgrade_buttons(notification)
     config: ConfigData = _structure(CONFIG_SCHEMA, data, "configuration")
     for notification in config["notifications"]:
-        upgrade_listed(notification)
         for number, step in enumerate(notification["steps"], start=1):
             await _validate_step_automation(
                 hass,
@@ -1509,15 +1486,6 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     order_modes(config["modes"])
     _check_references(config)
     return config
-
-
-def _known_people(hass: HomeAssistant, data: dict[str, Any]) -> list[str]:
-    """Return the person entities of Home Assistant and of the settings."""
-    people = {state.entity_id for state in hass.states.async_all("person")}
-    for person in data.get("people") or []:
-        if isinstance(person, dict) and isinstance(person.get("person"), str):
-            people.add(person["person"])
-    return sorted(people)
 
 
 def order_modes(modes: list[dict[str, Any]]) -> None:

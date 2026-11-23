@@ -1,661 +1,842 @@
-# Example configuration for development and tests.
-#
-# The 28 notifications of the design, with generic names and entity ids.
-# Import it from the panel to have something to look at; it is not part of
-# the default data.
 version: 1
-
 modes:
-  - id: away
-    name: Away
-    icon: mdi:home-export-outline
-    condition: {type: state, entity_id: zone.home, state: "0"}
-  - id: sleep
-    name: Sleep
-    icon: mdi:sleep
-    condition: {type: toggle, entity_id: input_boolean.sleep_mode}
-  - id: guest
-    name: Guest
-    icon: mdi:account-multiple
-    condition: {type: toggle, entity_id: input_boolean.guest_mode}
-  - id: home
-    name: Home
-    icon: mdi:home
-
+- id: away
+  name: Away
+  icon: mdi:home-export-outline
+  condition: {type: state, entity_id: zone.home, state: '0'}
+- id: sleep
+  name: Sleep
+  icon: mdi:sleep
+  condition: {type: toggle, entity_id: input_boolean.sleep_mode}
+- id: guest
+  name: Guest
+  icon: mdi:account-multiple
+  condition: {type: toggle, entity_id: input_boolean.guest_mode}
+- {id: home, name: Home, icon: 'mdi:home'}
 people:
-  - person: person.parent
-    notify: notify.mobile_app_parent_phone
-    device_type: android
-    sleep: {type: state, entity_id: binary_sensor.bedroom_bed_occupied, state: "on"}
-  - person: person.child
-    notify: notify.mobile_app_child_phone
-    device_type: ios
-
+- person: person.parent
+  notify: notify.mobile_app_parent_phone
+  device_type: android
+  sleep: {type: state, entity_id: binary_sensor.bedroom_bed_occupied, state: 'on'}
+- {person: person.child, notify: notify.mobile_app_child_phone, device_type: ios}
 lights:
-  - id: kitchen_strip
-    entity_id: light.kitchen_strip
-    brightness: 80
-    illuminance_sensor: sensor.outdoor_illuminance
-    dim_below: 30
-    dim_brightness: 30
-    dim_continuously: true
-    effect: blink
-
+- {id: kitchen_strip, entity_id: light.kitchen_strip, brightness: 80, illuminance_sensor: sensor.outdoor_illuminance, dim_below: 30,
+  dim_brightness: 30, dim_continuously: true, effect: blink}
 speakers:
-  - id: kitchen_speaker
-    entity_id: media_player.kitchen_speaker
-    volume: 0.5
-
+- {id: kitchen_speaker, entity_id: media_player.kitchen_speaker, volume: 0.5}
 sirens:
-  - id: balcony_siren
-    entity_id: siren.balcony_siren
-    duration: 60
-  - id: co_detector
-    entity_id: select.co_detector_siren
-    option: smoke_siren
-    stop_option: stop
-
+- {id: balcony_siren, entity_id: siren.balcony_siren, duration: 60}
+- {id: co_detector, entity_id: select.co_detector_siren, option: smoke_siren, stop_option: stop}
 chimes:
-  - id: soft_chime
-    name: Soft chime
-    media: {media_content_id: media-source://media_source/local/chimes/soft.mp3, media_content_type: audio/mpeg}
-
+- id: soft_chime
+  name: Soft chime
+  media: {media_content_id: 'media-source://media_source/local/chimes/soft.mp3', media_content_type: audio/mpeg}
 general:
-  read_the_message:
-    tts_service: tts.home_assistant_cloud
-    language: en-US
-    volume: 0.6
-
+  read_the_message: {tts_service: tts.home_assistant_cloud, language: en-US, volume: 0.6}
 categories:
-  - id: emergency
-    name: Emergency
-    icon: mdi:alert-octagon
-    card_color: red
-    highlight: true
-    chime: nc_alarm
-    snooze: {type: not_allowed}
-    channels:
-      dashboard: {modes: [away, sleep, guest, home]}
-      light:kitchen_strip: {modes: [away, sleep, guest, home]}
-      speaker:kitchen_speaker:
-        modes: [home]
-        repeat: {type: recurring, every: {seconds: 30}}
-      siren:balcony_siren: {modes: [away, sleep, guest, home]}
-      siren:co_detector: {modes: [away, sleep, guest, home]}
-      push:
-        modes: [away, sleep, guest, home]
-        critical: true
-        recipients: {at_home: true, away: true, sleeping: true}
-  - id: security
-    name: Security
-    icon: mdi:shield-home
-    card_color: indigo
-    chime: nc_chime
-    snooze: {type: fixed, duration: {hours: 1}}
-    channels:
-      dashboard: {modes: [away, home]}
-      push: {modes: [away, home]}
-  - id: devices
-    name: Devices
-    icon: mdi:devices
-    card_color: orange
-    snooze: {type: fixed, duration: {days: 1}}
-    channels:
-      dashboard: {modes: [away, home]}
-      push:
-        modes: [away, home]
-        delay: {hours: 1}
-  - id: home_category
-    name: Home
-    icon: mdi:home-alert
-    card_color: amber
-    snooze: {type: fixed, duration: {hours: 1}}
-    channels:
-      dashboard: {modes: [away, home]}
-  - id: family
-    name: Family
-    icon: mdi:account-group
-    card_color: purple
-    snooze: {type: fixed, duration: {hours: 1}}
-    channels:
-      dashboard: {modes: [away, home]}
-  - id: household
-    name: Household
-    icon: mdi:broom
-    card_color: blue
-    chime: soft_chime
-    snooze: {type: ask}
-    channels:
-      dashboard: {modes: [away, home]}
-  - id: garden
-    name: Garden
-    icon: mdi:flower
-    card_color: light-green
-    snooze: {type: fixed, duration: {hours: 1}}
-    channels:
-      dashboard: {modes: [away, home]}
-  - id: general
-    name: General
-    icon: mdi:bell
-    card_color: blue
-    channels:
-      dashboard: {modes: [home]}
-
+- id: emergency
+  name: Emergency
+  icon: mdi:alert-octagon
+  highlight: true
+  chime: nc_alarm
+  channels:
+    dashboard:
+      modes: [away, sleep, guest, home]
+    light:kitchen_strip:
+      modes: [away, sleep, guest, home]
+    speaker:kitchen_speaker:
+      modes: [home]
+      repeat:
+        type: recurring
+        every: {seconds: 30}
+    siren:balcony_siren:
+      modes: [away, sleep, guest, home]
+    siren:co_detector:
+      modes: [away, sleep, guest, home]
+    push:
+      modes: [away, sleep, guest, home]
+      critical: true
+      recipients: {at_home: true, away: true, sleeping: true}
+  buttons:
+  - {type: snooze}
+  audience: {}
+  color: red
+- id: security
+  name: Security
+  icon: mdi:shield-home
+  chime: nc_chime
+  channels:
+    dashboard:
+      modes: [away, home]
+    push:
+      modes: [away, home]
+  buttons:
+  - type: snooze
+    snooze: [1h]
+  audience: {}
+  color: indigo
+- id: devices
+  name: Devices
+  icon: mdi:devices
+  channels:
+    dashboard:
+      modes: [away, home]
+    push:
+      modes: [away, home]
+      delay: {hours: 1}
+  buttons:
+  - type: snooze
+    snooze: [tomorrow]
+  audience: {}
+  color: orange
+- id: home_category
+  name: Home
+  icon: mdi:home-alert
+  channels:
+    dashboard:
+      modes: [away, home]
+  buttons:
+  - type: snooze
+    snooze: [1h]
+  audience: {}
+  color: amber
+- id: family
+  name: Family
+  icon: mdi:account-group
+  channels:
+    dashboard:
+      modes: [away, home]
+  buttons:
+  - type: snooze
+    snooze: [1h]
+  audience: {}
+  color: purple
+- id: household
+  name: Household
+  icon: mdi:broom
+  chime: soft_chime
+  channels:
+    dashboard:
+      modes: [away, home]
+  buttons:
+  - {type: snooze}
+  audience: {}
+  color: blue
+- id: garden
+  name: Garden
+  icon: mdi:flower
+  channels:
+    dashboard:
+      modes: [away, home]
+  buttons:
+  - type: snooze
+    snooze: [1h]
+  audience: {}
+  color: light-green
+- id: general
+  name: General
+  icon: mdi:bell
+  channels:
+    dashboard:
+      modes: [home]
+  buttons:
+  - {type: snooze}
+  audience: {}
+  color: blue
 notifications:
-  # --- Emergency ---------------------------------------------------------
-  - id: smoke_alarm
-    name: Smoke alarm
-    category: emergency
-    icon: mdi:smoke-detector-variant-alert
-    entities:
-      - entity_id: binary_sensor.kitchen_smoke
+- id: smoke_alarm
+  name: Smoke alarm
+  category: emergency
+  icon: mdi:smoke-detector-variant-alert
+  entities:
+  - entity_id: binary_sensor.kitchen_smoke
+    actions:
+      mute:
+      - action: switch.turn_on
+        target: {entity_id: switch.kitchen_smoke_mute}
+  - entity_id: binary_sensor.workshop_smoke
+    actions:
+      mute:
+      - action: switch.turn_on
+        target: {entity_id: switch.workshop_smoke_mute}
+  steps:
+  - message: 'Smoke: {Area}'
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - id: mute
+      type: custom
+      enabled: true
+      label: Mute
+      icon: mdi:volume-off
+      action: {type: entity_action}
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_state, to: 'on', notification: smoke_alarm}
+- id: co_alarm
+  name: CO alarm
+  category: emergency
+  icon: mdi:molecule-co
+  entities:
+  - entity_id: binary_sensor.kitchen_co
+    actions:
+      mute:
+      - action: switch.turn_on
+        target: {entity_id: switch.kitchen_co_mute}
+  - entity_id: binary_sensor.workshop_co
+    actions:
+      mute:
+      - action: switch.turn_on
+        target: {entity_id: switch.workshop_co_mute}
+  steps:
+  - message: 'Carbon monoxide: {Area}'
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - id: mute
+      type: custom
+      enabled: true
+      label: Mute
+      icon: mdi:volume-off
+      action: {type: entity_action}
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_state, to: 'on', notification: co_alarm}
+- id: water_leak
+  name: Water leak
+  category: emergency
+  icon: mdi:water-alert
+  entity_groups:
+  - {id: moisture, domain: binary_sensor, device_class: moisture}
+  steps:
+  - message: 'Water leak: {Device}'
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - {type: custom, enabled: true, label: Mute, icon: 'mdi:volume-off'}
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_state, to: 'on', notification: water_leak}
+- id: alarm_triggered
+  name: Alarm triggered
+  category: emergency
+  icon: mdi:shield-alert
+  entities:
+  - {entity_id: alarm_control_panel.home}
+  steps:
+  - message: 'Alarm: {trigger.entity_name}'
+    done_when:
+      triggers:
+      - {trigger: state, entity_id: alarm_control_panel.home, to: disarmed}
+    attachments:
+    - {camera: camera.front_door}
+    buttons:
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    - type: custom
+      label: Disarm
+      icon: mdi:shield-off
+      confirm: true
+      action:
+        type: ha_action
         actions:
-          mute: [{action: switch.turn_on, target: {entity_id: switch.kitchen_smoke_mute}}]
-      - entity_id: binary_sensor.workshop_smoke
+        - action: alarm_control_panel.alarm_disarm
+          target: {entity_id: alarm_control_panel.home}
+    - type: custom
+      label: Silence
+      icon: mdi:volume-off
+      action:
+        type: ha_action
         actions:
-          mute: [{action: switch.turn_on, target: {entity_id: switch.workshop_smoke_mute}}]
-    steps:
-      - message: "Smoke: {Area}"
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {id: mute, type: dismiss, enabled: true, label: Mute, icon: mdi:volume-off, card: keep_silent, action: {type: entity_action}}
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-  - id: co_alarm
-    name: CO alarm
-    category: emergency
-    icon: mdi:molecule-co
-    entities:
-      - entity_id: binary_sensor.kitchen_co
+        - action: siren.turn_off
+          target: {entity_id: siren.home}
+    - type: custom
+      label: Clips
+      icon: mdi:filmstrip
+      action: {type: show_attachment}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_state, to: triggered, notification: alarm_triggered}
+- id: device_offline
+  name: Device offline
+  category: devices
+  icon: mdi:lan-disconnect
+  entity_groups:
+  - {domain: binary_sensor, device_class: connectivity}
+  steps:
+  - message: '{Device} is offline'
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - type: tap
+      enabled: true
+      action: {type: more_info}
+    - {type: dismiss, enabled: true}
+    - {type: done, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - trigger: notification_center.entities_state
+        to: [unavailable, unknown]
+        for: {minutes: 30}
+        notification: device_offline
+- id: low_battery
+  name: Low battery
+  category: devices
+  icon: mdi:battery-alert
+  entity_groups:
+  - {domain: sensor, device_class: battery}
+  steps:
+  - message: '{Device} battery is at {State} %'
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - type: tap
+      enabled: true
+      action: {type: more_info}
+    - {type: dismiss, enabled: true}
+    - {type: done, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - trigger: notification_center.entities_numeric_state
+        below: 15
+        for: {hours: 1}
+        notification: low_battery
+- id: doorbell_battery
+  name: Doorbell battery
+  category: devices
+  icon: mdi:doorbell
+  entities:
+  - {entity_id: sensor.doorbell_battery}
+  steps:
+  - message: Charge the doorbell
+    done_when:
+      triggers:
+      - {trigger: state, entity_id: sensor.doorbell_battery_state, to: charging}
+    buttons:
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: numeric_state, entity_id: sensor.doorbell_battery, below: 20}
+  - message: The doorbell is charged, put it back
+    done_when:
+      triggers:
+      - {trigger: state, entity_id: sensor.doorbell_battery_state, from: charging}
+    buttons:
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_numeric_state, above: 99, notification: doorbell_battery}
+    conditions:
+      activate_only_while_met: true
+      hide_while_not_met: false
+      conditions:
+      - {condition: state, entity_id: sensor.doorbell_battery_state, state: charging}
+- id: watering_water_shortage
+  name: Watering water shortage
+  category: garden
+  icon: mdi:water-off
+  entities:
+  - {entity_id: sensor.rain_tank_level}
+  steps:
+  - message: The rain tank is at {State} %, watering may stop
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_numeric_state, below: 20, notification: watering_water_shortage}
+      - {trigger: notification_center.notification_state, notification: garden_watering, state: active}
+    conditions:
+      activate_only_while_met: true
+      hide_while_not_met: false
+      conditions:
+      - {condition: numeric_state, entity_id: sensor.rain_tank_level, below: 20}
+      - {condition: notification_center.notification_state, notification: garden_watering, state: active}
+- id: garden_watering
+  name: Garden watering
+  category: garden
+  icon: mdi:sprinkler-variant
+  steps:
+  - message: Water the garden
+    done_when:
+      triggers:
+      - {trigger: template, value_template: '{{ states(''sensor.watering_amount'') | float(0) >= states(''input_number.watering_target'')
+          | float(0) }}'}
+    buttons:
+    - {type: done, enabled: false}
+    - type: custom
+      label: Start
+      icon: mdi:play
+      action:
+        type: ha_action
         actions:
-          mute: [{action: switch.turn_on, target: {entity_id: switch.kitchen_co_mute}}]
-      - entity_id: binary_sensor.workshop_co
+        - action: script.turn_on
+          target: {entity_id: script.water_the_garden}
+    activation:
+      type: schedule
+      schedule:
+        type: after_last_done
+        every: input_number.garden_watering_interval
+        unit: days
+        at: '22:00'
+        expires: {hours: 6}
+    conditions:
+      activate_only_while_met: true
+      hide_while_not_met: true
+      conditions:
+      - {condition: numeric_state, entity_id: sensor.rain_today, below: 5}
+      - condition: not
+        conditions:
+        - {condition: time, after: '04:00', before: '22:00'}
+- id: entrance_door_open
+  name: Entrance door open
+  category: home_category
+  icon: mdi:door-open
+  entities:
+  - {entity_id: binary_sensor.entrance_door}
+  steps:
+  - message: The entrance door is open
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - trigger: notification_center.entities_state
+        to: 'on'
+        for: {minutes: 5}
+        notification: entrance_door_open
+- id: seasonal_decoration
+  name: Seasonal decoration
+  category: home_category
+  icon: mdi:pine-tree
+  steps:
+  - message: Change the seasonal decoration
+    activation:
+      type: schedule
+      schedule: {type: calendar, every: 3, unit: months, day_of_month: 1, at: '10:00', starting: '2026-12-01'}
+- id: doorbell_ring
+  name: Doorbell ring
+  category: home_category
+  icon: mdi:bell-ring
+  steps:
+  - message: Someone is at the door
+    done_when:
+      triggers:
+      - trigger: notification_center.notification_state
+        notification: doorbell_ring
+        state: active
+        for: {minutes: 3}
+    attachments:
+    - {camera: camera.front_door}
+    buttons:
+    - type: tap
+      enabled: true
+      action: {type: more_info, entity_id: camera.front_door}
+    - type: custom
+      label: Camera
+      icon: mdi:cctv
+      action: {type: more_info, entity_id: camera.front_door}
+    - {type: dismiss, enabled: true}
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+- id: cat_at_home
+  name: Cat at home
+  category: family
+  icon: mdi:cat
+  entities:
+  - {entity_id: input_boolean.cat_at_home}
+  steps:
+  - message: The cat is at home
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_state, to: 'on', notification: cat_at_home}
+- id: child_at_practice
+  name: Child at practice
+  category: family
+  icon: mdi:run
+  entities:
+  - {entity_id: person.child}
+  steps:
+  - message: The child is at practice
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_state, to: Sports club, notification: child_at_practice}
+- id: dishwasher
+  name: Dishwasher
+  category: household
+  icon: mdi:dishwasher
+  steps:
+  - message: Start the dishwasher, it has been rinsed
+    done_when:
+      triggers:
+      - {trigger: state, entity_id: binary_sensor.dishwasher_running, to: 'on'}
+    activation:
+      type: triggers
+      triggers:
+      - trigger: state
+        entity_id: select.dishwasher_program
+        to: rinse
+        for: {minutes: 40}
+      - trigger: state
+        entity_id: binary_sensor.dishwasher_running
+        to: 'off'
+        for: {minutes: 40}
+    conditions:
+      activate_only_while_met: true
+      hide_while_not_met: false
+      conditions:
+      - condition: state
+        entity_id: select.dishwasher_program
+        state: rinse
+        for: {minutes: 40}
+      - {condition: state, entity_id: binary_sensor.dishwasher_running, state: 'off'}
+  - message: Unload the dishwasher
+    done_when:
+      triggers:
+      - {trigger: state, entity_id: binary_sensor.dishwasher_running, to: 'on'}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: state, entity_id: select.dishwasher_program, to: clean}
+- id: unload_washing_machine
+  name: Unload the washing machine
+  category: household
+  icon: mdi:washing-machine
+  steps:
+  - message: Unload the washing machine
+    done_when:
+      triggers:
+      - trigger: state
+        entity_id: binary_sensor.washing_machine_door
+        to: 'on'
+        for: {minutes: 1}
+      - {trigger: state, entity_id: sensor.washing_machine_status, to: running}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: state, entity_id: sensor.washing_machine_status, to: finished}
+    conditions:
+      activate_only_while_met: false
+      hide_while_not_met: true
+      conditions:
+      - condition: not
+        conditions:
+        - {condition: state, entity_id: binary_sensor.washing_machine_door, state: 'on'}
+- id: mixed_waste
+  name: Mixed waste
+  category: household
+  icon: mdi:trash-can
+  steps:
+  - id: put_out
+    message: Put out the mixed waste bin
+    activation:
+      type: schedule
+      schedule:
+        type: calendar
+        every: 1
+        unit: weeks
+        weekdays: [wed]
+        at: '19:00'
+        expires: {hours: 14}
+  - message: Bring in the mixed waste bin
+    done_when:
+      triggers:
+      - {trigger: time, at: '22:00:00'}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: time, at: '10:00:00'}
+    conditions:
+      activate_only_while_met: true
+      hide_while_not_met: false
+      conditions:
+      - condition: notification_center.notification_state
+        notification: mixed_waste
+        step: put_out
+        state: done
+        within: {hours: 24}
+- id: recycling
+  name: Recycling
+  category: household
+  icon: mdi:recycle
+  steps:
+  - id: put_out
+    message: Put out the recycling bin
+    activation:
+      type: schedule
+      schedule:
+        type: calendar
+        every: 2
+        unit: weeks
+        weekdays: [tue]
+        at: '19:00'
+        starting: '2026-11-03'
+        expires: {hours: 14}
+  - message: Bring in the recycling bin
+    done_when:
+      triggers:
+      - {trigger: time, at: '22:00:00'}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: time, at: '10:00:00'}
+    conditions:
+      activate_only_while_met: true
+      hide_while_not_met: false
+      conditions:
+      - condition: notification_center.notification_state
+        notification: recycling
+        step: put_out
+        state: done
+        within: {hours: 24}
+- id: vacuum_bin_full
+  name: Vacuum bin full
+  category: household
+  icon: mdi:robot-vacuum
+  entities:
+  - {entity_id: binary_sensor.robot_vacuum_bin_full}
+  steps:
+  - message: Empty the robot vacuum's bin
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: notification_center.entities_state, to: 'on', notification: vacuum_bin_full}
+- id: dishwasher_salt
+  name: Dishwasher salt
+  category: household
+  icon: mdi:shaker
+  steps:
+  - message: Refill the dishwasher salt
+    buttons:
+    - type: done
+      action:
+        type: ha_action
         actions:
-          mute: [{action: switch.turn_on, target: {entity_id: switch.workshop_co_mute}}]
-    steps:
-      - message: "Carbon monoxide: {Area}"
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {id: mute, type: dismiss, enabled: true, label: Mute, icon: mdi:volume-off, card: keep_silent, action: {type: entity_action}}
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-  - id: water_leak
-    name: Water leak
-    category: emergency
-    icon: mdi:water-alert
-    entity_groups:
-      - id: moisture
-        domain: binary_sensor
-        device_class: moisture
-    steps:
-      - message: "Water leak: {Device}"
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: dismiss, enabled: true, label: Mute, icon: mdi:volume-off, card: keep_silent}
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-  - id: alarm_triggered
-    name: Alarm triggered
-    category: emergency
-    icon: mdi:shield-alert
-    entities:
-      - entity_id: alarm_control_panel.home
-    steps:
-      - message: "Alarm: {trigger.entity_name}"
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: triggered}]
-        done_when:
-          triggers: [{trigger: state, entity_id: alarm_control_panel.home, to: disarmed}]
-        attachments:
-          - camera: camera.front_door
-        buttons:
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-          - type: custom
-            label: Disarm
-            icon: mdi:shield-off
-            card: keep
-            confirm: true
-            action:
-              type: ha_action
-              actions: [{action: alarm_control_panel.alarm_disarm, target: {entity_id: alarm_control_panel.home}}]
-          - type: custom
-            label: Silence
-            icon: mdi:volume-off
-            card: keep
-            action:
-              type: ha_action
-              actions: [{action: siren.turn_off, target: {entity_id: siren.home}}]
-          - {type: custom, label: Clips, icon: mdi:filmstrip, card: keep, action: {type: show_attachment}}
-
-  # --- Devices -----------------------------------------------------------
-  - id: device_offline
-    name: Device offline
-    category: devices
-    icon: mdi:lan-disconnect
-    entity_groups:
-      - {domain: binary_sensor, device_class: connectivity}
-    steps:
-      - message: "{Device} is offline"
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: [unavailable, unknown], for: {minutes: 30}}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: tap, enabled: true, action: {type: more_info}}
-          - {type: dismiss, enabled: true}
-          - {type: done, enabled: false}
-  - id: low_battery
-    name: Low battery
-    category: devices
-    icon: mdi:battery-alert
-    entity_groups:
-      - {domain: sensor, device_class: battery}
-    steps:
-      - message: "{Device} battery is at {State} %"
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, below: 15, for: {hours: 1}}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: tap, enabled: true, action: {type: more_info}}
-          - {type: dismiss, enabled: true}
-          - {type: done, enabled: false}
-  - id: doorbell_battery
-    name: Doorbell battery
-    category: devices
-    icon: mdi:doorbell
-    entities:
-      - entity_id: sensor.doorbell_battery
-    steps:
-      - message: Charge the doorbell
-        start:
-          type: triggers
-          triggers: [{trigger: numeric_state, entity_id: sensor.doorbell_battery, below: 20}]
-        done_when:
-          triggers: [{trigger: state, entity_id: sensor.doorbell_battery_state, to: charging}]
-        buttons:
-          - {type: snooze, enabled: false}
-      - message: The doorbell is charged, put it back
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, above: 99}]
-          conditions: [{condition: state, entity_id: sensor.doorbell_battery_state, state: charging}]
-        done_when:
-          triggers: [{trigger: state, entity_id: sensor.doorbell_battery_state, from: charging}]
-        buttons:
-          - {type: snooze, enabled: false}
-
-  # --- Garden ------------------------------------------------------------
-  - id: watering_water_shortage
-    name: Watering water shortage
-    category: garden
-    icon: mdi:water-off
-    entities:
-      - entity_id: sensor.rain_tank_level
-    steps:
-      - message: The rain tank is at {State} %, watering may stop
-        start:
-          type: triggers
-          triggers:
-            - {trigger: notification_center.listed_entities, below: 20}
-            - {trigger: notification_center.notification_state, notification: garden_watering, state: active}
+        - action: counter.reset
+          target: {entity_id: counter.dishwasher_cycles}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: numeric_state, entity_id: counter.dishwasher_cycles, above: 29}
+- id: meter_reading
+  name: Meter reading
+  category: household
+  icon: mdi:meter-electric
+  steps:
+  - message: Send the electricity meter reading
+    activation:
+      type: schedule
+      schedule:
+        type: calendar
+        every: 1
+        unit: years
+        month: 4
+        day_of_month: 5
+        at: 09:00
+        expires: {days: 5}
+- id: change_bedding
+  name: Change bedding and towels
+  category: household
+  icon: mdi:bed
+  steps:
+  - message: Change the bedding and the towels
+    activation:
+      type: schedule
+      schedule:
+        type: calendar
+        every: 3
+        unit: weeks
+        weekdays: [sat]
+        at: '10:00'
+        starting: '2026-11-01'
+- id: bottle_return
+  name: Bottle return
+  category: household
+  icon: mdi:bottle-wine
+  steps:
+  - message: Take the bottles back
+    activation:
+      type: schedule
+      schedule:
+        type: calendar
+        every: 3
+        unit: weeks
+        weekdays: [sat]
+        at: '10:00'
+        starting: '2026-11-08'
+- id: vacuuming
+  name: Vacuuming
+  category: household
+  icon: mdi:vacuum
+  steps:
+  - message: Vacuum the house
+    done_when:
+      triggers:
+      - {trigger: event, event_type: robot_vacuum_full_clean_finished}
+    activation:
+      type: schedule
+      schedule:
+        type: calendar
+        every: 1
+        unit: weeks
+        weekdays: [sat]
+        at: '10:00'
+        expires: {days: 1, hours: 12}
+    conditions:
+      activate_only_while_met: false
+      hide_while_not_met: true
+      conditions:
+      - condition: not
+        conditions:
+        - {condition: state, entity_id: vacuum.robot, state: cleaning}
+- id: bathroom_bin
+  name: Empty the bathroom bin
+  category: household
+  icon: mdi:delete-empty
+  steps:
+  - message: Empty the bathroom bin
+    activation:
+      type: schedule
+      schedule:
+        type: calendar
+        every: 3
+        unit: weeks
+        weekdays: [sat]
+        at: '10:00'
+        starting: '2026-11-15'
+- id: alarm_cannot_arm
+  name: Alarm cannot arm
+  category: security
+  icon: mdi:shield-alert-outline
+  steps:
+  - message: The alarm cannot arm
+    done_when:
+      triggers:
+      - trigger: state
+        entity_id: alarm_control_panel.home
+        to: [armed_away, armed_night]
+      - trigger: notification_center.notification_state
+        notification: alarm_cannot_arm
+        state: active
+        for: {minutes: 10}
+    buttons:
+    - type: custom
+      label: Arm anyway
+      icon: mdi:shield-lock
+      action:
+        type: ha_action
+        actions:
+        - action: alarm_control_panel.alarm_arm_night
+          target: {entity_id: alarm_control_panel.home}
+    - {type: dismiss, enabled: true}
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    activation:
+      type: triggers
+      triggers:
+      - {trigger: event, event_type: alarm_arm_failed}
+- id: arm_the_alarm
+  name: Arm the alarm
+  category: security
+  icon: mdi:shield-lock-outline
+  steps:
+  - message: Arm the alarm
+    done_when:
+      triggers:
+      - trigger: state
+        entity_id: alarm_control_panel.home
+        to: [armed_away, armed_night]
+      - {trigger: numeric_state, entity_id: zone.home, above: 0}
+    buttons:
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    - type: custom
+      label: Arm away
+      icon: mdi:shield-lock
+      action:
+        type: ha_action
+        actions:
+        - action: alarm_control_panel.alarm_arm_away
+          target: {entity_id: alarm_control_panel.home}
+    - type: custom
+      label: Arm night
+      icon: mdi:shield-moon
+      action:
+        type: ha_action
+        actions:
+        - action: alarm_control_panel.alarm_arm_night
+          target: {entity_id: alarm_control_panel.home}
+    activation:
+      type: triggers
+      triggers:
+      - trigger: state
+        entity_id: zone.home
+        to: '0'
+        for: {minutes: 10}
+      - {trigger: time, at: '23:00:00'}
+      - {trigger: state, entity_id: binary_sensor.everyone_in_bed, to: 'on'}
+    conditions:
+      activate_only_while_met: true
+      hide_while_not_met: false
+      conditions:
+      - {condition: state, entity_id: alarm_control_panel.home, state: disarmed}
+      - condition: or
+        conditions:
+        - {condition: state, entity_id: zone.home, state: '0'}
+        - condition: and
           conditions:
-            - {condition: numeric_state, entity_id: sensor.rain_tank_level, below: 20}
-            - {condition: notification_center.notification_state, notification: garden_watering, state: active}
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-  - id: garden_watering
-    name: Garden watering
-    category: garden
-    icon: mdi:sprinkler-variant
-    steps:
-      - message: Water the garden
-        start:
-          type: schedule
-          schedule: {type: after_last_done, every: input_number.garden_watering_interval, unit: days, at: "22:00", expires: {hours: 6}}
-          conditions:
-            - {condition: numeric_state, entity_id: sensor.rain_today, below: 5}
-        hide_while:
-          - {condition: time, after: "04:00", before: "22:00"}
-        done_when:
-          triggers:
-            - {trigger: template, value_template: "{{ states('sensor.watering_amount') | float(0) >= states('input_number.watering_target') | float(0) }}"}
-        buttons:
-          - {type: done, enabled: false}
-          - type: custom
-            label: Start
-            icon: mdi:play
-            card: keep
-            action:
-              type: ha_action
-              actions: [{action: script.turn_on, target: {entity_id: script.water_the_garden}}]
-
-  # --- Home --------------------------------------------------------------
-  - id: entrance_door_open
-    name: Entrance door open
-    category: home_category
-    icon: mdi:door-open
-    entities:
-      - entity_id: binary_sensor.entrance_door
-    steps:
-      - message: The entrance door is open
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: "on", for: {minutes: 5}}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-  - id: seasonal_decoration
-    name: Seasonal decoration
-    category: home_category
-    icon: mdi:pine-tree
-    steps:
-      - message: Change the seasonal decoration
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 3, unit: months, day_of_month: 1, at: "10:00", starting: "2026-12-01"}
-  - id: doorbell_ring
-    name: Doorbell ring
-    category: home_category
-    icon: mdi:bell-ring
-    steps:
-      - message: Someone is at the door
-        done_when:
-          triggers: [{trigger: notification_center.notification_state, notification: doorbell_ring, state: active, for: {minutes: 3}}]
-        attachments:
-          - camera: camera.front_door
-        buttons:
-          - {type: tap, enabled: true, action: {type: more_info, entity_id: camera.front_door}}
-          - {type: custom, label: Camera, icon: mdi:cctv, card: keep, action: {type: more_info, entity_id: camera.front_door}}
-          - {type: dismiss, enabled: true}
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-
-  # --- Family ------------------------------------------------------------
-  - id: cat_at_home
-    name: Cat at home
-    category: family
-    icon: mdi:cat
-    entities:
-      - entity_id: input_boolean.cat_at_home
-    steps:
-      - message: The cat is at home
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-  - id: child_at_practice
-    name: Child at practice
-    category: family
-    icon: mdi:run
-    entities:
-      - entity_id: person.child
-    steps:
-      - message: The child is at practice
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: Sports club}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-
-  # --- Household ---------------------------------------------------------
-  - id: dishwasher
-    name: Dishwasher
-    category: household
-    icon: mdi:dishwasher
-    steps:
-      - message: Start the dishwasher, it has been rinsed
-        start:
-          type: triggers
-          triggers:
-            - {trigger: state, entity_id: select.dishwasher_program, to: rinse, for: {minutes: 40}}
-            - {trigger: state, entity_id: binary_sensor.dishwasher_running, to: "off", for: {minutes: 40}}
-          conditions:
-            - {condition: state, entity_id: select.dishwasher_program, state: rinse, for: {minutes: 40}}
-            - {condition: state, entity_id: binary_sensor.dishwasher_running, state: "off"}
-        done_when:
-          triggers: [{trigger: state, entity_id: binary_sensor.dishwasher_running, to: "on"}]
-      - message: Unload the dishwasher
-        start:
-          type: triggers
-          triggers: [{trigger: state, entity_id: select.dishwasher_program, to: clean}]
-        done_when:
-          triggers: [{trigger: state, entity_id: binary_sensor.dishwasher_running, to: "on"}]
-  - id: unload_washing_machine
-    name: Unload the washing machine
-    category: household
-    icon: mdi:washing-machine
-    steps:
-      - message: Unload the washing machine
-        start:
-          type: triggers
-          triggers: [{trigger: state, entity_id: sensor.washing_machine_status, to: finished}]
-        hide_while:
-          - {condition: state, entity_id: binary_sensor.washing_machine_door, state: "on"}
-        done_when:
-          triggers:
-            - {trigger: state, entity_id: binary_sensor.washing_machine_door, to: "on", for: {minutes: 1}}
-            - {trigger: state, entity_id: sensor.washing_machine_status, to: running}
-  - id: mixed_waste
-    name: Mixed waste
-    category: household
-    icon: mdi:trash-can
-    steps:
-      - id: put_out
-        message: Put out the mixed waste bin
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 1, unit: weeks, weekdays: [wed], at: "19:00", expires: {hours: 14}}
-      - message: Bring in the mixed waste bin
-        start:
-          type: triggers
-          triggers: [{trigger: time, at: "10:00:00"}]
-          conditions:
-            - {condition: notification_center.notification_state, notification: mixed_waste, step: put_out, state: done, within: {hours: 24}}
-        done_when:
-          triggers: [{trigger: time, at: "22:00:00"}]
-  - id: recycling
-    name: Recycling
-    category: household
-    icon: mdi:recycle
-    steps:
-      - id: put_out
-        message: Put out the recycling bin
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 2, unit: weeks, weekdays: [tue], at: "19:00", starting: "2026-11-03", expires: {hours: 14}}
-      - message: Bring in the recycling bin
-        start:
-          type: triggers
-          triggers: [{trigger: time, at: "10:00:00"}]
-          conditions:
-            - {condition: notification_center.notification_state, notification: recycling, step: put_out, state: done, within: {hours: 24}}
-        done_when:
-          triggers: [{trigger: time, at: "22:00:00"}]
-  - id: vacuum_bin_full
-    name: Vacuum bin full
-    category: household
-    icon: mdi:robot-vacuum
-    entities:
-      - entity_id: binary_sensor.robot_vacuum_bin_full
-    steps:
-      - message: Empty the robot vacuum's bin
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: "on"}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: snooze, enabled: false}
-  - id: dishwasher_salt
-    name: Dishwasher salt
-    category: household
-    icon: mdi:shaker
-    steps:
-      - message: Refill the dishwasher salt
-        start:
-          type: triggers
-          triggers: [{trigger: numeric_state, entity_id: counter.dishwasher_cycles, above: 29}]
-        buttons:
-          - type: done
-            action:
-              type: ha_action
-              actions: [{action: counter.reset, target: {entity_id: counter.dishwasher_cycles}}]
-  - id: meter_reading
-    name: Meter reading
-    category: household
-    icon: mdi:meter-electric
-    steps:
-      - message: Send the electricity meter reading
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 1, unit: years, month: 4, day_of_month: 5, at: "09:00", expires: {days: 5}}
-  - id: change_bedding
-    name: Change bedding and towels
-    category: household
-    icon: mdi:bed
-    steps:
-      - message: Change the bedding and the towels
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 3, unit: weeks, weekdays: [sat], at: "10:00", starting: "2026-11-01"}
-  - id: bottle_return
-    name: Bottle return
-    category: household
-    icon: mdi:bottle-wine
-    steps:
-      - message: Take the bottles back
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 3, unit: weeks, weekdays: [sat], at: "10:00", starting: "2026-11-08"}
-  - id: vacuuming
-    name: Vacuuming
-    category: household
-    icon: mdi:vacuum
-    steps:
-      - message: Vacuum the house
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 1, unit: weeks, weekdays: [sat], at: "10:00", expires: {days: 1, hours: 12}}
-        hide_while:
-          - {condition: state, entity_id: vacuum.robot, state: cleaning}
-        done_when:
-          triggers: [{trigger: event, event_type: robot_vacuum_full_clean_finished}]
-  - id: bathroom_bin
-    name: Empty the bathroom bin
-    category: household
-    icon: mdi:delete-empty
-    steps:
-      - message: Empty the bathroom bin
-        start:
-          type: schedule
-          schedule: {type: calendar, every: 3, unit: weeks, weekdays: [sat], at: "10:00", starting: "2026-11-15"}
-
-  # --- Security ----------------------------------------------------------
-  - id: alarm_cannot_arm
-    name: Alarm cannot arm
-    category: security
-    icon: mdi:shield-alert-outline
-    steps:
-      - message: The alarm cannot arm
-        start:
-          type: triggers
-          triggers: [{trigger: event, event_type: alarm_arm_failed}]
-        done_when:
-          triggers:
-            - {trigger: state, entity_id: alarm_control_panel.home, to: [armed_away, armed_night]}
-            - {trigger: notification_center.notification_state, notification: alarm_cannot_arm, state: active, for: {minutes: 10}}
-        buttons:
-          - type: custom
-            label: Arm anyway
-            icon: mdi:shield-lock
-            card: dismiss
-            action:
-              type: ha_action
-              actions: [{action: alarm_control_panel.alarm_arm_night, target: {entity_id: alarm_control_panel.home}}]
-          - {type: dismiss, enabled: true}
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-  - id: arm_the_alarm
-    name: Arm the alarm
-    category: security
-    icon: mdi:shield-lock-outline
-    steps:
-      - message: Arm the alarm
-        start:
-          type: triggers
-          triggers:
-            - {trigger: state, entity_id: zone.home, to: "0", for: {minutes: 10}}
-            - {trigger: time, at: "23:00:00"}
-            - {trigger: state, entity_id: binary_sensor.everyone_in_bed, to: "on"}
-          conditions:
-            - {condition: state, entity_id: alarm_control_panel.home, state: disarmed}
-            - condition: or
-              conditions:
-                - {condition: state, entity_id: zone.home, state: "0"}
-                - condition: and
-                  conditions:
-                    - {condition: time, after: "23:00:00"}
-                    - {condition: state, entity_id: binary_sensor.everyone_in_bed, state: "on"}
-        done_when:
-          triggers:
-            - {trigger: state, entity_id: alarm_control_panel.home, to: [armed_away, armed_night]}
-            - {trigger: numeric_state, entity_id: zone.home, above: 0}
-        buttons:
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-          - type: custom
-            label: Arm away
-            icon: mdi:shield-lock
-            card: done
-            action:
-              type: ha_action
-              actions: [{action: alarm_control_panel.alarm_arm_away, target: {entity_id: alarm_control_panel.home}}]
-          - type: custom
-            label: Arm night
-            icon: mdi:shield-moon
-            card: done
-            action:
-              type: ha_action
-              actions: [{action: alarm_control_panel.alarm_arm_night, target: {entity_id: alarm_control_panel.home}}]
-  - id: alarm_armed
-    name: Alarm armed
-    category: security
-    icon: mdi:shield-lock
-    entities:
-      - entity_id: alarm_control_panel.home
-    steps:
-      - message: The alarm is armed
-        start:
-          type: triggers
-          triggers: [{trigger: notification_center.listed_entities, to: [armed_away, armed_night, armed_home]}]
-        done_when: {activation_conditions_no_longer_true: true}
-        buttons:
-          - {type: done, enabled: false}
-          - {type: snooze, enabled: false}
-          - type: custom
-            label: Disarm
-            icon: mdi:shield-off
-            card: keep
-            confirm: true
-            action:
-              type: ha_action
-              actions: [{action: alarm_control_panel.alarm_disarm, target: {entity_id: alarm_control_panel.home}}]
+          - {condition: time, after: '23:00:00'}
+          - {condition: state, entity_id: binary_sensor.everyone_in_bed, state: 'on'}
+- id: alarm_armed
+  name: Alarm armed
+  category: security
+  icon: mdi:shield-lock
+  entities:
+  - {entity_id: alarm_control_panel.home}
+  steps:
+  - message: The alarm is armed
+    done_when: {activation_conditions_no_longer_true: true}
+    buttons:
+    - {type: done, enabled: false}
+    - {type: snooze, enabled: false}
+    - type: custom
+      label: Disarm
+      icon: mdi:shield-off
+      confirm: true
+      action:
+        type: ha_action
+        actions:
+        - action: alarm_control_panel.alarm_disarm
+          target: {entity_id: alarm_control_panel.home}
+    activation:
+      type: triggers
+      triggers:
+      - trigger: notification_center.entities_state
+        to: [armed_away, armed_night, armed_home]
+        notification: alarm_armed

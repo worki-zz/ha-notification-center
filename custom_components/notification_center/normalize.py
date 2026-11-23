@@ -28,12 +28,6 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, UNIQUE_ID_NOTIFICATION_PREFIX
 from .listed import group_members
-from .migrations import (
-    upgrade_buttons,
-    upgrade_listed,
-    upgrade_show_when,
-    upgrade_terms,
-)
 from .model import (
     ENTITIES_KINDS,
     TRIGGER_NOTIFICATION_STATE,
@@ -151,10 +145,6 @@ def normalize_notification(
     it replaces, if any.
     """
     notification = copy.deepcopy(data)
-    upgrade_listed(notification)
-    upgrade_show_when(notification)
-    upgrade_terms(notification)
-    upgrade_buttons(notification)
     steps = notification.get("steps")
     for step in steps if isinstance(steps, list) else []:
         # A new step gets its id now, so a step number can point to it.

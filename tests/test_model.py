@@ -99,39 +99,6 @@ async def test_builtin_buttons_keep_their_settings(hass: HomeAssistant) -> None:
     assert "card" not in custom
 
 
-async def test_earlier_buttons_and_snooze_are_upgraded(hass: HomeAssistant) -> None:
-    """Mute becomes an own button; the notification's Snooze moves to the button."""
-    data = _with_notification(
-        buttons=[
-            {"id": "mute", "type": "dismiss", "label": "Mute", "card": "keep_silent"},
-            {"type": "custom", "label": "Disarm", "card": "done"},
-            {"type": "snooze", "snooze": "ask"},
-        ]
-    )
-    data["notifications"][0]["snooze"] = {"type": "fixed", "duration": {"hours": 2}}
-    config = await async_validate_config(hass, data)
-    notification = config["notifications"][0]
-    assert "snooze" not in notification
-    buttons = notification["steps"][0]["buttons"]
-    mute = next(button for button in buttons if button["id"] == "mute")
-    assert (mute["type"], mute["label"]) == ("custom", "Mute")
-    assert all("card" not in button for button in buttons)
-    snooze = next(button for button in _effective(config) if button["type"] == "snooze")
-    assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
-
-    data = _with_notification()
-    data["notifications"][0]["snooze"] = {"type": "not_allowed"}
-    config = await async_validate_config(hass, data)
-    snooze = next(button for button in _effective(config) if button["type"] == "snooze")
-    assert snooze["enabled"] is False
-
-    data = _with_notification(buttons=[{"type": "snooze", "snooze": {"minutes": 20}}])
-    config = await async_validate_config(hass, data)
-    buttons = _effective(config)
-    snooze = next(button for button in buttons if button["type"] == "snooze")
-    assert snooze["snooze"] == ["15m"]
-
-
 async def test_durations_times_and_dates_stay_plain(hass: HomeAssistant) -> None:
     config = await async_validate_config(
         hass,
@@ -266,65 +233,6 @@ async def test_step_channels_store_only_changes(hass: HomeAssistant) -> None:
     assert category == {"modes": ["home"]}
 
 
-async def test_start_conditions_and_hide_while_become_show_when(
-    hass: HomeAssistant,
-) -> None:
-    """Earlier steps get one Show when, with the switches set to match."""
-    away = {"condition": "state", "entity_id": "input_boolean.away", "state": "off"}
-    rain = {"condition": "state", "entity_id": "input_boolean.rain", "state": "on"}
-    data = _with_notification()
-    first = data["notifications"][0]["steps"][0]
-    data["notifications"][0]["steps"] = [
-        {**first, "start": {"type": "triggers", "conditions": [away]}},
-        {**first, "hide_while": [rain]},
-        {
-            **first,
-            "start": {"type": "triggers", "conditions": [away]},
-            "hide_while": [rain],
-        },
-        dict(first),
-    ]
-    config = await async_validate_config(hass, data)
-    steps = config["notifications"][0]["steps"]
-    not_rain = {"condition": "not", "conditions": [rain]}
-
-    def conditions(activate: bool, hide: bool, items: list[Any]) -> dict[str, Any]:
-        return {
-            "activate_only_while_met": activate,
-            "hide_while_not_met": hide,
-            "conditions": items,
-        }
-
-    assert steps[0]["conditions"] == conditions(True, False, [away])
-    assert steps[1]["conditions"] == conditions(False, True, [not_rain])
-    assert steps[2]["conditions"] == conditions(True, True, [away, not_rain])
-    assert steps[3]["conditions"] == conditions(True, True, [])
-    assert all("hide_while" not in step and "show_when" not in step for step in steps)
-    assert all("conditions" not in step["activation"] for step in steps)
-
-
-async def test_earlier_field_names_are_renamed(hass: HomeAssistant) -> None:
-    """Show when, start and Start condition no longer true get their new names."""
-    away = {"condition": "state", "entity_id": "input_boolean.away", "state": "off"}
-    data = _with_notification()
-    first = data["notifications"][0]["steps"][0]
-    first.pop("activation", None)
-    first["start"] = {"type": "triggers", "triggers": []}
-    first["show_when"] = {"start": False, "hide": True, "conditions": [away]}
-    first["done_when"] = {"start_no_longer_true": True}
-    config = await async_validate_config(hass, data)
-    step = config["notifications"][0]["steps"][0]
-    assert step["activation"] == {"type": "triggers", "triggers": []}
-    assert step["conditions"] == {
-        "activate_only_while_met": False,
-        "hide_while_not_met": True,
-        "conditions": [away],
-    }
-    assert step["done_when"]["activation_conditions_no_longer_true"] is True
-    assert "show_when" not in step
-    assert "start" not in step
-
-
 async def test_category_buttons_are_inherited(hass: HomeAssistant) -> None:
     """Icon, times and push come from the category until a step sets them."""
     data = _with_notification(
@@ -358,64 +266,6 @@ async def test_category_buttons_are_inherited(hass: HomeAssistant) -> None:
     assert buttons["door"]["category"] is True
     assert buttons["light"]["enabled"] is True
     assert buttons["own"]["category"] is False
-
-
-async def test_categories_of_0_4_get_buttons(hass: HomeAssistant) -> None:
-    """A category's Snooze becomes its button; default step values go."""
-    data = _with_notification(
-        buttons=[
-            {
-                "type": "snooze",
-                "enabled": True,
-                "snooze": ["1h", "3h", "tomorrow"],
-                "show_in_push": True,
-            },
-            {"type": "done", "enabled": True, "show_in_push": False},
-        ]
-    )
-    data["categories"][0].pop("buttons")
-    data["categories"][0]["snooze"] = {"type": "fixed", "duration": {"hours": 2}}
-    config = await async_validate_config(hass, data)
-    category = config["categories"][0]
-    assert "snooze" not in category
-    snooze = next(b for b in category["buttons"] if b["type"] == "snooze")
-    assert snooze["snooze"] == ["2h"]
-    step = config["notifications"][0]["steps"][0]
-    stored = {button["type"]: button for button in step["buttons"]}
-    assert "snooze" not in stored["snooze"]
-    assert "show_in_push" not in stored["snooze"]
-    assert stored["done"]["show_in_push"] is False
-
-
-async def test_custom_colours_become_own_colours(hass: HomeAssistant) -> None:
-    """0.6.4's card and light colours become ``color`` and the Colors list."""
-    config = _with_notification()
-    config["lights"] = [{"id": "lamp", "entity_id": "light.lamp"}]
-    config["categories"][0].pop("color")
-    config["categories"][0]["card_color"] = "red"
-    config["categories"][0]["channels"]["speaker:x"] = {"chime": "nc_chime"}
-    config["categories"][0]["chime"] = "none"
-    config["speakers"] = [{"id": "x", "entity_id": "media_player.x"}]
-    config["categories"].append(
-        {"id": "c2", "name": "Two", "card_color": "#102030", "light_color": [1, 2, 3]}
-    )
-    config["notifications"][0].update(card_color="#102030", light_color=[1, 2, 3])
-    config["notifications"].append(
-        {**copy.deepcopy(config["notifications"][0]), "id": "n2", "name": "Two"}
-    )
-    config["notifications"][1].update(card_color="#ffffff", light_color=None)
-    result = await async_validate_config(hass, config)
-    assert result["categories"][0]["color"] == "red"
-    assert "card_color" not in result["categories"][0]
-    assert "chime" not in result["categories"][0]["channels"]["speaker:x"]
-    assert "chime" not in result["categories"][0]
-    assert [color["name"] for color in result["colors"]] == ["Custom 1", "Custom 2"]
-    first, second = result["colors"]
-    assert first["rgb"] == [16, 32, 48]
-    assert result["categories"][1]["color"] == first["id"]
-    assert result["notifications"][0]["color"] == first["id"]
-    assert result["notifications"][1]["color"] == second["id"]
-    assert result["lights"][0]["colors"] == {first["id"]: [1, 2, 3]}
 
 
 async def test_0_6_8_highlight_repeat_and_push_tap_are_upgraded(

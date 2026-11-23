@@ -67,7 +67,7 @@ async def test_own_triggers_in_editor_form(
                         "type": "triggers",
                         "triggers": [
                             {
-                                "trigger": f"{DOMAIN}.listed_entities",
+                                "trigger": f"{DOMAIN}.entities_state",
                                 "target": {},
                                 "options": {"notification": "", "to": ["on"]},
                             }
