@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.2
+
+Code review fixes, button dialog order, Tap behavior as one block, export in the Companion app.
 
 ### Fixed
 
