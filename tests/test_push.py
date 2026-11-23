@@ -11,7 +11,7 @@ from pytest_homeassistant_custom_component.common import async_mock_service
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.notification_center.const import DOMAIN
-from custom_components.notification_center.model import effective_buttons, validate_item
+from custom_components.notification_center.model import effective_buttons
 from custom_components.notification_center.push import (
     Content,
     Phone,
@@ -121,26 +121,6 @@ def test_helpers() -> None:
     assert push_body("Unload it", "Eco 40") == "Unload it\nEco 40"
     assert color_hex("red", []) == "#F44336"
     assert color_hex("c1", [{"id": "c1", "rgb": [1, 2, 3]}]) == "#010203"
-
-
-def test_legacy_push_keys_are_dropped() -> None:
-    """The never used push settings of the earlier data model go away."""
-    category = validate_item(
-        "categories",
-        {
-            "id": "general",
-            "name": "General",
-            "channels": {
-                "push": {
-                    "modes": ["home"],
-                    "critical": True,
-                    "recipients": {"away": True},
-                    "priority": "critical",
-                }
-            },
-        },
-    )
-    assert category["channels"]["push"] == {"modes": ["home"], "priority": "critical"}
 
 
 async def _setup(

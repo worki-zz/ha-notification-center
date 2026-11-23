@@ -42,8 +42,6 @@ The release zip contains the built frontend. The repository itself does not, so 
     entity_id: sensor.nc_doorbell
   data:
     message: "Someone is at the door"
-    attachments:
-      - camera: camera.front_door
     data:
       visitor: "{{ states('sensor.doorbell_last_person') }}"
   ```

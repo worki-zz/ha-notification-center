@@ -134,7 +134,6 @@ export interface Button {
    * the category's; empty: its own actions). See `runButtonOf`.
    */
   run_button?: string | null;
-  confirm?: boolean;
 }
 
 /** A button as it works: the step's settings over the category's. */
@@ -201,7 +200,7 @@ export interface Person {
 export interface GeneralSettings {
   snooze_tomorrow_at: string;
   // Read the message: the text-to-speech entity and its language.
-  read_the_message?: { tts_service?: string | null; language?: string | null; volume?: number | null };
+  read_the_message?: { tts_service?: string | null; language?: string | null };
   // The order of the chimes (ids); the others follow by name.
   chime_order?: string[];
   // The page a tap on a push opens (empty: the panel's Overview).

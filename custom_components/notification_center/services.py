@@ -30,7 +30,6 @@ from .const import (
     SOURCE_ACTION,
 )
 from .engine import Engine, async_get_engine
-from .model import ATTACHMENT_SCHEMA
 
 _STEP = vol.All(vol.Coerce(int), vol.Range(min=1))
 
@@ -44,7 +43,6 @@ TRIGGER_SCHEMA = cv.make_entity_service_schema(
         **_COMMON,
         vol.Optional("message"): cv.string,
         vol.Optional("info"): cv.string,
-        vol.Optional("attachments"): vol.All(cv.ensure_list, [ATTACHMENT_SCHEMA]),
         vol.Optional("data"): dict,
     }
 )
@@ -111,7 +109,6 @@ def async_setup_services(hass: HomeAssistant) -> None:
         overrides = Overrides(
             message=call.data.get("message"),
             info=call.data.get("info"),
-            attachments=call.data.get("attachments"),
             data=call.data.get("data"),
         )
         for engine, notification_id, step_id in await _targets(hass, call):

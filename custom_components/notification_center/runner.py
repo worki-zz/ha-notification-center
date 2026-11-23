@@ -52,9 +52,6 @@ from .model import (
 from .scheduler import StepSchedule
 
 if TYPE_CHECKING:
-    pass
-
-if TYPE_CHECKING:
     from .engine import Engine
 
 

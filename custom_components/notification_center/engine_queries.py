@@ -33,9 +33,6 @@ from .render import render_text
 from .schedule import calendar_between
 
 if TYPE_CHECKING:
-    pass
-
-if TYPE_CHECKING:
     from .engine import Engine
     from .runner import NotificationRunner
 

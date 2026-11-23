@@ -61,7 +61,10 @@ type Handler = Callable[
 
 
 def _manager(hass: HomeAssistant) -> ConfigManager | None:
-    manager: ConfigManager | None = hass.data.get(DOMAIN)
+    entries = hass.config_entries.async_loaded_entries(DOMAIN)
+    if not entries:
+        return None
+    manager: ConfigManager = entries[0].runtime_data.manager
     return manager
 
 

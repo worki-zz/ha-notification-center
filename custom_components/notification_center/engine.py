@@ -88,6 +88,7 @@ from .engine_actions import EngineActions
 from .engine_queries import EngineQueries
 from .issues import IssueTracker
 from .model import (
+    GENERAL_CATEGORY_ID,
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
 )
@@ -283,6 +284,11 @@ class Engine(EngineQueries, EngineActions):
         self._person_states = self._read_person_states()
         for notification in self._config["notifications"]:
             await self._async_start_notification(notification)
+        now = dt_util.utcnow()
+        for card in list(self.cards.values()):
+            if card.snoozed_until is not None and card.snoozed_until <= now:
+                self._cancel_unsnooze(card)
+                self._unsnooze(card)
         for card in list(self.cards.values()):
             if card.is_open:
                 self._start_text(card)
@@ -476,7 +482,9 @@ class Engine(EngineQueries, EngineActions):
         categories = self._config["categories"]
         return next(
             (item for item in categories if item["id"] == notification.get("category")),
-            next((item for item in categories if item["id"] == "general"), None),
+            next(
+                (item for item in categories if item["id"] == GENERAL_CATEGORY_ID), None
+            ),
         )
 
     @property
@@ -769,8 +777,6 @@ class Engine(EngineQueries, EngineActions):
             card.message_override = overrides.message
         if overrides.info is not None:
             card.info_override = overrides.info
-        if overrides.attachments is not None:
-            card.attachments = overrides.attachments
         if overrides.data is not None:
             card.data = overrides.data
 
@@ -1169,22 +1175,28 @@ class Engine(EngineQueries, EngineActions):
         @callback
         def wake(_now: datetime) -> None:
             self._snooze_timers.pop(card.key, None)
-            if self.cards.get(card.key) is not card or card.phase != PHASE_SNOOZED:
-                return
-            runner = self.runners.get(card.notification_id)
-            step = runner.steps.get(card.step_id) if runner else None
-            self._change(
-                card,
-                source=SOURCE_SNOOZE_END,
-                phase=PHASE_OPEN,
-                snoozed_until=None,
-                hidden=step.is_hidden(card) if step else False,
-            )
-            self._start_text(card)
+            # Before Home Assistant started, ``_async_started`` wakes the cards
+            # whose time has passed.
+            if self._started:
+                self._unsnooze(card)
 
         self._snooze_timers[card.key] = async_track_point_in_utc_time(
             self.hass, wake, card.snoozed_until
         )
+
+    def _unsnooze(self, card: Card) -> None:
+        if self.cards.get(card.key) is not card or card.phase != PHASE_SNOOZED:
+            return
+        runner = self.runners.get(card.notification_id)
+        step = runner.steps.get(card.step_id) if runner else None
+        self._change(
+            card,
+            source=SOURCE_SNOOZE_END,
+            phase=PHASE_OPEN,
+            snoozed_until=None,
+            hidden=step.is_hidden(card) if step else False,
+        )
+        self._start_text(card)
 
     def _schedule_expiry(self, card: Card) -> None:
         self._cancel_expiry(card)

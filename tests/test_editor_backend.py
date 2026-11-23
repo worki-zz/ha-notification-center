@@ -21,7 +21,6 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 from custom_components.notification_center import schedule as sched
 from custom_components.notification_center.const import DOMAIN
 from custom_components.notification_center.listed import EntityList
-from custom_components.notification_center.model import DATA_SCHEMA, validate_item
 
 from .common import load
 
@@ -129,14 +128,6 @@ async def test_entity_group_lists_and_snapshot(
         entry = registry.async_get_or_create("binary_sensor", "test", name)
         registry.async_update_entity(entry.entity_id, area_id=area)
         hass.states.async_set(entry.entity_id, "off", {"device_class": "moisture"})
-    # The earlier single area is still read.
-    old = validate_item(
-        "notifications",
-        {"name": "x", "entity_groups": [{"domain": "d", "area": "Kitchen"}],
-         "steps": [{"message": "m"}]},
-    )  # fmt: skip
-    assert old["entity_groups"][0]["areas"] == ["Kitchen"]
-
     center = await load(hass, config_entry)
     await center.add(
         "Leak",
@@ -270,11 +261,3 @@ async def test_text_preview_and_custom_data(
     await hass.async_block_till_done()
     card = center.engine.cards_of(item["id"])[0]
     assert (card.message, card.data_text) == ("Closed", "8 min")
-
-
-def test_due_data_reads_as_active_since() -> None:
-    """A step saved with Data Due (0.4.1) reads as Active since."""
-    assert DATA_SCHEMA({"type": "due", "format": "time"}) == {
-        "type": "active_since",
-        "format": "time",
-    }

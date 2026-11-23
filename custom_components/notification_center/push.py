@@ -48,7 +48,6 @@ from .model import (
     CHANNEL_PUSH,
     PUSH_PRIORITY_DEFAULT,
     SYSTEM_COLORS,
-    effective_buttons,
     run_button_of,
 )
 
@@ -448,20 +447,6 @@ class PushDevice(Device):
         general = self.manager.engine.manager.config.get("general") or {}
         return str(general.get("open_on_tap") or PANEL_PATH)
 
-    def _buttons(self, card: Card) -> list[dict[str, Any]]:
-        engine = self.manager.engine
-        notification = engine.notification_config(card.notification_id) or {}
-        category = engine.category_of(notification)
-        step: dict[str, Any] = next(
-            (
-                item
-                for item in notification.get("steps", [])
-                if item["id"] == card.step_id
-            ),
-            {},
-        )
-        return effective_buttons(category, step)
-
     def tap_url(self, card: Card) -> str:
         """Return what a tap on a card's push opens.
 
@@ -470,14 +455,18 @@ class PushDevice(Device):
         own page.
         """
         tap = next(
-            (button for button in self._buttons(card) if button["type"] == "tap"),
+            (
+                button
+                for button in self.manager.engine.buttons_of(card)
+                if button["type"] == "tap"
+            ),
             None,
         )
         page = (tap or {}).get("open_on_tap") or self.default_url()
         if tap is None or not tap.get("enabled"):
             return page
         # A Tap that runs another button does what that button does.
-        target = run_button_of(self._buttons(card), tap) or tap
+        target = run_button_of(self.manager.engine.buttons_of(card), tap) or tap
         actions = target.get("actions") or {}
         if not actions and target["type"] not in BUTTON_EFFECTS:
             return page
@@ -494,7 +483,7 @@ class PushDevice(Device):
     def actions_of(self, card: Card) -> list[dict[str, Any]]:
         """Return the buttons of a card's push, in the order of the editor."""
         actions: list[dict[str, Any]] = []
-        for button in self._buttons(card):
+        for button in self.manager.engine.buttons_of(card):
             if (
                 button["type"] == "tap"
                 or not button.get("enabled", True)

@@ -12,6 +12,19 @@
 - A button's actions run one after the other: each waits for the one before it (Silence, the entity action, the notification state, then the Home Assistant actions). The panel does not wait for the actions to finish.
 - A *Notification entities* trigger in an automation keeps following the lists after the integration is reloaded, and passes the context of the state change on.
 - Saving checks the notification and step named by a *Notification state* or *Notification entities* condition too (not only triggers), and the step of a trigger or condition. Deleting a notification that others refer to says which ones.
+- Two changes of the configuration made at the same time no longer lose one of them (they run one after the other).
+- A snooze that ended while Home Assistant was starting wakes the card once Home Assistant has started, not before.
+- The setup of the integration stops everything it started when it fails; the panel's commands find the loaded integration through its config entry.
+- A template error is logged once per text, not at every redraw.
+
+### Removed
+
+- The fields that were stored but never used: a step's and the *Trigger* action's `attachments`, a button's `confirm` and the volume of *Read the message* in General. They are dropped from saved configurations and from YAML exports of earlier versions (export version 3). The ideas stay in BACKLOG.md.
+- Leftovers of the 0.x upgrades: the earlier names and forms of highlight, repeat, state names, data types, entity group area and label, push settings and the old event entity.
+
+### Changed
+
+- The push and the engine take a card's buttons from the same place (one copy of the code); the same for the condition of a mode.
 
 ## 0.7.1
 

@@ -12,7 +12,6 @@ pointing to the same notification and step after a rename or a reorder:
   is turned into the notification's id; a step number into the step's id;
 - Notification entities state and numeric state: like Notification state,
   no notification means this notification and a sensor becomes an id;
-- an earlier Listed entities item becomes one of the two.
 
 An entity group with Add new matching switched off remembers the entities
 it matched when it was saved (``members``), until its filter changes.
@@ -199,13 +198,8 @@ def _filter_value(group: dict[str, Any], key: str) -> Any:
 
 
 def _with_lists(group: dict[str, Any]) -> dict[str, Any]:
-    """Return a group with the earlier single area and label as lists."""
+    """Return a group with its areas, floors and labels as lists."""
     result = dict(group)
-    for old, new in (("area", "areas"), ("label", "labels")):
-        if old in result:
-            single = result.pop(old)
-            if single and not result.get(new):
-                result[new] = [single]
     for key in ("areas", "floors", "labels"):
         value = result.get(key)
         if value is None:

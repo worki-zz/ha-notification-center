@@ -7,14 +7,13 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from . import websocket_api
-from .const import DOMAIN, PLATFORMS, STORAGE_KEYS, UNIQUE_ID_EVENT
+from .const import DOMAIN, PLATFORMS, STORAGE_KEYS
 from .devices import DeviceManager
 from .engine import Engine
 from .frontend_setup import async_register_frontend, async_unregister_frontend
@@ -57,12 +56,25 @@ async def async_setup_entry(
     engine = Engine(hass, manager)
     await engine.async_load()
     devices = DeviceManager(engine)
-    await devices.async_start()
-    engine.devices = devices
-    entry.runtime_data = RuntimeData(
-        version=version, manager=manager, engine=engine, devices=devices
-    )
-    hass.data[DOMAIN] = manager
+    try:
+        await devices.async_start()
+        engine.devices = devices
+        entry.runtime_data = RuntimeData(
+            version=version, manager=manager, engine=engine, devices=devices
+        )
+        await _async_finish_setup(hass, entry, version)
+    except Exception:
+        # Nothing may keep running when the setup fails.
+        await devices.async_stop()
+        await engine.async_unload()
+        manager.async_unload()
+        raise
+    return True
+
+
+async def _async_finish_setup(
+    hass: HomeAssistant, entry: NotificationCenterConfigEntry, version: str
+) -> None:
 
     # Websocket commands cannot be removed, so they are registered once and
     # answer "not loaded" while the integration is unloaded.
@@ -70,16 +82,8 @@ async def async_setup_entry(
         websocket_api.async_register(hass)
         hass.data[_WEBSOCKET_REGISTERED] = True
 
-    # The event entity of 0.2.x is gone: remove what it left in the registry.
-    registry = er.async_get(hass)
-    if (
-        old := registry.async_get_entity_id("event", DOMAIN, UNIQUE_ID_EVENT)
-    ) is not None:
-        registry.async_remove(old)
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_frontend(hass, version)
-    return True
 
 
 async def async_unload_entry(
@@ -92,7 +96,6 @@ async def async_unload_entry(
     await entry.runtime_data.devices.async_stop()
     await entry.runtime_data.engine.async_unload()
     entry.runtime_data.manager.async_unload()
-    hass.data.pop(DOMAIN, None)
     return True
 
 

@@ -105,10 +105,6 @@
           "name": "Info",
           "description": "Shown instead of the step's info line."
         },
-        "attachments": {
-          "name": "Attachments",
-          "description": "Images or videos for the card: camera, image or video items."
-        },
         "data": {
           "name": "Data",
           "description": "Any values, available in the texts as {{ data.name }}."

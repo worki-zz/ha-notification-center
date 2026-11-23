@@ -105,10 +105,6 @@
           "name": "Info",
           "description": "A lépés info sora helyett jelenik meg."
         },
-        "attachments": {
-          "name": "Mellékletek",
-          "description": "Képek vagy videók a kártyához: camera, image vagy video elemek."
-        },
         "data": {
           "name": "Adatok",
           "description": "Bármilyen érték, a szövegekben {{ data.name }} formában érhető el."

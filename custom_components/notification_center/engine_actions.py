@@ -39,9 +39,6 @@ from .model import (
 from .scheduler import HISTORY_SKIPPED
 
 if TYPE_CHECKING:
-    pass
-
-if TYPE_CHECKING:
     from .engine import Engine
     from .runner import StepRunner
 
@@ -147,15 +144,7 @@ class EngineActions:
         """Return the buttons of a card's step, with what they inherit."""
         step = self._step_config(card.notification_id, card.step_id) or {}
         notification = self.notification_config(card.notification_id) or {}
-        category = next(
-            (
-                item
-                for item in self._config["categories"]
-                if item["id"] == notification.get("category")
-            ),
-            None,
-        )
-        return effective_buttons(category, step)
+        return effective_buttons(self.category_of(notification), step)
 
     def snooze_until(
         self: Engine, card: Card, button: Mapping[str, Any], choice: str | None = None

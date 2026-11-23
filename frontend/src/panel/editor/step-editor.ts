@@ -972,7 +972,6 @@ export class NcStepEditor extends LitElement {
         label: "",
         actions: {},
         show_in_push: true,
-        confirm: false,
       },
     };
   }

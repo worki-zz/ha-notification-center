@@ -1,4 +1,4 @@
-version: 2
+version: 3
 modes:
 - id: away
   name: Away
@@ -32,12 +32,12 @@ chimes:
   name: Soft chime
   media: {media_content_id: 'media-source://media_source/local/chimes/soft.mp3', media_content_type: audio/mpeg}
 general:
-  read_the_message: {tts_service: tts.home_assistant_cloud, language: en-US, volume: 0.6}
+  read_the_message: {tts_service: tts.home_assistant_cloud, language: en-US}
 categories:
 - id: emergency
   name: Emergency
   icon: mdi:alert-octagon
-  highlight: true
+  highlight: alert
   chime: nc_alarm
   channels:
     dashboard:
@@ -55,8 +55,6 @@ categories:
       modes: [away, sleep, guest, home]
     push:
       modes: [away, sleep, guest, home]
-      critical: true
-      recipients: {at_home: true, away: true, sleeping: true}
   buttons:
   - {type: snooze}
   audience: {}
@@ -234,15 +232,12 @@ notifications:
     done_when:
       triggers:
       - {trigger: state, entity_id: alarm_control_panel.home, to: disarmed}
-    attachments:
-    - {camera: camera.front_door}
     buttons:
     - {type: done, enabled: false}
     - {type: snooze, enabled: false}
     - type: custom
       label: Disarm
       icon: mdi:shield-off
-      confirm: true
       actions:
         ha_actions:
         - action: alarm_control_panel.alarm_disarm
@@ -435,8 +430,6 @@ notifications:
         notification: doorbell_ring
         state: active
         for: {minutes: 3}
-    attachments:
-    - {camera: camera.front_door}
     buttons:
     - type: tap
       enabled: true
@@ -820,7 +813,6 @@ notifications:
     - type: custom
       label: Disarm
       icon: mdi:shield-off
-      confirm: true
       actions:
         ha_actions:
         - action: alarm_control_panel.alarm_disarm

@@ -268,38 +268,6 @@ async def test_category_buttons_are_inherited(hass: HomeAssistant) -> None:
     assert buttons["own"]["category"] is False
 
 
-async def test_0_6_8_highlight_repeat_and_push_tap_are_upgraded(
-    hass: HomeAssistant,
-) -> None:
-    """Highlight on/off, the speaker's until_muted and push_tap of 0.6.8."""
-    config = _with_notification(
-        buttons=[
-            {
-                "type": "tap",
-                "push_tap": False,
-                "actions": {"navigation": {"type": "more_info"}},
-            }
-        ]
-    )
-    config["speakers"] = [{"id": "x", "entity_id": "media_player.x"}]
-    category = config["categories"][0]
-    category["highlight"] = True
-    category["buttons"] = [{"type": "tap", "push_tap": False}]
-    category["channels"]["speaker:x"] = {
-        "modes": ["home"],
-        "repeat": {"type": "until_muted", "every": {"seconds": 30}},
-    }
-    config["notifications"][0]["highlight"] = False
-    result = await async_validate_config(hass, config)
-    category = result["categories"][0]
-    assert category["highlight"] == "alert"
-    assert result["notifications"][0]["highlight"] == "none"
-    assert category["channels"]["speaker:x"]["repeat"] == {"type": "loop"}
-    assert all("push_tap" not in button for button in category["buttons"])
-    step = result["notifications"][0]["steps"][0]
-    assert all("push_tap" not in button for button in step["buttons"])
-
-
 async def test_speaker_repeat_volume_and_chime(hass: HomeAssistant) -> None:
     """Recurring needs its time; the channel can set a volume and no chime."""
     config = default_config()
