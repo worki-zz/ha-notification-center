@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 import pytest
@@ -400,3 +401,58 @@ async def test_group_member_custom_action(center: Center) -> None:
     # An empty custom action does nothing, instead of the group's.
     assert engine.entity_actions(back, "done") == []
     assert engine.entity_actions(front, "done") == group_action
+
+
+async def test_button_actions_run_one_after_the_other(
+    hass: HomeAssistant, center: Center
+) -> None:
+    """A button's Home Assistant actions wait for its entity action."""
+    log: list[str] = []
+    release = asyncio.Event()
+
+    async def slow(call: ServiceCall) -> None:
+        log.append("slow start")
+        await release.wait()
+        log.append("slow end")
+
+    async def quick(call: ServiceCall) -> None:
+        log.append("quick")
+
+    hass.services.async_register("test", "slow", slow)
+    hass.services.async_register("test", "quick", quick)
+    await center.set("binary_sensor.front", "on", device_class="door")
+    nid = await center.add(
+        "Plants",
+        step(
+            buttons=[
+                {
+                    "type": "custom",
+                    "id": "both",
+                    "label": "Both",
+                    "actions": {
+                        "entity_action": True,
+                        "ha_actions": [{"action": "test.quick"}],
+                    },
+                }
+            ]
+        ),
+        entities=[
+            {
+                "entity_id": "binary_sensor.front",
+                "actions": {"both": [{"action": "test.slow"}]},
+            }
+        ],
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "trigger",
+        {"entity_id": "sensor.nc_plants", "entity": "binary_sensor.front"},
+        blocking=True,
+    )
+    card = center.engine.cards_of(nid)[0]
+    task = hass.async_create_task(center.engine.async_press(card, "both", None))
+    await asyncio.sleep(0.05)
+    assert log == ["slow start"]
+    release.set()
+    await task
+    assert log == ["slow start", "slow end", "quick"]

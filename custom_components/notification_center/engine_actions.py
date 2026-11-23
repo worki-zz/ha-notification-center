@@ -208,11 +208,12 @@ class EngineActions:
     ) -> None:
         """Press a button of a card: run its actions in their fixed order.
 
-        Silence, the entity action, then the notification state (Done marks
-        the card done, Dismiss dismisses it and Snooze snoozes it: until the
-        given time, or for the chosen or first of its times), then the Home
-        Assistant actions. The navigation (More info or Navigate) happens
-        where the button was pressed. An action that cannot run is skipped
+        Each action finishes before the next one starts. Silence, the entity
+        action, then the notification state (Done marks the card done,
+        Dismiss dismisses it and Snooze snoozes it: until the given time, or
+        for the chosen or first of its times), then the Home Assistant actions.
+        The navigation (More info or Navigate) happens where the button was
+        pressed. An action that cannot run is skipped
         and the others still run. A Tap that runs another button runs that
         button's actions.
         """
@@ -276,7 +277,7 @@ class EngineActions:
         variables: dict[str, Any],
         context: Context | None,
     ) -> None:
-        """Start a list of Home Assistant actions; skip it when it is not valid."""
+        """Run a list of Home Assistant actions; skip it when it is not valid."""
         notification = self.notification_config(card.notification_id) or {}
         label = button.get("label") or button["type"]
         name = f"{notification.get('name', card.notification_id)}: {label}"
@@ -288,10 +289,11 @@ class EngineActions:
             _LOGGER.warning("%s: the action is skipped: %s", name, err)
             return
         script = Script(self.hass, sequence, name, DOMAIN, script_mode="parallel")
-        self.hass.async_create_background_task(
-            script.async_run(variables, context),
-            f"{DOMAIN} button {name}",
-        )
+        # Wait for it: the next action starts when this one is done.
+        try:
+            await script.async_run(variables, context)
+        except HomeAssistantError as err:
+            _LOGGER.warning("%s: the action failed: %s", name, err)
 
     @callback
     def done_early(

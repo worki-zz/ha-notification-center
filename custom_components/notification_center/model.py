@@ -676,10 +676,10 @@ NOTIFICATION_STATE_SCHEMA = vol.Schema(
     }
 )
 
-# The actions of a button. They run in this fixed order: the entity
-# action, the notification state, Silence, the Home Assistant actions (in
-# their order), then the navigation (where the button was pressed). One
-# that cannot run is skipped; the others still run.
+# The actions of a button. They run one after the other in this fixed
+# order: Silence, the entity action, the notification state, the Home
+# Assistant actions (in their order), then the navigation (where the button
+# was pressed). One that cannot run is skipped; the others still run.
 BUTTON_ACTIONS_SCHEMA = vol.Schema(
     {
         vol.Optional("entity_action"): cv.boolean,
@@ -1285,7 +1285,7 @@ def _check_references(config: ConfigData) -> None:
         check_look(category, where)
         check_channels(category["channels"], _path(where, "channels"))
 
-    notification_ids = {item["id"] for item in config["notifications"]}
+    notifications_by_id = {item["id"]: item for item in config["notifications"]}
     for notification in config["notifications"]:
         where = _path("notifications", notification["name"])
         check_look(notification, where)
@@ -1298,20 +1298,64 @@ def _check_references(config: ConfigData) -> None:
             step_where = _path(where, f"step {number}")
             check_channels(step["channels"], _path(step_where, "channels"))
             _check_unique(step["buttons"], "id", _path(step_where, "buttons"))
-            for trigger in _own_items(step, "trigger"):
-                kind = trigger.get("trigger")
-                if (kind == TRIGGER_NOTIFICATION_STATE or kind in ENTITIES_KINDS) and (
-                    trigger["notification"] not in notification_ids
-                ):
-                    raise ConfigValidationError(
-                        _path(
-                            step_where,
-                            "notification state"
-                            if kind == TRIGGER_NOTIFICATION_STATE
-                            else "notification entities",
-                        )
-                        + f": no notification '{trigger['notification']}'"
+            for item_kind in ("trigger", "condition"):
+                for item in _own_items(step, item_kind):
+                    _check_own_reference(
+                        item, item_kind, step_where, notifications_by_id
                     )
+
+
+def _check_own_reference(
+    item: dict[str, Any],
+    item_kind: str,
+    where: str,
+    notifications: dict[str, dict[str, Any]],
+) -> None:
+    """Check the notification and step an own trigger or condition names."""
+    kind = item.get(item_kind)
+    reference = item.get("notification")
+    label = (
+        "notification state"
+        if kind == TRIGGER_NOTIFICATION_STATE
+        else "notification entities"
+    )
+    if reference is None:  # an entities condition of the notification itself
+        return
+    notification = notifications.get(reference)
+    if notification is None:
+        raise ConfigValidationError(
+            _path(where, f"{label} {item_kind}") + f": no notification '{reference}'"
+        )
+    step = item.get("step")
+    if kind != TRIGGER_NOTIFICATION_STATE or step is None:
+        return
+    steps = notification["steps"]
+    if isinstance(step, int) or str(step).isdecimal():
+        found = 1 <= int(step) <= len(steps)
+    else:
+        found = any(candidate["id"] == step for candidate in steps)
+    if not found:
+        raise ConfigValidationError(
+            _path(where, f"{label} {item_kind}")
+            + f": no step '{step}' in notification '{notification['name']}'"
+        )
+
+
+def notifications_using(config: ConfigData, notification_id: str) -> list[str]:
+    """Return the names of the other notifications that refer to one."""
+    users = []
+    for notification in config["notifications"]:
+        if notification["id"] == notification_id:
+            continue
+        for step in notification["steps"]:
+            if any(
+                item.get("notification") == notification_id
+                for item_kind in ("trigger", "condition")
+                for item in _own_items(step, item_kind)
+            ):
+                users.append(notification["name"])
+                break
+    return users
 
 
 # ---------------------------------------------------------------------------

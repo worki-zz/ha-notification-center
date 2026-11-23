@@ -25,9 +25,10 @@ from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
 from .cards import StateWatch
-from .engine import async_add_state_watch, async_get_engine
+from .engine import Engine, async_add_refresher, async_add_state_watch, async_get_engine
 from .listed import EntityList, ListedTracker
 from .model import ENTITIES_NUMERIC_FIELDS, ENTITIES_STATE_FIELDS, NOTIFICATION_STATES
+from .runner import trigger_context
 
 NOTIFICATION_STATE_OPTIONS: dict[vol.Marker, Any] = {
     vol.Required("notification"): cv.string,
@@ -126,8 +127,7 @@ class EntitiesStateTrigger(_OptionsTrigger):
         if engine is None:
             raise HomeAssistantError("Notification Center is not loaded")
         reference: str = self._options["notification"]
-        notification_id = engine.resolve_notification(reference)
-        if notification_id is None:
+        if engine.resolve_notification(reference) is None:
             raise HomeAssistantError(f"No notification {reference}")
         hass = self._hass
         trackers: list[ListedTracker] = []
@@ -137,6 +137,7 @@ class EntitiesStateTrigger(_OptionsTrigger):
             run_action(
                 {**variables, "notification": reference},
                 f"{entity_id} of {reference}",
+                trigger_context(variables, None),
             )
 
         @callback
@@ -144,11 +145,19 @@ class EntitiesStateTrigger(_OptionsTrigger):
             """Do nothing: only matching fires."""
 
         @callback
-        def start(*_: Any) -> None:
+        def start(current: Engine | None) -> None:
+            # The engine of now: it changes when the integration reloads.
             for tracker in trackers:
                 tracker.async_stop()
             trackers.clear()
-            notification = engine.notification_config(notification_id)
+            if current is None:
+                return
+            notification_id = current.resolve_notification(reference)
+            notification = (
+                current.notification_config(notification_id)
+                if notification_id is not None
+                else None
+            )
             if notification is None:
                 return
             tracker = ListedTracker(
@@ -157,13 +166,14 @@ class EntitiesStateTrigger(_OptionsTrigger):
             trackers.append(tracker)
             tracker.async_start(fire_matching=False)
 
-        start()
-        # The lists change when the notification is saved.
-        unsub_config = engine.manager.async_add_listener(start)
+        start(engine)
+        # The lists change when the notification is saved or the integration
+        # is loaded again.
+        unsub_refresh = async_add_refresher(hass, start)
 
         @callback
         def remove() -> None:
-            unsub_config()
+            unsub_refresh()
             for tracker in trackers:
                 tracker.async_stop()
             trackers.clear()

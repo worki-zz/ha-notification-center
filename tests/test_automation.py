@@ -155,3 +155,29 @@ async def test_editor_descriptions(hass: HomeAssistant, center: Center) -> None:
     assert {"notification", "above", "below", "value_template"} <= set(
         numeric["fields"]
     )
+
+
+async def test_entities_trigger_follows_a_reload(
+    hass: HomeAssistant, center: Center
+) -> None:
+    """After a reload, the trigger follows the changed lists of a notification."""
+    await center.set("binary_sensor.front", "off", device_class="door")
+    nid = await center.add("Doors", step())
+    fired = _capture(hass, "fired")
+    await _automation(
+        hass,
+        {
+            "trigger": "notification_center.entities_state",
+            "options": {"notification": "sensor.nc_doors", "to": "on"},
+        },
+    )
+    assert await hass.config_entries.async_reload(center.entry.entry_id)
+    await hass.async_block_till_done()
+    item = next(i for i in center.manager.config["notifications"] if i["id"] == nid)
+    await center.manager.async_update(
+        "notifications", nid, {**item, "entity_groups": [DOOR_GROUP]}
+    )
+    await hass.async_block_till_done()
+    await center.set("binary_sensor.front", "on", device_class="door")
+    assert [event.data["entity"] for event in fired] == ["binary_sensor.front"]
+    assert fired[0].context.id

@@ -120,6 +120,27 @@ def async_get_engine(hass: HomeAssistant) -> Engine | None:
     return engine
 
 
+# The Notification entities triggers of automations: each one is given the
+# engine (or none, while unloaded) whenever it is loaded or its configuration
+# changes, so that it follows the lists of the engine that runs now.
+type Refresher = Callable[[Engine | None], None]
+DATA_REFRESHERS: HassKey[list[Refresher]] = HassKey(f"{DOMAIN}_refreshers")
+
+
+@callback
+def async_add_refresher(hass: HomeAssistant, refresh: Refresher) -> CALLBACK_TYPE:
+    """Call ``refresh`` with the engine at each load and configuration change."""
+    refreshers = hass.data.setdefault(DATA_REFRESHERS, [])
+    refreshers.append(refresh)
+
+    @callback
+    def remove() -> None:
+        if refresh in refreshers:
+            refreshers.remove(refresh)
+
+    return remove
+
+
 @callback
 def async_add_state_watch(hass: HomeAssistant, watch: StateWatch) -> CALLBACK_TYPE:
     """Report a Notification state trigger until the returned call."""
@@ -238,6 +259,7 @@ class Engine(EngineQueries, EngineActions):
             if card.phase == PHASE_SNOOZED:
                 self._schedule_unsnooze(card)
         self._unsubs.append(self.manager.async_add_listener(self._config_changed))
+        self._refresh_triggers(self)
         self._unsubs.append(
             async_track_time_change(
                 self.hass, self._midnight, hour=0, minute=0, second=0
@@ -292,6 +314,7 @@ class Engine(EngineQueries, EngineActions):
             unsub()
         self._unsubs.clear()
         self.issues.async_stop()
+        self._refresh_triggers(None)
         for runner in self.runners.values():
             runner.async_stop()
         self.runners.clear()
@@ -310,9 +333,16 @@ class Engine(EngineQueries, EngineActions):
         await self._store.async_save(self._data_to_save())
 
     @callback
+    def _refresh_triggers(self, engine: Engine | None) -> None:
+        refreshers = self.hass.data.setdefault(DATA_REFRESHERS, [])
+        for refresh in list(refreshers):
+            refresh(engine)
+
+    @callback
     def _config_changed(self, config: ConfigData) -> None:
         old = {item["id"]: item for item in self._config["notifications"]}
         self._config = config
+        self._refresh_triggers(self)
         sleep = self._sleep_conditions()
         if sleep != self._sleep.conditions:
             self._sleep.async_stop()
