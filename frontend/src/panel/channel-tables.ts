@@ -888,7 +888,8 @@ export class NcChannelTable extends LitElement {
       }
       .separator {
         border-top: 1px solid var(--divider-color);
-        margin: 16px 0 0;
+        /* Full width, as in the button dialog. */
+        margin: 16px -24px 0;
       }
       .columns {
         display: flex;

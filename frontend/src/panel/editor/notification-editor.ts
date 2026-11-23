@@ -934,7 +934,7 @@ export class NcNotificationEditor extends LitElement {
     const text = step.message
       .replace(/\{\{-?\s*(.*?)\s*-?\}\}/g, "$1")
       .replace(/\{%-?.*?-?%\}/g, "")
-      .replace(/\{(\w+)\}/g, "$1")
+      .replace(/\{(\w+(?: \w+)?)\}/g, "$1")
       .replace(/\s+/g, " ")
       .trim();
     if (!text) return `Step ${index + 1}`;
