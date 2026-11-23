@@ -40,6 +40,7 @@ import {
   INTERACTION_DEFAULTS,
   pushButtonsWarning,
   runChoicesOf,
+  actionsText,
   runText,
 } from "./editor/interaction-dialog";
 import "./editor/interaction-dialog";
@@ -472,7 +473,10 @@ export class NcCategoryEditor extends LitElement {
         ? snoozeChoices(button)
             .map((choice) => choice.text)
             .join(", ")
-        : runText(button, this._draft!.buttons);
+        : button.type === "tap"
+          ? runText(button, this._draft!.buttons) ||
+            actionsText(this.hass, button.actions ?? { navigation: { type: "more_info" } }).join(" · ")
+          : "";
     const open = () => (this._button = { button, isNew: false });
     return html`<div
       class="interaction ${button.enabled ? "" : "off"}"
@@ -537,7 +541,7 @@ export class NcCategoryEditor extends LitElement {
       .hass=${this.hass}
       .narrow=${this.narrow}
       mode="category"
-      .button=${{ ...edit.button, actions: {} } as Button}
+      .button=${edit.button as Button}
       .isNew=${edit.isNew}
       .runChoices=${runChoicesOf(this._draft!.buttons)}
       @interaction-closed=${(
@@ -555,10 +559,11 @@ export class NcCategoryEditor extends LitElement {
           });
           return;
         }
-        const { actions: _action, ...rest } = result;
-        void _action;
+        // Only the Tap has actions in a category (its Tap behavior).
+        const { actions, ...rest } = result;
         this._setButton({
           ...rest,
+          ...(rest.type === "tap" && actions ? { actions } : {}),
           enabled: rest.enabled ?? true,
         } as CategoryButton);
       }}

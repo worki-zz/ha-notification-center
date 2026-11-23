@@ -10,12 +10,15 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from datetime import datetime, time
 from functools import wraps
+from http import HTTPStatus
 import logging
 from typing import TYPE_CHECKING, Any, Final
 
+from aiohttp import web
 from homeassistant.components import websocket_api
+from homeassistant.components.http import KEY_HASS, KEY_HASS_USER, HomeAssistantView
 from homeassistant.core import Context, HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
@@ -46,6 +49,9 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 ERR_INVALID: Final = "invalid_config"
+
+# The address of the YAML export (opened through a signed path).
+EXPORT_URL: Final = f"/api/{DOMAIN}/export"
 
 CARD_DONE: Final = "done"
 CARD_DISMISS: Final = "dismiss"
@@ -127,6 +133,7 @@ def async_register(hass: HomeAssistant) -> None:
         ws_text_preview,
     ):
         websocket_api.async_register_command(hass, command)
+    hass.http.register_view(ExportView())
 
 
 _SECTION = vol.In(COLLECTIONS)
@@ -460,6 +467,38 @@ async def ws_export(
 ) -> None:
     """Return the whole configuration as YAML."""
     connection.send_result(msg["id"], {"yaml": manager.export_yaml()})
+
+
+class ExportView(HomeAssistantView):
+    """Download the whole configuration as a YAML file.
+
+    The panel opens it through a signed path: the Companion app downloads a
+    file only from an address, not from the page's memory.
+    """
+
+    url = EXPORT_URL
+    name = f"api:{DOMAIN}:export"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return the YAML export as an attachment."""
+        hass: HomeAssistant = request.app[KEY_HASS]
+        user = request.get(KEY_HASS_USER)
+        if user is None or not user.is_admin:
+            raise Unauthorized
+        manager = _manager(hass)
+        if manager is None:
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="Not loaded")
+        stamp = dt_util.now().strftime("%Y-%m-%d-%H-%M-%S")
+        return web.Response(
+            text=manager.export_yaml(),
+            content_type="text/yaml",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="notification_center_{stamp}.yaml"'
+                )
+            },
+        )
 
 
 @websocket_api.websocket_command(

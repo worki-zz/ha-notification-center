@@ -11,6 +11,7 @@ from homeassistant.util import yaml as yaml_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import (
+    ClientSessionGenerator,
     MockHAClientWebSocket,
     WebSocketGenerator,
 )
@@ -285,7 +286,7 @@ async def test_import_export_round_trip(
     exported = (await client.ok("config/export"))["yaml"]
     data = yaml_util.parse_yaml(exported)
     assert isinstance(data, dict)
-    assert data["version"] == 3
+    assert data["version"] == 4
     stored = hass_storage[CONFIG_KEY]["data"]
     assert {key: value for key, value in data.items() if key != "version"} == stored
 
@@ -467,3 +468,20 @@ async def test_not_loaded(
     await hass.async_block_till_done()
     error = await client.error("config/get")
     assert error["code"] == "not_loaded"
+
+
+async def test_export_download(
+    hass: HomeAssistant,
+    client: Client,
+    hass_client: ClientSessionGenerator,
+    hass_storage: dict[str, Any],
+) -> None:
+    """The YAML export downloads as a file from its address."""
+    http = await hass_client()
+    response = await http.get(f"/api/{DOMAIN}/export")
+    assert response.status == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+    data = yaml_util.parse_yaml(await response.text())
+    assert isinstance(data, dict)
+    assert data["version"] == 4
+    assert data["categories"] == hass_storage[CONFIG_KEY]["data"]["categories"]

@@ -723,8 +723,9 @@ BUTTON_SCHEMA = _with_id(
     }
 )
 
-# A button of a category: what its notifications inherit. No action: that
-# belongs to each notification.
+# A button of a category: what its notifications inherit. No action (that
+# belongs to each notification), except the Tap behavior: the Tap's actions
+# or the button it runs, inherited by a notification as one block.
 CATEGORY_BUTTON_SCHEMA = _with_id(
     {
         vol.Required("type"): vol.In(BUTTON_TYPES),
@@ -736,8 +737,10 @@ CATEGORY_BUTTON_SCHEMA = _with_id(
         ),
         vol.Optional("show_in_push"): _optional(cv.boolean),
         vol.Optional("open_on_tap"): _optional(cv.string),
-        # Tap: the button the Tap of its notifications runs (empty: their
-        # own actions).
+        # Tap: the actions of its notifications' Tap (left out: more info).
+        vol.Optional("actions"): BUTTON_ACTIONS_SCHEMA,
+        # Tap: the button the Tap of its notifications runs instead (empty:
+        # the actions).
         vol.Optional("run_button"): _optional(cv.string),
     }
 )
@@ -794,6 +797,9 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
             button["actions"] = _clean_actions(button["type"], button["actions"])
         if button["type"] != "tap" or button.get("run_button") is None:
             button.pop("run_button", None)
+        elif button.get("run_button"):
+            # The Tap behavior is Button action: its actions are not used.
+            button.pop("actions", None)
         if button["type"] != "snooze" or not button.get("snooze"):
             button.pop("snooze", None)
         else:
@@ -848,9 +854,15 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
                 button.pop("open_on_tap", None)
             if not button.get("run_button"):
                 button.pop("run_button", None)
+                if "actions" in button:
+                    button["actions"] = _clean_actions(kind, button["actions"])
+            else:
+                # Button action: the actions are not used.
+                button.pop("actions", None)
         else:
             button.pop("open_on_tap", None)
             button.pop("run_button", None)
+            button.pop("actions", None)
             if button.get("show_in_push") is None:
                 button["show_in_push"] = True
     return buttons
@@ -965,6 +977,15 @@ def detach_category_buttons(
         step["buttons"] = buttons
 
 
+def tap_behavior_own(tap: dict[str, Any]) -> bool:
+    """Return whether a step's Tap has its own Tap behavior.
+
+    The Tap behavior (the actions, or the button the Tap runs) is one block:
+    a step that stores either has its own, else it follows the category.
+    """
+    return "actions" in tap or "run_button" in tap
+
+
 def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
     kind = base["type"]
     button: dict[str, Any] = {
@@ -979,13 +1000,17 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
         else dict(BUILTIN_ACTION_DEFAULTS.get(kind, {})),
         "category": True,
     }
+    own_tap = kind == "tap" and tap_behavior_own(entry)
+    if kind == "tap" and not own_tap and "actions" in base:
+        # The Tap behavior is one block: the step's, or the category's.
+        button["actions"] = dict(base["actions"])
     if kind == "snooze":
         button["snooze"] = (
             entry.get("snooze") or base.get("snooze") or list(DEFAULT_SNOOZE_CHOICES)
         )
     if kind == "tap":
         button["open_on_tap"] = entry.get("open_on_tap") or base.get("open_on_tap")
-        run = entry["run_button"] if "run_button" in entry else base.get("run_button")
+        run = entry.get("run_button") if own_tap else base.get("run_button")
         button["run_button"] = run or None
     else:
         value = entry.get("show_in_push")

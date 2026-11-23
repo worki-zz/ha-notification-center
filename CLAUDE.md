@@ -40,7 +40,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 | `sensor.py`, `calendar.py` | Per-notification sensors, summary sensor, calendar |
 | `listed.py`, `trigger.py`, `condition.py` | Notification entities / Notification state triggers and conditions |
 | `services.py` (+ `services.yaml`) | Actions |
-| `websocket_api.py` | Websocket commands for the panel |
+| `websocket_api.py` | Websocket commands for the panel; the YAML export download view |
 | `issues.py`, `diagnostics.py` | Repairs, diagnostics download |
 | `media_source.py`, `sounds/` | Built-in sounds |
 | `frontend_setup.py` | Registers panel and card |
