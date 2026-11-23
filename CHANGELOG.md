@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- The Notifications list and the Overview show an empty state (*No notifications yet*) while there are no notifications, with an *Add notification* button on its own row (on the Overview only for an administrator).
+- Repairs issues are fixable: the fix flow shows a link to the editor of the notification (or the settings page). A light, speaker or siren whose entity is missing has its own Repairs issue.
+- A failed save also shows Home Assistant's own toast.
+
+### Fixed
+
+- The Overview says *No active notifications* above Upcoming (*All done* only when nothing is upcoming either).
+- A long step name in the editor tabs is cut at its end, so the start always shows on a phone.
+- The Settings pages no longer render Home Assistant's elements before `hass` is set (console errors *Cannot read properties of undefined (reading 'localize')*).
+- An unknown General page (for example `/settings/general/push`) goes to General.
+
 ### Changed
 
 - A step's *Done* block is called *Done when* in the editor, its help and the README.

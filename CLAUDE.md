@@ -41,7 +41,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 | `listed.py`, `trigger.py`, `condition.py` | Notification entities / Notification state triggers and conditions |
 | `services.py` (+ `services.yaml`) | Actions |
 | `websocket_api.py` | Websocket commands for the panel; the YAML export download view |
-| `issues.py`, `diagnostics.py` | Repairs, diagnostics download |
+| `issues.py`, `repairs.py`, `diagnostics.py` | Repairs issues and their fix flow, diagnostics download |
 | `media_source.py`, `sounds/` | Built-in sounds |
 | `frontend_setup.py` | Registers panel and card |
 | `translations/en.json`, `hu.json` | UI strings (keep both in step) |

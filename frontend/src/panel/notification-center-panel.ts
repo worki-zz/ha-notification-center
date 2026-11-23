@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import "./dialog-back";
+import "./empty-state";
 import { loadDashboardElements } from "../card/elements";
 import { CHANNEL_DASHBOARD, colorCss, type AudienceEntry, type AudienceState } from "../shared/config";
 import {
@@ -468,12 +469,19 @@ export class NotificationCenterPanel extends LitElement {
     ].sort((a, b) => a.at - b.at);
     const done = this._cards(["done"]).length;
     const later = this._upcoming().some((item) => item.due.getTime() >= end);
+    if (!this._store.config?.notifications.length) {
+      return html`<nc-empty-state
+        text="No notifications yet"
+        .action=${this._isAdmin ? "Add notification" : ""}
+        @nc-action=${() => navigate(`/${this.panel?.url_path ?? "notification-center"}/settings/notifications/new`)}
+      ></nc-empty-state>`;
+    }
     return html`
       ${active.length
         ? this._renderLive(active)
         : html`<ha-card outlined class="all-done">
             <ha-icon icon="mdi:message-bulleted"></ha-icon>
-            <div>All done</div>
+            <div>${timed.length ? "No active notifications" : "All done"}</div>
           </ha-card>`}
       ${timed.length
         ? html`<h2>Upcoming</h2>
@@ -586,7 +594,8 @@ export class NotificationCenterPanel extends LitElement {
   // The settings: Home Assistant's own subpage layout, the list or the
   // editor of one notification.
   private _renderSettingsPage() {
-    if (!this._haReady) {
+    // HA's elements need hass for their texts: not before it is set.
+    if (!this._haReady || !this.hass) {
       return html`<div class="empty">Loading…</div>`;
     }
     const { config, state, hasData } = this._store;

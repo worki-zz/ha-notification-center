@@ -2,7 +2,7 @@
 // header and what it does at the top: Home modes, People, Light, Sound, Chimes,
 // Colors.
 
-import { LitElement, css, html, nothing } from "lit";
+import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import { type NotificationCenterConfig, type StateMessage } from "../shared/config";
@@ -63,8 +63,16 @@ export class NcGeneralPage extends LitElement {
 
   @property() public base = "/notification-center";
 
+  // An unknown page (an old or mistyped link) goes to General.
+  protected override willUpdate(changed: PropertyValues): void {
+    if (changed.has("page") && this.page && !(this.page in PAGES)) {
+      navigate(`${this.base}/settings/general`, true);
+    }
+  }
+
   protected override render() {
     const page = PAGES[this.page];
+    if (this.page && !page) return nothing;
     return html`<hass-subpage
       .hass=${this.hass}
       .narrow=${this.narrow}
