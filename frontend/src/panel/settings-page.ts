@@ -18,6 +18,7 @@ import { cssColor } from "../shared/format";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
+import "./empty-state";
 import "./settings-general";
 import { STATUS_STYLES, renderStatus, statusOf } from "./status";
 
@@ -93,7 +94,7 @@ export class NcSettings extends LitElement {
               ? this._renderCategories()
               : this._renderList()}
         </div>
-        ${this.tab === "notifications"
+        ${this.tab === "notifications" && this.config?.notifications.length
           ? html`<ha-button slot="fab" size="l" @click=${this._add}>
               <ha-icon slot="start" icon="mdi:plus"></ha-icon>
               Add notification
@@ -182,13 +183,15 @@ export class NcSettings extends LitElement {
           )}
         </ha-dropdown>
       </div>
-      <ha-card outlined>
+      ${visible.length === 0 && !config.notifications.length
+        ? html`<nc-empty-state
+            text="No notifications yet"
+            action="Add notification"
+            @nc-action=${this._add}
+          ></nc-empty-state>`
+        : html`<ha-card outlined>
         ${visible.length === 0
-          ? html`<div class="empty">
-              ${config.notifications.length
-                ? "No notifications match."
-                : "No notifications yet. Add the first one with the button below."}
-            </div>`
+          ? html`<div class="empty">No notifications match.</div>`
           : html`<ha-sortable
               handle-selector=".handle"
               .disabled=${filtering}
@@ -202,7 +205,7 @@ export class NcSettings extends LitElement {
                 )}
               </ha-list-base>
             </ha-sortable>`}
-      </ha-card>
+      </ha-card>`}
     `;
   }
 

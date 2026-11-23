@@ -368,23 +368,87 @@
   "issues": {
     "missing_entity": {
       "title": "{name}: missing entities",
-      "description": "The notification **{name}** uses entities that do not exist: {entities}. Its triggers and conditions that use them do not work. Change the notification in Notification Center, or bring the entities back."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{name}: missing entities",
+            "description": "The notification **{name}** uses entities that do not exist: {entities}. Its triggers and conditions that use them do not work. Change the notification in Notification Center, or bring the entities back.\n\n[Open it in Notification Center]({link}). The issue goes by itself when the problem is fixed."
+          }
+        },
+        "abort": {
+          "fix_it_there": "The issue goes by itself when the problem is fixed."
+        }
+      }
     },
     "invalid_every": {
       "title": "{name}: the schedule is stopped",
-      "description": "Step {step} of **{name}** takes its interval from {entity}, but its state is not a number, so the schedule is stopped, as with 0. It starts again when the state is a number."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{name}: the schedule is stopped",
+            "description": "Step {step} of **{name}** takes its interval from {entity}, but its state is not a number, so the schedule is stopped, as with 0. It starts again when the state is a number.\n\n[Open it in Notification Center]({link}). The issue goes by itself when the problem is fixed."
+          }
+        },
+        "abort": {
+          "fix_it_there": "The issue goes by itself when the problem is fixed."
+        }
+      }
     },
     "template_error": {
       "title": "{name}: error in the message",
-      "description": "The message or the info line of step {step} of **{name}** has a template error, so the notification shows the text without the template: {error}"
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{name}: error in the message",
+            "description": "The message or the info line of step {step} of **{name}** has a template error, so the notification shows the text without the template: {error}\n\n[Open it in Notification Center]({link}). The issue goes by itself when the problem is fixed."
+          }
+        },
+        "abort": {
+          "fix_it_there": "The issue goes by itself when the problem is fixed."
+        }
+      }
     },
     "setup_error": {
       "title": "{name}: a trigger or condition does not work",
-      "description": "Step {step} of **{name}** could not be set up: {error}"
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{name}: a trigger or condition does not work",
+            "description": "Step {step} of **{name}** could not be set up: {error}\n\n[Open it in Notification Center]({link}). The issue goes by itself when the problem is fixed."
+          }
+        },
+        "abort": {
+          "fix_it_there": "The issue goes by itself when the problem is fixed."
+        }
+      }
     },
     "missing_push_service": {
       "title": "{name}: the push device is missing",
-      "description": "The push notifications of **{name}** go to {service}, but there is no such action. Choose the phone again on the People page of Notification Center, or bring the action back."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{name}: the push device is missing",
+            "description": "The push notifications of **{name}** go to {service}, but there is no such action. Choose the phone again on the People page of Notification Center, or bring the action back.\n\n[Open it in Notification Center]({link}). The issue goes by itself when the problem is fixed."
+          }
+        },
+        "abort": {
+          "fix_it_there": "The issue goes by itself when the problem is fixed."
+        }
+      }
+    },
+    "missing_device": {
+      "title": "{kind} {entity} is missing",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{kind} {entity} is missing",
+            "description": "The {kind} channel uses {entity}, but there is no such entity, so the channel does nothing. Choose the entity again in Notification Center, or bring it back.\n\n[Open it in Notification Center]({link}). The issue goes by itself when the problem is fixed."
+          }
+        },
+        "abort": {
+          "fix_it_there": "The issue goes by itself when the problem is fixed."
+        }
+      }
     }
   }
 }

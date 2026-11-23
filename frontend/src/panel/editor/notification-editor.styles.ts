@@ -129,6 +129,16 @@ export const NOTIFICATION_EDITOR_STYLES = css`
       flex: 0 1 auto;
       min-width: 0;
     }
+    /* A long step name is cut at its end, so its start always shows. */
+    .step-label {
+      display: inline-block;
+      max-width: 40vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: start;
+      vertical-align: middle;
+    }
     ha-tab-group-tab.off {
       opacity: 0.5;
     }

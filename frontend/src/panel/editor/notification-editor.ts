@@ -722,7 +722,7 @@ export class NcNotificationEditor extends LitElement {
                 : item.id && live.has(item.id)
                   ? html`<ha-icon class="live-dot" icon="mdi:circle-medium" title="Active"></ha-icon>`
                   : nothing}
-              ${this._stepLabel(item, i)}
+              <span class="step-label">${this._stepLabel(item, i)}</span>
             </ha-tab-group-tab>`,
           )}
         </ha-tab-group>
@@ -1029,6 +1029,14 @@ export class NcNotificationEditor extends LitElement {
       const text = errorText(err);
       const target = errorTarget(text);
       this._error = errorWithPlace(text, target);
+      // HA's own toast, as its automation editor shows on a failed save.
+      this.dispatchEvent(
+        new CustomEvent("hass-notification", {
+          detail: { message: this._error },
+          bubbles: true,
+          composed: true,
+        }),
+      );
       if (target.step !== undefined && target.step < draft.steps.length) {
         this._step = target.step;
         if (target.block) this._toggle(`step:${target.block}`, true);

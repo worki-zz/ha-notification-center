@@ -8,7 +8,12 @@ itself as soon as the problem does:
   as with N = 0);
 - the message or the info line has a template error;
 - a trigger or condition could not be set up;
-- the notify action of a person's push device does not exist.
+- the notify action of a person's push device does not exist;
+- the entity of a light, speaker or siren channel does not exist.
+
+Every issue is fixable: its fix flow shows a link to the place that fixes it
+(the editor of the notification, or the settings page of the device). The
+issue goes when the problem does.
 """
 
 from __future__ import annotations
@@ -32,10 +37,17 @@ ISSUE_INVALID_EVERY: Final = "invalid_every"
 ISSUE_TEMPLATE_ERROR: Final = "template_error"
 ISSUE_SETUP_ERROR: Final = "setup_error"
 ISSUE_MISSING_PUSH: Final = "missing_push_service"
+ISSUE_MISSING_DEVICE: Final = "missing_device"
 
 _CHECK_INTERVAL: Final = timedelta(minutes=15)
 _LINK: Final = f"/{PANEL_URL_PATH}"
 _PEOPLE_LINK: Final = f"{_LINK}/settings/general/people"
+# The channel devices: their config key, the settings page and the name.
+_DEVICES: Final = (
+    ("lights", "light", "Light"),
+    ("speakers", "sound", "Speaker"),
+    ("sirens", "sound", "Siren"),
+)
 
 type Issue = tuple[str, dict[str, str]]
 
@@ -117,7 +129,8 @@ class IssueTracker:
                 self._hass,
                 DOMAIN,
                 issue_id,
-                is_fixable=False,
+                is_fixable=True,
+                data={"link": self._links.get(issue_id, _LINK), **placeholders},
                 is_persistent=False,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key=key,
@@ -209,6 +222,17 @@ class IssueTracker:
                 ISSUE_MISSING_PUSH,
                 {"name": state.name, "service": str(service)},
             )
+        for key, page, kind in _DEVICES:
+            for device in engine.manager.config.get(key, []):
+                entity = device["entity_id"]
+                if self._exists(entity):
+                    continue
+                issue_id = f"{ISSUE_MISSING_DEVICE}_{device['id']}"
+                links[issue_id] = f"{_LINK}/settings/general/{page}"
+                problems[issue_id] = (
+                    ISSUE_MISSING_DEVICE,
+                    {"kind": kind, "entity": entity},
+                )
         self._links = links
         return problems
 

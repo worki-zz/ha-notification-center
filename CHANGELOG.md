@@ -9,6 +9,16 @@
 - Live marks in the editor's Channels and Audience tables: a green dot at the home mode now; in the column of the home mode now (and at each person's state now) a ticked box is green; each person's state now under their name; a badge on each channel icon and person avatar, as on a tile card: a green check when it sends or gets the notification now, an orange timer while a delay applies, an orange pause when the home mode or person state holds it back, a grey cross when no home mode or state is ticked at all. The Status dialog uses the same marks. The channel dialog marks the home mode now with an *Active* tag, and names a light, speaker or siren as the Entities dialogs do (name, then area ▸ device).
 - A person with no sleep condition has a disabled *Asleep* box in the Audience table instead of none.
 - The *Test* item of a condition row works for Notification state and Notification entities conditions without a notification set: they test this (saved) notification.
+- The Notifications list and the Overview show an empty state (*No notifications yet*) while there are no notifications, with an *Add notification* button on its own row (on the Overview only for an administrator).
+- Repairs issues are fixable: the fix flow shows a link to the editor of the notification (or the settings page). A light, speaker or siren whose entity is missing has its own Repairs issue.
+- A failed save also shows Home Assistant's own toast.
+
+### Fixed
+
+- The Overview says *No active notifications* above Upcoming (*All done* only when nothing is upcoming either).
+- A long step name in the editor tabs is cut at its end, so the start always shows on a phone.
+- The Settings pages no longer render Home Assistant's elements before `hass` is set (console errors *Cannot read properties of undefined (reading 'localize')*).
+- An unknown General page (for example `/settings/general/push`) goes to General.
 
 ### Changed
 

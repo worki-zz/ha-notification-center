@@ -19,7 +19,7 @@ interface PanelResolver extends HTMLElement, Routes {
 
 let loading: Promise<boolean> | undefined;
 
-async function load(): Promise<boolean> {
+async function load(hass: unknown, host: HTMLElement): Promise<boolean> {
   await customElements.whenDefined("partial-panel-resolver");
   if (!customElements.get("ha-panel-config")) {
     const resolver = document.createElement("partial-panel-resolver") as PanelResolver;
@@ -48,7 +48,7 @@ async function load(): Promise<boolean> {
       (name) => customElements.whenDefined(name),
     ),
   );
-  await loadSelectors();
+  await loadSelectors(hass, host);
   patchTriggerEditor();
   patchRowTitles();
   patchActionAdd();
@@ -207,10 +207,12 @@ const SELECTORS: Record<string, Record<string, unknown>> = {
   navigation: { navigation: {} },
 };
 
-async function loadSelectors(): Promise<void> {
+async function loadSelectors(hass: unknown, host: HTMLElement): Promise<void> {
   const holder = document.createElement("div");
   holder.style.display = "none";
-  document.body.appendChild(holder);
+  // Inside the panel: Home Assistant's elements get their texts and
+  // formats from contexts of the elements above them.
+  (host.shadowRoot ?? host).appendChild(holder);
   try {
     await Promise.race([
       Promise.all([
@@ -218,7 +220,10 @@ async function loadSelectors(): Promise<void> {
         ...Object.entries(SELECTORS).map(([type, selector]) => {
           const element = document.createElement("ha-selector") as HTMLElement & {
             selector: unknown;
+            hass: unknown;
           };
+          // The pickers read the user, the language and the formats of hass.
+          element.hass = hass;
           element.selector = selector;
           holder.appendChild(element);
           return customElements.whenDefined(`ha-selector-${type}`);
@@ -232,8 +237,8 @@ async function loadSelectors(): Promise<void> {
 }
 
 /** Load the elements of the settings pages; true when they are there. */
-export function loadSettingsElements(): Promise<boolean> {
-  loading ??= load().catch(() => {
+export function loadSettingsElements(hass: unknown, host: HTMLElement): Promise<boolean> {
+  loading ??= load(hass, host).catch(() => {
     loading = undefined;
     return false;
   });
