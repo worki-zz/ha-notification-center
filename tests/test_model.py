@@ -69,7 +69,7 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert done["show_in_push"] is True
     assert "push_tap" not in done
     tap = next(button for button in buttons if button["type"] == "tap")
-    assert tap["push_tap"] is True
+    assert "push_tap" not in tap
     assert tap["action"] == {"type": "more_info"}
     assert "show_in_push" not in tap
     snooze = next(button for button in buttons if button["type"] == "snooze")
@@ -416,3 +416,49 @@ async def test_custom_colours_become_own_colours(hass: HomeAssistant) -> None:
     assert result["notifications"][0]["color"] == first["id"]
     assert result["notifications"][1]["color"] == second["id"]
     assert result["lights"][0]["colors"] == {first["id"]: [1, 2, 3]}
+
+
+async def test_0_6_8_highlight_repeat_and_push_tap_are_upgraded(
+    hass: HomeAssistant,
+) -> None:
+    """Highlight on/off, the speaker's until_muted and push_tap of 0.6.8."""
+    config = _with_notification(
+        buttons=[{"type": "tap", "push_tap": False, "action": {"type": "more_info"}}]
+    )
+    config["speakers"] = [{"id": "x", "entity_id": "media_player.x"}]
+    category = config["categories"][0]
+    category["highlight"] = True
+    category["buttons"] = [{"type": "tap", "push_tap": False}]
+    category["channels"]["speaker:x"] = {
+        "modes": ["home"],
+        "repeat": {"type": "until_muted", "every": {"seconds": 30}},
+    }
+    config["notifications"][0]["highlight"] = False
+    result = await async_validate_config(hass, config)
+    category = result["categories"][0]
+    assert category["highlight"] == "alert"
+    assert result["notifications"][0]["highlight"] == "none"
+    assert category["channels"]["speaker:x"]["repeat"] == {"type": "loop"}
+    assert all("push_tap" not in button for button in category["buttons"])
+    step = result["notifications"][0]["steps"][0]
+    assert all("push_tap" not in button for button in step["buttons"])
+
+
+async def test_speaker_repeat_volume_and_chime(hass: HomeAssistant) -> None:
+    """Recurring needs its time; the channel can set a volume and no chime."""
+    config = default_config()
+    config["speakers"] = [{"id": "x", "entity_id": "media_player.x"}]
+    config["categories"][0]["channels"]["speaker:x"] = {
+        "modes": ["home"],
+        "repeat": {"type": "recurring", "every": {"hours": 1}},
+        "volume": 0.5,
+        "play_chime": False,
+    }
+    result = await async_validate_config(hass, config)
+    channel = result["categories"][0]["channels"]["speaker:x"]
+    assert channel["repeat"] == {"type": "recurring", "every": {"hours": 1}}
+    assert channel["volume"] == 0.5
+    assert channel["play_chime"] is False
+    config["categories"][0]["channels"]["speaker:x"]["repeat"] = {"type": "recurring"}
+    with pytest.raises(ConfigValidationError):
+        await async_validate_config(hass, config)

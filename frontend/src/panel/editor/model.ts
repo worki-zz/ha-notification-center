@@ -1,7 +1,15 @@
 // The notification as the editor holds it, and the conversions between
 // its stored form and the form Home Assistant's own editors use.
 
-import type { AudienceEntry, Button, Category, ChannelSettings, Duration, NotificationState } from "../../shared/config";
+import type {
+  AudienceEntry,
+  Button,
+  CardHighlight,
+  Category,
+  ChannelSettings,
+  Duration,
+  NotificationState,
+} from "../../shared/config";
 import { categoryButtons, effectiveButtons } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
@@ -101,7 +109,7 @@ export interface EditorNotification {
   enabled: boolean;
   icon?: string | null;
   color?: string | null;
-  highlight?: boolean | null;
+  highlight?: CardHighlight | null;
   chime?: string | null;
   entities: EntityItem[];
   entity_groups: EntityGroup[];
@@ -540,11 +548,9 @@ export function entityDisplay(
   if (name === deviceName) name = "";
   const areaId = entry?.area_id || device?.area_id;
   const area = areaId ? hass.areas?.[areaId]?.name : undefined;
-  const parentId = device?.parent_device_id ?? device?.via_device_id;
-  const parent = parentId ? hass.devices?.[parentId] : undefined;
-  const parentName = parent ? parent.name_by_user || parent.name || "" : "";
   const primary = name || deviceName || friendly || entityId;
-  // As Home Assistant's more info dialog: area ▸ parent device ▸ device.
-  const secondary = [area, parentName, name ? deviceName : ""].filter(Boolean).join(" ▸ ");
+  // Area ▸ device. The device a device connects through (a Zigbee2MQTT
+  // bridge, a hub) is left out: it says nothing about the entity.
+  const secondary = [area, name ? deviceName : ""].filter(Boolean).join(" ▸ ");
   return { primary, secondary };
 }

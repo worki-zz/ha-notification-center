@@ -23,7 +23,7 @@ export function newGroup(): EntityGroup {
   };
 }
 
-/** "Binary sensor · moisture" */
+/** "Kitchen · Moisture · Binary sensor": the reverse of how it is set. */
 export function groupName(hass: HomeAssistant | undefined, group: EntityGroup): string {
   const domain = domainName(group.domain);
   const parts = [domain];
@@ -33,7 +33,7 @@ export function groupName(hass: HomeAssistant | undefined, group: EntityGroup): 
     ...group.areas.map((id) => hass?.areas?.[id]?.name ?? id),
   ];
   if (places.length) parts.push(places.join(", "));
-  return parts.join(" · ");
+  return parts.reverse().join(" · ");
 }
 
 export function domainName(domain: string): string {

@@ -254,14 +254,8 @@ export class NcSettingsSound extends LitElement {
                   <ha-icon .icon=${item ? "mdi:music-note-outline" : "mdi:music-note"}></ha-icon>
                   <div class="text">
                     <div>${chime.name}</div>
-                    <div class="secondary">${item ? (item.media?.media_content_id ?? "") : "Built-in"}</div>
+                    <div class="secondary">${item ? "Custom" : "Built-in"}</div>
                   </div>
-                  <ha-icon-button
-                    .label=${this._playing === chime.id ? "Stop" : "Play"}
-                    @click=${() => void this._play(chime.id)}
-                  >
-                    <ha-icon .icon=${this._playing === chime.id ? "mdi:stop" : "mdi:play"}></ha-icon>
-                  </ha-icon-button>
                   ${item
                     ? html`<ha-icon-button
                         .label=${"Edit"}
@@ -270,6 +264,12 @@ export class NcSettingsSound extends LitElement {
                         <ha-icon icon="mdi:pencil"></ha-icon>
                       </ha-icon-button>`
                     : html`<span class="edit-space"></span>`}
+                  <ha-icon-button
+                    .label=${this._playing === chime.id ? "Stop" : "Play"}
+                    @click=${() => void this._play(chime.id)}
+                  >
+                    <ha-icon .icon=${this._playing === chime.id ? "mdi:stop" : "mdi:play"}></ha-icon>
+                  </ha-icon-button>
                 </div>`;
               },
             )}

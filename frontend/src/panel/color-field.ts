@@ -6,7 +6,14 @@
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 
-import { CHIME_DEFAULT, CHIME_NONE, type NotificationCenterConfig, SYSTEM_COLORS, orderedChimes } from "../shared/config";
+import {
+  CHIME_DEFAULT,
+  CHIME_NONE,
+  type CardHighlight,
+  type NotificationCenterConfig,
+  SYSTEM_COLORS,
+  orderedChimes,
+} from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
 import { field } from "./fields";
 
@@ -79,7 +86,7 @@ export function colorField(
           onlyListed(element);
           hideClear(element, !options.inherits || !own);
         })}
-        .defaultColor=${fallback}
+        .defaultColor=${options.inherits ? fallback : undefined}
         .includeNone=${false}
         .includeState=${false}
         .extraOptions=${ownColorOptions(config)}
@@ -112,7 +119,10 @@ export function chimeField(
         options: [
           ...(options.inherits ? [{ value: CHIME_NONE, label: "None" }] : []),
           ...orderedChimes(config).map((chime) => ({ value: chime.id, label: chime.name })),
-        ].map((option) => (option.value === fallback ? { ...option, label: `${option.label} (default)` } : option)),
+        ].map((option) =>
+          // Only a notification marks its category's; a category shows what it has.
+          options.inherits && option.value === fallback ? { ...option, label: `${option.label} (default)` } : option,
+        ),
       },
     },
     value || fallback,
@@ -124,36 +134,43 @@ export function chimeField(
 }
 
 /**
- * Highlight: Normal or Highlighted. A notification shows its category's
- * until it sets its own, which has an X that goes back to the category's;
- * choosing the category's is no own value, as in the colour picker.
+ * Highlight: Normal or one of the card's highlights (Pulse, Glow, Alert);
+ * any highlight also makes the lights blink. A notification shows its
+ * category's until it sets its own, which has an X that goes back to the
+ * category's; choosing the category's is no own value, as in the colour
+ * picker.
  */
 export function highlightField(
-  value: boolean | undefined,
-  inherited: boolean | undefined,
-  changed: (value: boolean | undefined) => void,
+  value: CardHighlight | undefined,
+  inherited: CardHighlight | undefined,
+  changed: (value: CardHighlight | undefined) => void,
 ) {
   const own = value !== undefined;
-  const fallback = !!inherited;
+  const fallback = inherited ?? "none";
   const shown = own ? value : fallback;
-  const label = (on: boolean, text: string) => (on === fallback ? `${text} (default)` : text);
+  const options: [CardHighlight, string][] = [
+    ["none", "Normal"],
+    ["pulse", "Pulse"],
+    ["glow", "Glow"],
+    ["alert", "Alert"],
+  ];
   return field(
     undefined,
     {
       select: {
         mode: "dropdown",
-        options: [
-          { value: "normal", label: label(false, "Normal") },
-          { value: "highlighted", label: label(true, "Highlighted") },
-        ],
+        options: options.map(([key, text]) => ({
+          value: key,
+          label: inherited !== undefined && key === fallback ? `${text} (default)` : text,
+        })),
       },
     },
-    shown ? "highlighted" : "normal",
+    shown,
     "Highlight",
     (picked) => {
       if (picked === undefined || picked === null) changed(undefined);
-      else if (inherited === undefined) changed(picked === "highlighted");
-      else changed(picked === "highlighted" === fallback ? undefined : picked === "highlighted");
+      else if (inherited === undefined) changed(picked as CardHighlight);
+      else changed(picked === fallback ? undefined : (picked as CardHighlight));
     },
     { clearable: inherited !== undefined && own },
   );

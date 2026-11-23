@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.0
+
+First round of phase 7 (moving a real setup into the panel).
+
+### Added
+
+- **Highlight** of a category or notification: *Normal* (default), *Pulse*, *Glow* or *Alert*, the card styles of the dashboard card. The panel and the dashboard cards show an active card with it; on the lights every highlight but Normal blinks (or shows the light's effect).
+- Speaker channel: **Volume** for the notifications of a category or a notification (empty: the speaker's own), and **Play chime** (on by default) above Read the message, so a speaker can only read the message.
+- Speaker **Repeat**: *Once*, *Loop* (again and again, without a pause) and *Recurring* (every so often, 1 hour by default).
+- The Channels block shows how many channels send.
+
+### Changed
+
+- The Tap behavior has no "Also when the push notification is tapped" switch: a tap on the push always opens the app and runs the Tap. `push_tap` is dropped when the configuration is loaded.
+- Highlight on/off of earlier versions becomes *Alert* / *Normal*; a speaker's earlier Loop (`until_muted`) becomes the new *Loop*.
+- A category's Color, Highlight and Chime fields do not mark a value *(default)*; only a notification marks its category's.
+- The Snooze button's dialog always says what the push snoozes for.
+- A channel's Delayed starts at 1 hour.
+- An entity group's name reads the other way round: area, device class, domain.
+- The Audience block's count is the number of people (*2*, not *2/2*).
+- Chimes: the pencil comes before the play button, and an own chime says *Custom* instead of its media address.
+
+### Fixed
+
+- Entities: the device an entity's device connects through (such as a Zigbee2MQTT bridge) is no longer shown under the entity.
+
 ## 0.6.8
 
 ### Added

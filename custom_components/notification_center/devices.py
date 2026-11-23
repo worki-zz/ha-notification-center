@@ -26,6 +26,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
+import time
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components.media_player import (
@@ -101,6 +102,10 @@ SIREN_TEST_SECONDS: Final = 3
 # Waiting for a speaker: to start playing, and to finish.
 PLAY_START_TIMEOUT: Final = 5.0
 PLAY_TIMEOUT: Final = 60.0
+# A Loop plays again at once; a play shorter than this (nothing to play, an
+# error) waits LOOP_RETRY seconds first.
+LOOP_MIN_PLAY: Final = 1.0
+LOOP_RETRY: Final = 5.0
 POLL: Final = 0.25
 
 # The settings of a light, as a light takes them from a colour.
@@ -159,11 +164,14 @@ def chime_of(
 def highlight_of(
     notification: Mapping[str, Any] | None, category: Mapping[str, Any] | None
 ) -> bool:
-    """Return whether a notification is highlighted on the lights."""
+    """Return whether a notification is highlighted on the lights.
+
+    Every highlight of the card (Pulse, Glow, Alert) counts; Normal does not.
+    """
     own = (notification or {}).get("highlight")
-    if own is not None:
-        return bool(own)
-    return bool((category or {}).get("highlight", False))
+    if own is None:
+        own = (category or {}).get("highlight")
+    return own not in (None, False, "none")
 
 
 def light_rgb(
@@ -801,6 +809,8 @@ class _Played:
 
     token: str
     repeat: CALLBACK_TYPE | None = None
+    # Playing now (a Loop plays again when it ends).
+    busy: bool = False
 
 
 @dataclass(slots=True)
@@ -810,6 +820,8 @@ class Sound:
     chime: str | None
     text: str | None
     notification_id: str | None = None
+    # The channel's volume; None: the speaker's own.
+    volume: float | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -857,7 +869,12 @@ class SpeakerDevice(Device):
                 self._played[key] = _Played(_token(card))
                 self._play_card(card)
                 self._schedule_repeat(card)
-            elif played.repeat is None and self._settings_of(card).get("repeat"):
+            elif (
+                played.repeat is None
+                and not played.busy
+                and (self._settings_of(card).get("repeat") or {}).get("type")
+                in ("loop", "recurring")
+            ):
                 # Sending again (the mode came back): only the repeat goes on.
                 self._schedule_repeat(card)
 
@@ -874,15 +891,37 @@ class SpeakerDevice(Device):
     def _settings_of(self, card: Card) -> dict[str, Any]:
         return self.manager.engine.channel_settings_of(card, self.key) or {}
 
-    def _schedule_repeat(self, card: Card) -> None:
+    def _sending(self, key: tuple[str, str, str]) -> Card | None:
+        """Return a card this speaker still plays, or None."""
+        if key not in self._played:
+            return None
+        current = self.manager.engine.cards.get(key)
+        if current is None or current.key not in {c.key for c in self.cards}:
+            return None
+        return current
+
+    def _schedule_repeat(self, card: Card, delay: float | None = None) -> None:
+        """Plan the next play: Recurring after its time, Loop right after."""
         repeat = self._settings_of(card).get("repeat") or {}
-        if repeat.get("type") != "until_muted":
-            return
-        every = repeat.get("every") or {}
-        seconds = timedelta(**{unit: int(value) for unit, value in every.items()})
-        if seconds.total_seconds() < 5:
-            seconds = timedelta(seconds=5)
+        kind = repeat.get("type")
         key = card.key
+        played = self._played.get(key)
+        if played is None or played.repeat is not None:
+            return
+        if kind == "recurring":
+            every = repeat.get("every") or {}
+            seconds = timedelta(**{unit: int(value) for unit, value in every.items()})
+            if seconds.total_seconds() < 5:
+                seconds = timedelta(seconds=5)
+        elif kind == "loop":
+            # Started by the end of the play; a play still going goes on.
+            if delay is None:
+                if played.busy:
+                    return
+                delay = 0
+            seconds = timedelta(seconds=delay)
+        else:
+            return
 
         @callback
         def again(_now: datetime) -> None:
@@ -890,20 +929,41 @@ class SpeakerDevice(Device):
             if played is None:
                 return
             played.repeat = None
-            current = self.manager.engine.cards.get(key)
-            if current is not None and current.key in {c.key for c in self.cards}:
+            current = self._sending(key)
+            if current is not None:
                 self._play_card(current)
-                self._schedule_repeat(current)
+                if kind == "recurring":
+                    self._schedule_repeat(current)
 
-        played = self._played.get(key)
-        if played is not None:
-            played.repeat = async_call_later(self.hass, seconds, again)
+        played.repeat = async_call_later(self.hass, seconds, again)
 
     def _play_card(self, card: Card) -> None:
         sound = self.sound_of(card)
-        self.hass.async_create_background_task(
-            self._async_play(sound), f"{DOMAIN} {self.key}"
-        )
+        key = card.key
+        played = self._played.get(key)
+        if played is not None:
+            played.busy = True
+
+        async def run() -> None:
+            started = time.monotonic()
+            try:
+                await self._async_play(sound)
+            finally:
+                played = self._played.get(key)
+                if played is not None:
+                    played.busy = False
+            current = self._sending(key)
+            if current is None:
+                return
+            repeat = self._settings_of(current).get("repeat") or {}
+            if repeat.get("type") == "loop":
+                # Again at once; a play that ended at once (nothing to play,
+                # an error) waits a little, not to call the speaker in a
+                # tight loop.
+                quick = time.monotonic() - started < LOOP_MIN_PLAY
+                self._schedule_repeat(current, LOOP_RETRY if quick else 0)
+
+        self.hass.async_create_background_task(run(), f"{DOMAIN} {self.key}")
 
     def sound_of(self, card: Card) -> Sound:
         """Return the chime and the text of a card."""
@@ -911,7 +971,11 @@ class SpeakerDevice(Device):
         notification = self._notification(card)
         category = engine.category_of(notification) or {}
         settings = self._settings_of(card)
-        chime = chime_of(notification, category)
+        chime = (
+            chime_of(notification, category)
+            if settings.get("play_chime", True)
+            else None
+        )
         text = None
         if settings.get("read_the_message"):
             text = spoken_text(
@@ -921,7 +985,12 @@ class SpeakerDevice(Device):
                 with_name=bool(settings.get("read_name")),
                 with_info=bool(settings.get("read_info")),
             )
-        return Sound(chime=chime, text=text, notification_id=card.notification_id)
+        return Sound(
+            chime=chime,
+            text=text,
+            notification_id=card.notification_id,
+            volume=settings.get("volume"),
+        )
 
     async def _async_play(self, sound: Sound) -> None:
         async with self._lock:
@@ -944,7 +1013,9 @@ class SpeakerDevice(Device):
 
     async def _async_play_locked(self, sound: Sound) -> None:
         announce = self._announce()
-        volume = self.settings.get("volume")
+        volume = (
+            sound.volume if sound.volume is not None else self.settings.get("volume")
+        )
         restore: float | None = None
         if volume is not None and not announce:
             state = self.hass.states.get(self.entity_id)
@@ -1059,7 +1130,11 @@ class SpeakerDevice(Device):
             self.settings = {**self.settings, **data["device"]}
         settings = data.get("settings") or {}
         category = data.get("category") or {}
-        chime = chime_of(data.get("notification"), category)
+        chime = (
+            chime_of(data.get("notification"), category)
+            if settings.get("play_chime", True)
+            else None
+        )
         text = None
         if settings.get("read_the_message"):
             text = spoken_text(
@@ -1069,7 +1144,9 @@ class SpeakerDevice(Device):
                 with_name=bool(settings.get("read_name")),
                 with_info=bool(settings.get("read_info")),
             )
-        await self._async_play(Sound(chime=chime, text=text))
+        await self._async_play(
+            Sound(chime=chime, text=text, volume=settings.get("volume"))
+        )
 
 
 def spoken_text(

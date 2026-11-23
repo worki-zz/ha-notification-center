@@ -460,16 +460,16 @@ class PushDevice(Device):
     def tap_url(self, card: Card) -> str:
         """Return what a tap on a card's push opens.
 
-        The Tap's page (or the category's, or General's). When the Tap is
-        switched on for the push and does something, the panel presses it
-        first; a Tap that navigates opens its own page.
+        The Tap's page (or the category's, or General's). When the Tap does
+        something, the panel presses it first; a Tap that navigates opens its
+        own page.
         """
         tap = next(
             (button for button in self._buttons(card) if button["type"] == "tap"),
             None,
         )
         page = (tap or {}).get("open_on_tap") or self.default_url()
-        if tap is None or not tap.get("enabled") or not tap.get("push_tap", True):
+        if tap is None or not tap.get("enabled"):
             return page
         action = tap.get("action") or {"type": "nothing"}
         if action["type"] == "nothing":

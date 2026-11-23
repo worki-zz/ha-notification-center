@@ -210,6 +210,20 @@ def _optional(validator: Callable[[Any], Any]) -> Callable[[Any], Any]:
     return validate
 
 
+# How a card stands out: Normal (none) or one of the card's highlights. Any
+# highlight also makes the lights show their effect.
+HIGHLIGHTS = ("none", "pulse", "glow", "alert")
+
+
+def _highlight(value: Any) -> str:
+    """Validate a highlight; the on/off of 0.6.8 and before is read too."""
+    if value is True:
+        return "alert"
+    if value is False:
+        return "none"
+    return str(vol.In(HIGHLIGHTS)(value))
+
+
 def _id(value: Any) -> str:
     """Validate an item id: a non-empty string without spaces."""
     text = cv.string(value).strip()
@@ -413,10 +427,20 @@ CHIME_SCHEMA = _with_id(
 # ---------------------------------------------------------------------------
 # Channels
 
-REPEAT_SCHEMA = vol.Any(
-    vol.Schema({vol.Required("type"): "once"}),
-    vol.Schema({vol.Required("type"): "until_muted", vol.Required("every"): DURATION}),
+# A speaker's repeat until done or silenced: Once, Loop (again and again,
+# without a pause) or Recurring (every so often).
+_REPEAT_TYPES = vol.Any(
+    vol.Schema({vol.Required("type"): vol.In(("once", "loop"))}),
+    vol.Schema({vol.Required("type"): "recurring", vol.Required("every"): DURATION}),
 )
+
+
+def _repeat(value: Any) -> dict[str, Any]:
+    """Validate a repeat; the Loop of 0.6.8 and before (until_muted) is Loop."""
+    if isinstance(value, dict) and value.get("type") == "until_muted":
+        value = {"type": "loop"}
+    return dict(_REPEAT_TYPES(value))
+
 
 # Every key is optional so that a step can store only what it changes. A
 # channel sends after its delay (none: at once); in a step, ``delay: null``
@@ -430,7 +454,13 @@ _CHANNEL_EXTRA: dict[str, dict[Any, Any]] = {
     "light": {},
     "siren": {},
     "speaker": {
-        vol.Optional("repeat"): REPEAT_SCHEMA,
+        vol.Optional("repeat"): _repeat,
+        # Empty: the speaker's own volume.
+        vol.Optional("volume"): vol.Any(
+            None, vol.All(vol.Coerce(float), vol.Range(0, 1))
+        ),
+        # Off: only the message is read (default on).
+        vol.Optional("play_chime"): cv.boolean,
         vol.Optional("read_the_message"): cv.boolean,
         # What is read besides the message: the notification's name and
         # the Info line.
@@ -526,8 +556,9 @@ CATEGORY_SCHEMA = _with_id(
         vol.Optional("icon"): _optional(cv.icon),
         # A system colour by name, or an own colour by its id.
         vol.Optional("color"): _optional(cv.string),
-        # The lights blink (or show their effect) for its notifications.
-        vol.Optional("highlight", default=False): cv.boolean,
+        # How its cards stand out; any highlight also makes the lights blink
+        # (or show their effect).
+        vol.Optional("highlight", default="none"): _highlight,
         # What the speakers play.
         vol.Optional("chime"): _optional(_id),
         vol.Optional("buttons", default=list): _category_buttons_late,
@@ -735,7 +766,9 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
             button.pop("snooze", None)
         else:
             button["snooze"] = _sorted_snooze(button["snooze"])
-        for key in ("label", "icon", "show_in_push", "push_tap"):
+        # A tap on the push always runs the Tap (0.6.9): push_tap is gone.
+        button.pop("push_tap", None)
+        for key in ("label", "icon", "show_in_push"):
             if button.get(key) is None:
                 button.pop(key, None)
         if not button.get("open_on_tap"):
@@ -780,14 +813,12 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
             )
         else:
             button.pop("snooze", None)
+        button.pop("push_tap", None)
         if kind == "tap":
             button.pop("show_in_push", None)
-            if button.get("push_tap") is None:
-                button["push_tap"] = True
             if not button.get("open_on_tap"):
                 button.pop("open_on_tap", None)
         else:
-            button.pop("push_tap", None)
             button.pop("open_on_tap", None)
             if button.get("show_in_push") is None:
                 button["show_in_push"] = True
@@ -898,8 +929,6 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
             entry.get("snooze") or base.get("snooze") or list(DEFAULT_SNOOZE_CHOICES)
         )
     if kind == "tap":
-        value = entry.get("push_tap")
-        button["push_tap"] = base.get("push_tap", True) if value is None else value
         button["open_on_tap"] = entry.get("open_on_tap") or base.get("open_on_tap")
     else:
         value = entry.get("show_in_push")
@@ -1024,7 +1053,7 @@ NOTIFICATION_SCHEMA = _with_id(
         # Left out: inherited from the category.
         vol.Optional("icon"): _optional(cv.icon),
         vol.Optional("color"): _optional(cv.string),
-        vol.Optional("highlight"): _optional(cv.boolean),
+        vol.Optional("highlight"): _optional(_highlight),
         vol.Optional("chime"): _optional(_id),
         vol.Optional("entities", default=list): vol.All(
             cv.ensure_list, [ENTITY_SCHEMA]
@@ -1381,8 +1410,7 @@ def upgrade_category_buttons(data: dict[str, Any]) -> None:
                     button.pop("snooze", None)
                 if button.get("show_in_push") is True:
                     button.pop("show_in_push", None)
-                if button.get("push_tap") is True:
-                    button.pop("push_tap", None)
+                button.pop("push_tap", None)
                 for key in ("icon", "label"):
                     if not button.get(key):
                         button.pop(key, None)

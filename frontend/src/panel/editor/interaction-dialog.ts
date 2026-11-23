@@ -330,11 +330,17 @@ export class NcInteractionDialog extends LitElement {
     }
   }
 
+  // Tap: a tap on the push always opens the app and runs the Tap.
+  private _renderTapPush() {
+    return html`<div class="secondary">
+      Tapping the push notification always opens the app and does the same.
+    </div>`;
+  }
+
   private _renderPush(button: Button) {
     const tap = button.type === "tap";
-    const on = tap
-      ? (button.push_tap ?? true)
-      : (button.show_in_push ?? true);
+    if (tap) return this._renderTapPush();
+    const on = button.show_in_push ?? true;
     const total = this.otherPushButtons + (on ? 1 : 0);
     const times = button.type === "snooze" ? snoozeChoices(button) : [];
     return html`<label class="switch-row">
@@ -342,21 +348,19 @@ export class NcInteractionDialog extends LitElement {
           .checked=${on}
           @change=${(ev: Event) => {
             const checked = (ev.target as HTMLInputElement).checked;
-            this._set(tap ? { push_tap: checked } : { show_in_push: checked });
+            this._set({ show_in_push: checked });
           }}
         ></ha-switch>
         <span>
-          ${tap
-            ? "Also when the push notification is tapped"
-            : "Show button in the push notification"}
-          ${on && times.length > 1
+          Show button in the push notification
+          ${times.length
             ? html`<div class="secondary">
                 The push snoozes for ${times[0].label.toLowerCase()}.
               </div>`
             : nothing}
         </span>
       </label>
-      ${!tap && on && total > 3
+      ${on && total > 3
         ? html`<ha-alert alert-type="warning">
             ${total} buttons are shown in the push: Android shows only the first
             3, in the order of this list.
@@ -391,20 +395,16 @@ export class NcInteractionDialog extends LitElement {
   // A category's button in a notification: Push follows the category unless
   // chosen here.
   private _renderPushChoice(button: Button, inherited: CategoryButton) {
-    const tap = button.type === "tap";
-    const own = tap ? button.push_tap : button.show_in_push;
-    const base = tap ? (inherited.push_tap ?? true) : (inherited.show_in_push ?? true);
+    if (button.type === "tap") return this._renderTapPush();
+    const own = button.show_in_push;
+    const base = inherited.show_in_push ?? true;
     const on = own ?? base;
     const total = this.otherPushButtons + (on ? 1 : 0);
-    const options = tap
-      ? [
-          { value: "on", label: "Also when the push is tapped" },
-          { value: "off", label: "Not when the push is tapped" },
-        ]
-      : [
-          { value: "on", label: "Shown in the push" },
-          { value: "off", label: "Not in the push" },
-        ];
+    const times = button.type === "snooze" ? snoozeChoices(button) : [];
+    const options = [
+      { value: "on", label: "Shown in the push" },
+      { value: "off", label: "Not in the push" },
+    ];
     return html`${field(
         this.hass,
         { select: { mode: "dropdown", options } },
@@ -413,16 +413,16 @@ export class NcInteractionDialog extends LitElement {
         (value) => {
           const chosen = value === "on" ? true : value === "off" ? false : undefined;
           const copy = { ...this._button! };
-          if (tap) {
-            if (chosen === undefined) delete copy.push_tap;
-            else copy.push_tap = chosen;
-          } else if (chosen === undefined) delete copy.show_in_push;
+          if (chosen === undefined) delete copy.show_in_push;
           else copy.show_in_push = chosen;
           this._button = copy;
         },
         { clearable: true },
       )}
-      ${!tap && on && total > 3
+      ${times.length
+        ? html`<div class="secondary">The push snoozes for ${times[0].label.toLowerCase()}.</div>`
+        : nothing}
+      ${on && total > 3
         ? html`<ha-alert alert-type="warning">
             ${total} buttons are shown in the push: Android shows only the first
             3, in the order of this list.
@@ -469,7 +469,8 @@ export class NcInteractionDialog extends LitElement {
       gap: 16px;
       cursor: pointer;
     }
-    .switch-row .secondary {
+    .switch-row .secondary,
+    .form > .secondary {
       color: var(--secondary-text-color);
       font-size: var(--ha-font-size-s, 12px);
     }
