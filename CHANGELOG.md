@@ -15,7 +15,7 @@
 
 ### Changed
 
-- The unused push settings of the early data model (`critical`, `send_again_after`, `sound`, `recipients`, `action_buttons`, `attachments`, `clear_when_done`) are dropped when the configuration is loaded.
+- Push ticks of earlier versions are removed once with the update, so nothing is sent before the phones are set. The unused push settings of the early data model (`critical`, `send_again_after`, `sound`, `recipients`, `action_buttons`, `attachments`, `clear_when_done`) are dropped when the configuration is loaded.
 
 ## 0.6.7
 
