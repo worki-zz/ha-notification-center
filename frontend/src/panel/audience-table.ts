@@ -148,7 +148,11 @@ export class NcAudienceTable extends LitElement {
                 <span class="avatar-wrap"
                   >${avatar(person)}${now
                     ? liveBadge(
-                        gets ? "sends" : "no",
+                        gets
+                          ? "sends"
+                          : personStates(person.id, this.sleepers).some((state) => entry[state])
+                            ? "no"
+                            : "off",
                         `${STATE_NAMES[now]} now: ${gets ? "gets it" : "does not get it"}`,
                       )
                     : nothing}</span

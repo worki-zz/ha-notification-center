@@ -136,6 +136,9 @@ export const TABLE_STYLES = css`
   .live-badge.no {
     background-color: var(--ha-color-fill-warning-loud-resting, var(--warning-color, #ff9800));
   }
+  .live-badge.off {
+    background-color: var(--secondary-text-color);
+  }
   .channel-icon + .live-badge {
     right: -6px;
     bottom: -6px;

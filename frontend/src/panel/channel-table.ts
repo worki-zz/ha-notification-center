@@ -124,7 +124,7 @@ export class NcChannelTable extends LitElement {
     if (!this.currentMode) return icon;
     const ticked = settings.modes ?? [];
     let tone: LiveTone | undefined;
-    let title = "";
+    let title: string;
     if (this._sendsNow(settings)) {
       const late = hasDelay(settings.delay);
       tone = late ? "waits" : "sends";
@@ -132,6 +132,9 @@ export class NcChannelTable extends LitElement {
     } else if (ticked.length) {
       tone = "no";
       title = "Does not send in the home mode now";
+    } else {
+      tone = "off";
+      title = "Off in every home mode";
     }
     return html`<span class="avatar-wrap">${icon}${liveBadge(tone, title)}</span>`;
   }

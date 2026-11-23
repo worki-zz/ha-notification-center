@@ -177,12 +177,15 @@ export function whenText(settings: ChannelSettings): string {
     : when;
 }
 
-export type LiveTone = "sends" | "waits" | "no";
+// sends: now; waits: after the delay; no: not now (home mode or state);
+// off: never (no home mode or state ticked).
+export type LiveTone = "sends" | "waits" | "no" | "off";
 
 const LIVE_ICONS: Record<LiveTone, string> = {
   sends: "mdi:check",
   waits: "mdi:timer-sand",
-  no: "mdi:close",
+  no: "mdi:pause",
+  off: "mdi:close",
 };
 
 /**

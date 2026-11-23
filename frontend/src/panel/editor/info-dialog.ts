@@ -234,7 +234,8 @@ export class NcInfoDialog extends LitElement {
       const ok = gets && !noPhone;
       // Not in the audience now: it waits, like a channel waiting for its
       // home mode. No phone: nothing to wait for, so off.
-      const tone: Tone = ok ? "sends" : noPhone ? "off" : "waits";
+      const never = !view.audience.includes(person.id);
+      const tone: Tone = ok ? "sends" : noPhone || never ? "off" : "waits";
       return html`<ha-list-item-base class="person">
         <span slot="start" class="person-avatar">${avatar(person)}</span>
         <span slot="headline">${person.name}</span>
