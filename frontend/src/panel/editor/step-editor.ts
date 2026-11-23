@@ -28,6 +28,7 @@ import { BLOCK_INTROS, block } from "./block";
 import "./schedule-editor";
 import type {
   AudienceEntry,
+  AudienceState,
   Button,
   Category,
   CategoryButton,
@@ -52,6 +53,7 @@ import {
   runText,
 } from "./interaction-dialog";
 import "./interaction-dialog";
+import { conditionTestHass } from "./condition-test";
 import { HELP, type StartKind } from "./step-editor.help";
 import { STEP_EDITOR_STYLES } from "./step-editor.styles";
 
@@ -152,6 +154,14 @@ export class NcStepEditor extends LitElement {
 
   // The people with a sleep condition (the Audience's Sleep ticks).
   @property({ attribute: false }) public sleepers: string[] = [];
+
+  // The notification's sensor: the conditions' Test checks it.
+  @property() public sensor?: string;
+
+  // The home mode and the person states now: the tables mark them.
+  @property({ attribute: false }) public liveMode?: string | null;
+
+  @property({ attribute: false }) public livePeople?: Record<string, AudienceState>;
 
   // The interaction whose dialog is open: the step's own entry for it, the
   // category's button it inherits from, and whether it is a new own button.
@@ -730,7 +740,7 @@ export class NcStepEditor extends LitElement {
       </div>
       ${this._title("Conditions", "show")}
       <ha-automation-condition
-        .hass=${this.hass}
+        .hass=${conditionTestHass(this.hass, this.sensor)}
         .narrow=${this.narrow}
         .conditions=${show.conditions}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
@@ -823,6 +833,7 @@ export class NcStepEditor extends LitElement {
       <nc-audience-table
         .hass=${this.hass}
         .sleepers=${this.sleepers}
+        .personStates=${this.livePeople}
         .base=${this.category?.audience ?? {}}
         .value=${step.audience ?? {}}
         @value-changed=${(
@@ -843,6 +854,7 @@ export class NcStepEditor extends LitElement {
         .narrow=${this.narrow}
         .modes=${this.modes}
         .channels=${channelsOf(this.hass, this.config)}
+        .currentMode=${this.liveMode}
         .config=${this.config}
         .testContext=${{
           category: this.category,

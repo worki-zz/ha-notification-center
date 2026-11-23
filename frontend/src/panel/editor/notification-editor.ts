@@ -22,6 +22,7 @@ import { type FieldOptions, field, iconSelect } from "../fields";
 import { renderStatus, statusOf } from "../status";
 import { BLOCK_INTROS, block } from "./block";
 import "./group-dialog";
+import "./info-dialog";
 import { ACTION_SLOT_STYLES } from "./action-slots";
 import { type EditorNotification, type EditorStep, applyCategoryDefaults, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, toEditor, toSaved } from "./model";
 import "./entities-block";
@@ -71,6 +72,9 @@ export class NcNotificationEditor extends LitElement {
 
   @state() private _preview: PreviewText[] = [];
 
+  // The Status dialog: open for the notification, or for one step.
+  @state() private _info?: { stepId?: string };
+
   // The draft as it was loaded or saved, to tell whether it changed.
   private _original = "";
 
@@ -106,6 +110,23 @@ export class NcNotificationEditor extends LitElement {
 
   private _storedItem(): Notification | undefined {
     return this.config?.notifications.find((item) => item.id === this.notificationId);
+  }
+
+  private _storedStep(stepId: string | undefined) {
+    return stepId ? this._storedItem()?.steps.find((item) => item.id === stepId) : undefined;
+  }
+
+  private _renderInfo() {
+    const stored = this._storedItem();
+    if (!stored) return nothing;
+    return html`<nc-info-dialog
+      .hass=${this.hass}
+      .config=${this.config}
+      .state=${this.state}
+      .notification=${stored}
+      .stepId=${this._info?.stepId}
+      @info-closed=${() => (this._info = undefined)}
+    ></nc-info-dialog>`;
   }
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -338,6 +359,7 @@ export class NcNotificationEditor extends LitElement {
           ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
           ${draft ? this._renderEditor(draft) : nothing}
         </div>
+        ${this._info ? this._renderInfo() : nothing}
         ${draft
           ? html`<ha-button
               slot="fab"
@@ -358,7 +380,19 @@ export class NcNotificationEditor extends LitElement {
     const status = statusOf(draft, this._isNew ? undefined : this.state?.notifications[draft.id ?? ""]);
     return html`
       <div slot="toolbar-icon" class="toolbar">
-        ${renderStatus(status)}
+        ${status && !this._isNew
+          ? html`<span
+              class="status-button"
+              role="button"
+              tabindex="0"
+              title="Status"
+              @click=${() => (this._info = {})}
+              @keydown=${(ev: KeyboardEvent) => {
+                if (ev.key === "Enter" || ev.key === " ") this._info = {};
+              }}
+              >${renderStatus(status)}</span
+            >`
+          : renderStatus(status)}
         ${this.narrow
           ? nothing
           : html`<ha-icon-button
@@ -409,8 +443,8 @@ export class NcNotificationEditor extends LitElement {
             <wa-divider></wa-divider>`
         : nothing}
       <ha-dropdown-item value="info" .disabled=${!saved}>
-        <ha-icon slot="icon" icon="mdi:information-outline"></ha-icon>
-        Information
+        <ha-icon slot="icon" icon="mdi:list-status"></ha-icon>
+        Status
       </ha-dropdown-item>
       <ha-dropdown-item value="run_me" .disabled=${!runnable}>
         <ha-icon slot="icon" icon="mdi:play"></ha-icon>
@@ -683,7 +717,11 @@ export class NcNotificationEditor extends LitElement {
               .active=${i === index}
               class="${item.enabled ? "" : "off"} ${item.id && live.has(item.id) ? "live" : ""}"
             >
-              ${count > 1 ? html`<span class="step-number">${i + 1}</span>` : nothing}
+              ${count > 1
+                ? html`<span class="step-number">${i + 1}</span>`
+                : item.id && live.has(item.id)
+                  ? html`<ha-icon class="live-dot" icon="mdi:circle-medium" title="Active"></ha-icon>`
+                  : nothing}
               <span class="step-label">${this._stepLabel(item, i)}</span>
             </ha-tab-group-tab>`,
           )}
@@ -704,6 +742,10 @@ export class NcNotificationEditor extends LitElement {
           <ha-dropdown-item value="run_me" .disabled=${this._isNew || this._dirty || !draft.enabled || !step.enabled}>
             <ha-icon slot="icon" icon="mdi:play"></ha-icon>
             Run this step, only me
+          </ha-dropdown-item>
+          <ha-dropdown-item value="info" .disabled=${this._isNew || !this._storedStep(step.id)}>
+            <ha-icon slot="icon" icon="mdi:list-status"></ha-icon>
+            Step status
           </ha-dropdown-item>
           <ha-dropdown-item value="duplicate">
             <ha-icon slot="icon" icon="mdi:content-duplicate"></ha-icon>
@@ -760,6 +802,9 @@ export class NcNotificationEditor extends LitElement {
           .config=${this.config}
           .notification=${draft}
           .sleepers=${sleepersOf(this.config?.people)}
+          .sensor=${this._isNew ? undefined : this._sensor()}
+          .liveMode=${this.state?.mode}
+          .livePeople=${this.state?.people}
           @value-changed=${(ev: CustomEvent<{ value: EditorStep }>) => {
             ev.stopPropagation();
             this._changeStep(index, ev.detail.value);
@@ -788,6 +833,9 @@ export class NcNotificationEditor extends LitElement {
         return;
       case "run_me":
         await this._run(() => this._call("trigger", { step: index + 1, only_me: true }));
+        return;
+      case "info":
+        this._info = { stepId: step.id };
         return;
       case "duplicate": {
         const copy = JSON.parse(JSON.stringify(step)) as EditorStep;
@@ -879,15 +927,9 @@ export class NcNotificationEditor extends LitElement {
       case "visual":
         this._yaml = undefined;
         return;
-      case "info": {
-        const entityId = this._sensor();
-        if (entityId) {
-          this.dispatchEvent(
-            new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }),
-          );
-        }
+      case "info":
+        this._info = {};
         return;
-      }
       case "run":
         await this._run(() => this._call("trigger", { step: this._step + 1 }));
         return;

@@ -27,6 +27,15 @@ export const NOTIFICATION_EDITOR_STYLES = css`
     .toolbar .status {
       margin-inline-end: 8px;
     }
+    /* The status chip opens the Status dialog. */
+    .status-button {
+      display: inline-flex;
+      cursor: pointer;
+      border-radius: var(--ha-badge-border-radius, 9999px);
+    }
+    .status-button:focus-visible {
+      outline: 2px solid var(--primary-color);
+    }
     ha-switch {
       flex: none;
     }
@@ -99,6 +108,12 @@ export const NOTIFICATION_EDITOR_STYLES = css`
     /* A step with an active card, like the Active status chip. */
     ha-tab-group-tab.live .step-number {
       background-color: var(--green-color, #4caf50);
+    }
+    /* A single step has no number: a green dot says it is active. */
+    .live-dot {
+      --mdc-icon-size: 20px;
+      margin-inline: -4px 4px;
+      color: var(--green-color, #4caf50);
     }
     .steps {
       display: block;

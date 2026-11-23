@@ -77,6 +77,72 @@ export const TABLE_STYLES = css`
   .reset {
     color: var(--secondary-text-color);
   }
+  /* Live marks: the home mode now, the ticks valid now, a delay that
+     applies now and the people who get the notification now. */
+  .now {
+    display: inline-flex;
+    align-items: center;
+  }
+  .now-dot {
+    --mdc-icon-size: 16px;
+    color: var(--ha-color-fill-success-loud-resting, var(--success-color, #4caf50));
+  }
+  .head .now-dot {
+    margin-inline-start: -4px;
+  }
+  .name-text .now-dot {
+    vertical-align: middle;
+    margin-inline-start: 2px;
+  }
+  ha-checkbox.now {
+    --ha-checkbox-border-color: var(
+      --ha-color-fill-success-loud-resting,
+      var(--success-color, #4caf50)
+    );
+    --ha-checkbox-checked-background-color: var(
+      --ha-color-fill-success-loud-resting,
+      var(--success-color, #4caf50)
+    );
+    --ha-checkbox-checked-background-color-hover: var(
+      --ha-color-fill-success-loud-hover,
+      var(--success-color, #4caf50)
+    );
+  }
+  .avatar-wrap {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+  }
+  /* As the badge of Home Assistant's tile card. */
+  .live-badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    --mdc-icon-size: 12px;
+    color: var(--white-color, #fff);
+    background-color: var(--ha-color-fill-success-loud-resting, var(--success-color, #4caf50));
+  }
+  .name .live-badge ha-icon,
+  .list-row .live-badge ha-icon {
+    color: var(--white-color, #fff);
+  }
+  .live-badge.waits,
+  .live-badge.no {
+    background-color: var(--ha-color-fill-warning-loud-resting, var(--warning-color, #ff9800));
+  }
+  .live-badge.off {
+    background-color: var(--secondary-text-color);
+  }
+  .channel-icon + .live-badge {
+    right: -6px;
+    bottom: -6px;
+  }
   .hint {
     margin: 0;
     color: var(--secondary-text-color);

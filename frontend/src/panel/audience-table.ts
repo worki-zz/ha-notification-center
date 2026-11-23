@@ -12,6 +12,7 @@ import {
   type PersonInfo,
   effectiveAudience,
   haPeople,
+  liveBadge,
   personStates,
   visibleStates,
 } from "./channel-helpers";
@@ -24,7 +25,7 @@ const STATE_HELP: Record<AudienceState, string> = {
 
 
 /** "As Home Assistant draws a person": the picture, or the initials. */
-function avatar(person: PersonInfo) {
+export function avatar(person: PersonInfo) {
   if (customElements.get("ha-person-badge")) {
     return html`<ha-person-badge
       class="avatar"
@@ -59,6 +60,11 @@ export class NcAudienceTable extends LitElement {
   // The people with a sleep condition: only they can be asleep, so only they
   // have a Sleep tick (no column at all when nobody has one).
   @property({ attribute: false }) public sleepers: string[] = [];
+
+  // Each person's state now (a notification's editor only): the tick of
+  // that state is green, and a person who gets the notification now has a
+  // check on the avatar.
+  @property({ attribute: false }) public personStates?: Record<string, AudienceState>;
 
   private get _isStep(): boolean {
     return this.base !== undefined;
@@ -135,15 +141,39 @@ export class NcAudienceTable extends LitElement {
           ${people.map((person) => {
             const entry = effective[person.id];
             const own = this._isStep && !!this.value[person.id];
+            const now = this.personStates?.[person.id];
+            const gets = !!now && entry[now];
             return html`<div class="row">
               <div class="cell name">
-                ${avatar(person)}<span class="name-text">${person.name}</span>
+                <span class="avatar-wrap"
+                  >${avatar(person)}${now
+                    ? liveBadge(
+                        gets
+                          ? "sends"
+                          : personStates(person.id, this.sleepers).some((state) => entry[state])
+                            ? "no"
+                            : "off",
+                        `${STATE_NAMES[now]} now: ${gets ? "gets it" : "does not get it"}`,
+                      )
+                    : nothing}</span
+                ><span class="name-text"
+                  >${person.name}${now
+                    ? html`<div class="secondary">${STATE_NAMES[now]}</div>`
+                    : nothing}</span
+                >
               </div>
               ${states.map((state) =>
                 state === "sleep" && !this.sleepers.includes(person.id)
-                  ? html`<div class="cell tick"></div>`
+                  ? html`<div class="cell tick">
+                      <ha-checkbox
+                        disabled
+                        title="No sleep condition is set for ${person.name} on the People page"
+                      ></ha-checkbox>
+                    </div>`
                   : html`<div class="cell tick">
                       <ha-checkbox
+                        class=${state === now && entry[state] ? "now" : ""}
+                        title=${state === now ? `${person.name} is ${STATE_NAMES[state].toLowerCase()} now` : ""}
                         .checked=${entry[state]}
                         .label=${`${person.name}: ${STATE_NAMES[state]}`}
                         @change=${(ev: Event) =>

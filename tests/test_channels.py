@@ -203,3 +203,33 @@ async def test_dashboard_mode_and_delay(
     assert _dashboard(center, nid)["reason"] == REASON_OFF
     assert center.attrs("sensor.nc_channel_dashboard")["off"] == 1
     assert center.attrs("sensor.nc_channel_dashboard")["upcoming"] == 0
+
+
+async def test_snapshot_lists_every_channel(center: Center) -> None:
+    """An active card says what each channel does now, for the Info dialog."""
+    await center.set("person.a", "home")
+    await center.set("person.b", "home")
+    await center.manager.async_update_person(
+        {"person": "person.a", "notify": "notify.a_phone"}
+    )
+    await _set_category(
+        center,
+        audience={"person.a": HOME_ONLY, "person.b": HOME_ONLY},
+        channels={"dashboard": {"modes": ["home"]}, "push": {"modes": ["home"]}},
+    )
+    nid = await center.add("Garbage", step())
+    await center.call("trigger", "sensor.nc_garbage")
+
+    snapshot = center.engine.snapshot()["notifications"][nid]
+    card = snapshot["cards"][0]
+    assert set(card["channels"]) == {"dashboard", "push"}
+    push = card["channels"]["push"]
+    assert push["people"] == ["person.a", "person.b"]
+    assert push["no_phone"] == ["person.b"]
+    assert card["channels"]["dashboard"]["reason"] is None
+    step_id = card["step_id"]
+    assert snapshot["history"][step_id]["active"]
+
+    await center.call("done", "sensor.nc_garbage")
+    card = center.engine.snapshot()["notifications"][nid]["cards"][0]
+    assert "channels" not in card

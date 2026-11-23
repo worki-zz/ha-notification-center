@@ -57,7 +57,8 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
   `ha-elements.ts`, `fields.ts`, `confirm.ts`, `dialog-back.ts`: shared UI helpers.
 - `panel/editor/`: notification editor (`notification-editor.ts`), its Entities block
   (`entities-block.ts`), one step (`step-editor.ts`), schedule, interaction (button)
-  dialog, entity groups, `model.ts` (editor form and conversions). Styles and help texts
+  dialog, entity groups, Status dialog (`info-dialog.ts`), condition Test for own
+  conditions (`condition-test.ts`), `model.ts` (editor form and conversions). Styles and help texts
   of the big components are in `*.styles.ts` and `step-editor.help.ts` next to them.
 - `shared/version.ts` must match the release version.
 
