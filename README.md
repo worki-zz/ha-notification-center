@@ -121,7 +121,7 @@ The Push channel sends a notification to the phones of the people (set on the Pe
 
 - **Content:** the notification's name as the title, the message, and the Info line on its own line. On iOS the notification's icon in white on its colour, as a round picture; on Android the icon in the status bar and the colour. Pushes of a category are grouped together.
 - **Priority** (in the channel's dialog): *Silent* (no sound, it waits in the list), *Normal*, *Time-sensitive* (through Focus and Do Not Disturb) or *Critical* (sounds even when the phone is muted). On iOS this is the interruption level. On Android *Normal* goes to a notification channel named after the category; *Silent*, *Time-sensitive* and *Critical* go to the shared channels *Silent*, *Time-sensitive* and the alarm stream. Time-sensitive and Critical arrive at once; a Critical push cannot be swiped away until the notification ends. An Android channel keeps its sound and importance from when it was first created (change them in the phone's settings); renaming a category removes its old channel.
-- **Buttons:** the switched-on buttons with *Show button in the push notification*, in the order of the editor (iOS shows them all, Android the first 3). Snooze snoozes for its first time. Pressing a button on the phone works as on the card, as the person who pressed it (*Done by …*). A button whose action is More info or Navigate opens the panel, which does the rest.
+- **Buttons:** the switched-on buttons with *Show button in the push notification*, in the order of the editor (iOS shows them all, Android the first 3). Snooze snoozes for its first time. Pressing a button on the phone works as on the card, as the person who pressed it (*Done by …*). A button with a Navigation action (More info or Navigate) opens the panel, which does the rest.
 - **Tap:** a tap opens the page set in *Open on tap*: the notification's Tap behavior, else its category's, else General › Push (the panel's Overview by default). The Tap behavior's action runs too (a Navigate action opens its own page).
 - **One push per notification and phone:** a later step replaces the earlier one (a Critical push on iOS is removed first, since iOS cannot replace it). The text of a sent push does not change. The push goes away when the card is done, dismissed, snoozed, expired or hidden by its conditions, and comes back when the card does. It stays on a mode or presence change and on Silence.
 - **Test:** the channel's dialog has two play icons: one sends a test to your own phone (your user's person), the other to every phone the notification can reach (the people of its audience with a phone). The People dialog tests one device.
@@ -148,14 +148,15 @@ Inside a notification, the Notification state trigger with no notification means
 
 ## Buttons
 
-A card's buttons work the same in the panel and on both cards. What a built-in button does to the card is fixed: **Done** closes it, **Dismiss** dismisses it, **Snooze** snoozes it. **Tap behavior** and own buttons leave the card as it is (to close it when something happens, use Done when). Each button can also run an **Action**:
+A card's buttons work the same in the panel and on both cards. Each button has a list of **Actions**, which always run in this order (the order cannot be changed):
 
-- **Nothing**.
-- **Entity action**: the listed entity's own action for that button, set in the entity's (or entity group's) dialog under *Entity actions*, which lists the switched-on buttons that use it.
-- **More info** opens the entity's dialog (the button's entity, else the card's entity, else the notification's sensor).
-- **Action** (Home Assistant's action editor) and Entity action run in Home Assistant, as the user who pressed the button.
-- **Navigate** opens a page.
-- **Silence** stops the lights, speakers and sirens of the notification; the card stays.
+1. **Entity action** (a switch at the top): the listed entity's own action for that button, set in the entity's (or entity group's) dialog under *Entity actions*, which lists the switched-on buttons that use it.
+2. **Notification state**: *Done* closes the card, *Dismiss* dismisses it, *Snooze* snoozes it for the chosen time. The built-in buttons have their own, which cannot be removed (the Snooze button's times are set there); the Tap and own buttons can add one (at most one). Without one, the card stays as it is (to close it when something happens, use Done when).
+3. **Silence** (at most one): stops the lights, speakers and sirens of the notification; the card stays.
+4. **Home Assistant actions** (any number, each its own row of Home Assistant's action editor, in their own order).
+5. **Navigation** (at most one, always last): *Navigate* opens a page, *More info* opens the entity's dialog (the chosen entity, else the card's entity, else the notification's sensor).
+
+The entity action and the Home Assistant actions run in Home Assistant, as the user who pressed the button; the navigation happens where it was pressed. An action that cannot run is skipped, and the others still run. Under the list, *Add action*, *Add notification state*, *Add silence* and *Add navigation* add them (the last three are hidden once the button has one).
 
 **Snooze times:** the Snooze button's dialog lists 15 and 30 minutes, 1, 2, 3, 6 and 12 hours, Tomorrow, 2 and 3 days, 1 and 2 weeks and 1 month; at least one is chosen (by default 1 h, 3 h and Tomorrow). With one, the button snoozes at once; with more, the card offers them (15 min, 1 h, Tomorrow, 2 d, 1 w, 1 mo). Minutes and hours count from the press; days come back on that day at the step's time (a scheduled step) or at 8:00 (*Snooze* in General, `snooze_tomorrow_at`).
 

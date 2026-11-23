@@ -9,16 +9,25 @@
 // changed for this notification only, and Push is a choice that, left
 // empty, follows the category.
 //
-// What a button does to the card is fixed: Done marks it done, Dismiss
-// dismisses it, Snooze snoozes it; the Tap and the own buttons leave it as
-// it is and only run their action.
+// In a notification, a button has a list of Actions in a fixed order: the
+// Entity action (a switch), the notification state (fixed on Done, Dismiss
+// and Snooze, which shows its times there; one can be added to the Tap and
+// the own buttons), Silence, any number of Home Assistant actions (Home
+// Assistant's own rows, in their own order), and the Navigation last.
 
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import type { Button, ButtonAction, CategoryButton } from "../../shared/config";
+import type {
+  Button,
+  ButtonActions,
+  ButtonNavigation,
+  ButtonState,
+  CategoryButton,
+} from "../../shared/config";
 import { DEFAULT_SNOOZE, SNOOZE_CHOICES, snoozeChoices } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
+import { actionAddAvailable } from "../ha-elements";
 import { field } from "../fields";
 
 /** The default label and icon of an interaction. */
@@ -33,46 +42,62 @@ export const INTERACTION_DEFAULTS: Record<
   custom: { label: "Button", icon: "mdi:gesture-tap-button" },
 };
 
-// The order of the Action choice.
-const ACTIONS: { value: ButtonAction["type"]; label: string }[] = [
-  { value: "nothing", label: "Nothing" },
-  { value: "entity_action", label: "Entity action" },
-  { value: "more_info", label: "More info" },
-  { value: "ha_action", label: "Action" },
-  { value: "navigate", label: "Navigate" },
-  { value: "silence", label: "Silence" },
+// The notification states, in the order of their choice.
+const STATES: { value: ButtonState["type"]; label: string; text: string }[] = [
+  { value: "done", label: "Done", text: "Marks the card done." },
+  { value: "dismiss", label: "Dismiss", text: "Dismisses the card." },
+  { value: "snooze", label: "Snooze", text: "Snoozes the card." },
 ];
 
+// A built-in button's own notification state.
+const OWN_STATE: Partial<Record<Button["type"], ButtonState["type"]>> = {
+  done: "done",
+  dismiss: "dismiss",
+  snooze: "snooze",
+};
+
+// The snooze time a newly added Snooze notification state starts with.
+const DEFAULT_STATE_SNOOZE = "1h";
+
+function haActionName(action: unknown): string | undefined {
+  const item = action as { action?: string; service?: string } | undefined;
+  return item?.action ?? item?.service;
+}
+
 /** What an interaction does, in a few words (the row's second line). */
-export function actionText(
+export function actionsText(
   hass: HomeAssistant | undefined,
-  action: ButtonAction | undefined,
-): string {
-  switch (action?.type) {
-    case "entity_action":
-      return "Entity action";
-    case "more_info": {
-      const entityId = action.entity_id;
-      if (!entityId) return "More info";
-      const name = hass?.states[entityId]?.attributes.friendly_name;
-      return `More info: ${typeof name === "string" ? name : entityId}`;
-    }
-    case "ha_action": {
-      const first = action.actions[0] as
-        | { action?: string; service?: string }
-        | undefined;
-      const name = first?.action ?? first?.service;
-      const more =
-        action.actions.length > 1 ? ` +${action.actions.length - 1}` : "";
-      return name ? `Action: ${name}${more}` : "Action";
-    }
-    case "navigate":
-      return action.path ? `Navigate: ${action.path}` : "Navigate";
-    case "silence":
-      return "Silence";
-    default:
-      return "Nothing";
+  actions: ButtonActions | undefined,
+): string[] {
+  const parts: string[] = [];
+  if (!actions) return parts;
+  if (actions.entity_action) parts.push("Entity action");
+  const state = actions.notification_state;
+  if (state) {
+    const label = STATES.find((item) => item.value === state.type)?.label ?? state.type;
+    const time = state.type === "snooze"
+      ? SNOOZE_CHOICES.find((choice) => choice.key === state.snooze)?.text
+      : undefined;
+    parts.push(time ? `${label} ${time}` : label);
   }
+  if (actions.silence) parts.push("Silence");
+  const list = actions.ha_actions ?? [];
+  if (list.length) {
+    const name = haActionName(list[0]);
+    const more = list.length > 1 ? ` +${list.length - 1}` : "";
+    parts.push(name ? `Action: ${name}${more}` : `Action${more}`);
+  }
+  const navigation = actions.navigation;
+  if (navigation?.type === "more_info") {
+    const entityId = navigation.entity_id;
+    const name = entityId ? hass?.states[entityId]?.attributes.friendly_name : undefined;
+    parts.push(
+      entityId ? `More info: ${typeof name === "string" ? name : entityId}` : "More info",
+    );
+  } else if (navigation?.type === "navigate") {
+    parts.push(navigation.path ? `Navigate: ${navigation.path}` : "Navigate");
+  }
+  return parts;
 }
 
 @customElement("nc-interaction-dialog")
@@ -101,6 +126,9 @@ export class NcInteractionDialog extends LitElement {
 
   @state() private _open = true;
 
+  // The rows of the Actions list that are opened.
+  @state() private _opened = new Set<string>();
+
   private _result?: Button | "delete";
 
   protected override willUpdate(): void {
@@ -112,18 +140,13 @@ export class NcInteractionDialog extends LitElement {
     this._button = { ...this._button!, ...changes };
   }
 
-  private _setAction(type: ButtonAction["type"]): void {
-    const current = this._button!.action;
-    if (current?.type === type) return;
-    const action: ButtonAction =
-      type === "ha_action"
-        ? { type, actions: [] }
-        : type === "navigate"
-          ? { type, path: "" }
-          : type === "more_info"
-            ? { type, entity_id: null }
-            : ({ type } as ButtonAction);
-    this._set({ action });
+  // Change the button's actions; a left out (undefined) action goes.
+  private _setActions(changes: Partial<ButtonActions>): void {
+    const actions: ButtonActions = { ...(this._button!.actions ?? {}), ...changes };
+    for (const key of Object.keys(actions) as (keyof ButtonActions)[]) {
+      if (actions[key] === undefined) delete actions[key];
+    }
+    this._set({ actions });
   }
 
   protected override render() {
@@ -131,7 +154,6 @@ export class NcInteractionDialog extends LitElement {
     const hass = this.hass;
     if (!button || !hass) return nothing;
     const defaults = INTERACTION_DEFAULTS[button.type];
-    const action = button.action ?? { type: "nothing" };
     const category = this.mode === "category";
     const inherited = this.inherited;
     // In a notification, the built-in buttons' labels are set in YAML only.
@@ -169,8 +191,11 @@ export class NcInteractionDialog extends LitElement {
             : this._iconField(button)}
         ${inherited ? this._renderPushChoice(button, inherited) : this._renderPush(button)}
         ${button.type === "tap" ? this._renderOpenOnTap(button) : nothing}
-        ${button.type === "snooze" ? this._renderSnooze(button) : nothing}
-        ${category ? nothing : this._renderActionPart(action)}
+        ${category && button.type === "snooze"
+          ? html`<div class="divider"></div>
+              ${this._renderSnooze(button)}`
+          : nothing}
+        ${category ? nothing : this._renderActions(button)}
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button
@@ -191,24 +216,275 @@ export class NcInteractionDialog extends LitElement {
     </ha-dialog>`;
   }
 
-  private _renderActionPart(action: ButtonAction) {
-    const hass = this.hass!;
+  // The Actions list, in its fixed order, and the buttons that add to it.
+  private _renderActions(button: Button) {
+    const actions = button.actions ?? {};
+    const own = OWN_STATE[button.type];
+    const list = actions.ha_actions ?? [];
+    // Home Assistant's own Add action button is used where ours cannot open
+    // its dialog.
+    const addAction = actionAddAvailable();
     return html`<div class="divider"></div>
+      <div class="title">Actions</div>
+      <div class="actions">
+        ${this._entityActionRow(actions)}
+        ${own || actions.notification_state ? this._stateRow(button, actions) : nothing}
+        ${actions.silence
+          ? this._row(
+              "silence",
+              "mdi:volume-off",
+              "Silence",
+              html`<div class="secondary">
+                Stops the lights, the speakers and the sirens of the notification. The card stays.
+              </div>`,
+              () => this._setActions({ silence: undefined }),
+            )
+          : nothing}
+        <ha-automation-action
+          class="ha-actions"
+          ?hidden=${addAction && !list.length}
+          ?nc-hide-add=${addAction}
+          .hass=${this.hass}
+          .narrow=${this.narrow}
+          .actions=${list}
+          @value-changed=${(ev: CustomEvent<{ value: unknown[] }>) => {
+            ev.stopPropagation();
+            this._setActions({
+              ha_actions: ev.detail.value.length ? ev.detail.value : undefined,
+            });
+          }}
+        ></ha-automation-action>
+        ${actions.navigation ? this._navigationRow(actions.navigation) : nothing}
+      </div>
+      <div class="add">
+        ${addAction
+          ? this._addButton("Add action", () => this._addHaAction())
+          : nothing}
+        ${own || actions.notification_state
+          ? nothing
+          : this._addButton("Add notification state", () =>
+              this._setActions({ notification_state: { type: "done" } }),
+            )}
+        ${actions.silence
+          ? nothing
+          : this._addButton("Add silence", () => this._setActions({ silence: true }))}
+        ${actions.navigation
+          ? nothing
+          : this._addButton("Add navigation", () =>
+              this._setActions({ navigation: { type: "navigate", path: "" } }),
+            )}
+      </div>`;
+  }
+
+  private _addButton(label: string, add: () => void) {
+    return html`<ha-button appearance="filled" size="s" @click=${add}>
+      <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+      ${label}
+    </ha-button>`;
+  }
+
+  // Home Assistant's Add action dialog of the action list.
+  private _addHaAction(): void {
+    const list = this.renderRoot.querySelector("ha-automation-action.ha-actions") as
+      | (HTMLElement & { _addActionDialog?: () => void })
+      | null;
+    list?._addActionDialog?.();
+  }
+
+  // A fixed row of the list, as the built-in rows of the step editor: in a
+  // card like Home Assistant's rows, with an amber icon, opened and closed
+  // like them. A row that can go has a delete button.
+  private _row(
+    key: string,
+    icon: string,
+    title: string,
+    content: unknown,
+    remove?: () => void,
+    headerItem?: unknown,
+  ) {
+    return html`<ha-card outlined class="pinned-card"
+      ><ha-expansion-panel
+        class="pinned"
+        .expanded=${this._opened.has(key)}
+        @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
+          ev.stopPropagation();
+          if (ev.target !== ev.currentTarget) return;
+          const opened = new Set(this._opened);
+          if (ev.detail.expanded) opened.add(key);
+          else opened.delete(key);
+          this._opened = opened;
+        }}
+        @expanded-will-change=${(ev: Event) => ev.stopPropagation()}
+      >
+        <ha-icon slot="leading-icon" class="builtin" .icon=${icon}></ha-icon>
+        <div slot="header" class="pinned-title">${title}</div>
+        ${headerItem || remove
+          ? html`<div
+              slot="icons"
+              class="row-icons"
+              @click=${(ev: Event) => ev.stopPropagation()}
+              @keydown=${(ev: Event) => ev.stopPropagation()}
+            >
+              ${headerItem ?? nothing}
+              ${remove
+                ? html`<ha-icon-button .label=${"Delete"} @click=${remove}>
+                    <ha-icon icon="mdi:delete"></ha-icon>
+                  </ha-icon-button>`
+                : nothing}
+            </div>`
+          : nothing}
+        <div class="row-content">${content}</div>
+      </ha-expansion-panel></ha-card
+    >`;
+  }
+
+  // Always at the top: switched on, the entity's own action for this
+  // button runs first.
+  private _entityActionRow(actions: ButtonActions) {
+    const on = !!actions.entity_action;
+    return this._row(
+      "entity",
+      "mdi:format-list-checks",
+      "Entity action",
+      html`<div class="secondary">
+        Runs the action set for the card's entity (or its entity group) for this button.
+        ${on && !this.entityActionSet
+          ? html`<ha-alert alert-type="info"
+              >Set the action for each entity in the Entities block.</ha-alert
+            >`
+          : nothing}
+      </div>`,
+      undefined,
+      html`<ha-switch
+        .checked=${on}
+        @change=${(ev: Event) =>
+          this._setActions({
+            entity_action: (ev.target as HTMLInputElement).checked || undefined,
+          })}
+      ></ha-switch>`,
+    );
+  }
+
+  // A built-in button's own state cannot be removed or changed (Snooze
+  // chooses its times here); an added one is one of Done, Dismiss and
+  // Snooze, with how long a Snooze lasts.
+  private _stateRow(button: Button, actions: ButtonActions) {
+    const own = OWN_STATE[button.type];
+    const hass = this.hass!;
+    if (own) {
+      const state = STATES.find((item) => item.value === own)!;
+      return this._row(
+        "state",
+        "mdi:list-status",
+        `Notification state: ${state.label}`,
+        own === "snooze"
+          ? this._renderSnooze(button)
+          : html`<div class="secondary">${state.text}</div>`,
+      );
+    }
+    const state = actions.notification_state ?? { type: "done" };
+    const label = STATES.find((item) => item.value === state.type)?.label ?? "";
+    return this._row(
+      "state",
+      "mdi:list-status",
+      `Notification state: ${label}`,
+      html`<div class="fields">
         ${field(
           hass,
           {
             select: {
               mode: "dropdown",
-              options: ACTIONS.filter((choice) => choice.value !== "nothing"),
+              options: STATES.map(({ value, label: text }) => ({ value, label: text })),
             },
           },
-          action.type === "nothing" ? "" : action.type,
-          "Action",
-          (value) =>
-            this._setAction((value as ButtonAction["type"]) || "nothing"),
-          { clearable: true },
+          state.type,
+          "State",
+          (value) => {
+            const type = (value as ButtonState["type"]) || "done";
+            this._setActions({
+              notification_state:
+                type === "snooze"
+                  ? { type, snooze: state.snooze ?? DEFAULT_STATE_SNOOZE }
+                  : { type },
+            });
+          },
         )}
-        ${this._renderAction(action)}`;
+        ${state.type === "snooze"
+          ? field(
+              hass,
+              {
+                select: {
+                  mode: "dropdown",
+                  options: SNOOZE_CHOICES.map((choice) => ({
+                    value: choice.key,
+                    label: choice.label,
+                  })),
+                },
+              },
+              state.snooze ?? DEFAULT_STATE_SNOOZE,
+              "Snooze for",
+              (value) =>
+                this._setActions({
+                  notification_state: {
+                    type: "snooze",
+                    snooze: (value as string) || DEFAULT_STATE_SNOOZE,
+                  },
+                }),
+            )
+          : nothing}
+      </div>`,
+      () => this._setActions({ notification_state: undefined }),
+    );
+  }
+
+  // Always last: More info or Navigate, where the button was pressed.
+  private _navigationRow(navigation: ButtonNavigation) {
+    const hass = this.hass!;
+    const tab = navigation.type;
+    const choose = (type: ButtonNavigation["type"]) => {
+      if (type === tab) return;
+      this._setActions({
+        navigation:
+          type === "navigate" ? { type, path: "" } : { type: "more_info", entity_id: null },
+      });
+    };
+    return this._row(
+      "navigation",
+      "mdi:open-in-app",
+      tab === "more_info" ? "Navigation: More info" : "Navigation: Navigate",
+      html`<ha-tab-group
+          @wa-tab-show=${(ev: CustomEvent<{ name: string }>) => {
+            ev.stopPropagation();
+            choose(ev.detail.name === "more_info" ? "more_info" : "navigate");
+          }}
+        >
+          <ha-tab-group-tab slot="nav" panel="navigate" .active=${tab === "navigate"}>
+            Navigate
+          </ha-tab-group-tab>
+          <ha-tab-group-tab slot="nav" panel="more_info" .active=${tab === "more_info"}>
+            More info
+          </ha-tab-group-tab>
+        </ha-tab-group>
+        ${navigation.type === "more_info"
+          ? // As the Data's entity: empty is the card's own entity.
+            html`<ha-entity-picker
+              .hass=${hass}
+              .value=${navigation.entity_id ?? ""}
+              .placeholder=${"Active entity"}
+              @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+                ev.stopPropagation();
+                this._setActions({
+                  navigation: { type: "more_info", entity_id: ev.detail.value || null },
+                });
+              }}
+            ></ha-entity-picker>`
+          : field(hass, { navigation: {} }, navigation.path, "Path", (value) =>
+              this._setActions({
+                navigation: { type: "navigate", path: (value as string) ?? "" },
+              }),
+            )}`,
+      () => this._setActions({ navigation: undefined }),
+    );
   }
 
   // Required for a custom button defined here (in the category, or a
@@ -261,8 +537,7 @@ export class NcInteractionDialog extends LitElement {
         !!this.inherited && snooze.join() === [...base].join();
       this._set({ snooze: same ? null : snooze });
     };
-    return html`<div class="divider"></div>
-      <div class="snooze">
+    return html`<div class="snooze">
       <div class="title">Times</div>
       <div class="times">
         ${SNOOZE_CHOICES.map(
@@ -279,55 +554,6 @@ export class NcInteractionDialog extends LitElement {
         )}
       </div>
     </div>`;
-  }
-
-  private _renderAction(action: ButtonAction) {
-    const hass = this.hass!;
-    switch (action.type) {
-      case "entity_action":
-        return this.entityActionSet
-          ? nothing
-          : html`<ha-alert alert-type="info"
-              >Set the action for each entity in the Entities block.</ha-alert
-            >`;
-      case "more_info":
-        // As the Data's entity: empty is the card's own entity.
-        return html`<ha-entity-picker
-          .hass=${hass}
-          .value=${action.entity_id ?? ""}
-          .placeholder=${"Active entity"}
-          @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-            ev.stopPropagation();
-            this._set({
-              action: { type: "more_info", entity_id: ev.detail.value || null },
-            });
-          }}
-        ></ha-entity-picker>`;
-      case "navigate":
-        return field(hass, { navigation: {} }, action.path, "Path", (value) =>
-          this._set({
-            action: { type: "navigate", path: (value as string) ?? "" },
-          }),
-        );
-      case "silence":
-        return html`<ha-alert alert-type="info"
-          >Stops the lights, the speakers and the sirens of the notification. The card stays.</ha-alert
-        >`;
-      case "ha_action":
-        return html`<ha-automation-action
-          .hass=${hass}
-          .narrow=${this.narrow}
-          .actions=${action.actions}
-          @value-changed=${(ev: CustomEvent<{ value: unknown[] }>) => {
-            ev.stopPropagation();
-            this._set({
-              action: { type: "ha_action", actions: ev.detail.value },
-            });
-          }}
-        ></ha-automation-action>`;
-      default:
-        return nothing;
-    }
   }
 
   // Tap: a tap on the push always opens the app and runs the Tap.
@@ -371,7 +597,7 @@ export class NcInteractionDialog extends LitElement {
   // Tap: the page the app opens when the push is tapped. A Navigate action
   // opens its own path.
   private _renderOpenOnTap(button: Button) {
-    if (this.mode === "step" && button.action?.type === "navigate") return nothing;
+    if (this.mode === "step" && button.actions?.navigation?.type === "navigate") return nothing;
     const base = this.inherited?.open_on_tap;
     return field(
       this.hass,
@@ -501,6 +727,65 @@ export class NcInteractionDialog extends LitElement {
       height: 1px;
       background-color: var(--divider-color);
       margin: 0 -24px;
+    }
+    /* The Actions list: fixed rows like the step editor's built-in ones,
+       and Home Assistant's own action rows. */
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .actions > [hidden] {
+      display: none;
+    }
+    ha-card.pinned-card {
+      overflow: hidden;
+    }
+    ha-expansion-panel.pinned {
+      display: block;
+      --expansion-panel-summary-padding: 0 8px 0 16px;
+      --expansion-panel-content-padding: 0;
+    }
+    ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {
+      margin-inline-end: 12px;
+    }
+    .pinned-title {
+      flex: 1;
+    }
+    ha-icon.builtin {
+      color: var(--amber-color, #ffc107);
+    }
+    .row-icons {
+      display: flex;
+      align-items: center;
+      color: var(--secondary-text-color);
+    }
+    .row-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px;
+    }
+    .row-content .secondary {
+      color: var(--secondary-text-color);
+    }
+    .row-content ha-alert {
+      display: block;
+      margin-top: 8px;
+    }
+    .row-content ha-tab-group {
+      display: block;
+      margin: -16px -16px 0;
+    }
+    .fields {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .add {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
     }
   `;
 }

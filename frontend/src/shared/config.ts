@@ -81,15 +81,32 @@ export interface Category {
 
 export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "custom";
 
-export type ButtonAction =
-  | { type: "nothing" }
-  | { type: "ha_action"; actions: unknown[] }
-  | { type: "entity_action" }
+/** Where a button takes the user, on the device it was pressed on. */
+export type ButtonNavigation =
   | { type: "more_info"; entity_id?: string | null }
-  | { type: "navigate"; path: string }
-  | { type: "show_attachment" }
+  | { type: "navigate"; path: string };
+
+/** The notification state an own button or the Tap sets. */
+export interface ButtonState {
+  type: "done" | "dismiss" | "snooze";
+  // Snooze: how long (a key of SNOOZE_CHOICES).
+  snooze?: string;
+}
+
+/**
+ * The actions of a button. They run in this fixed order: the entity
+ * action, the notification state, Silence, the Home Assistant actions, then
+ * the navigation. Left out: not used.
+ */
+export interface ButtonActions {
+  entity_action?: boolean;
+  // Not on the built-in Done, Dismiss and Snooze: they have their own.
+  notification_state?: ButtonState;
   // Stop the lights, speakers and sirens; the card stays.
-  | { type: "silence" };
+  silence?: boolean;
+  ha_actions?: unknown[];
+  navigation?: ButtonNavigation;
+}
 
 /**
  * A button of a step. Left out fields come from the category's button of
@@ -101,7 +118,7 @@ export interface Button {
   enabled?: boolean;
   label?: string | null;
   icon?: string | null;
-  action: ButtonAction;
+  actions: ButtonActions;
   // The Snooze button's times (keys of SNOOZE_CHOICES): one snoozes at
   // once, more are offered on the card.
   snooze?: string[] | null;

@@ -539,7 +539,7 @@ export class NcCategoryEditor extends LitElement {
       .hass=${this.hass}
       .narrow=${this.narrow}
       mode="category"
-      .button=${{ ...edit.button, action: { type: "nothing" } } as Button}
+      .button=${{ ...edit.button, actions: {} } as Button}
       .isNew=${edit.isNew}
       .otherPushButtons=${otherPushButtons}
       @interaction-closed=${(
@@ -557,7 +557,7 @@ export class NcCategoryEditor extends LitElement {
           });
           return;
         }
-        const { action: _action, confirm: _confirm, ...rest } = result;
+        const { actions: _action, confirm: _confirm, ...rest } = result;
         void _action;
         void _confirm;
         this._setButton({

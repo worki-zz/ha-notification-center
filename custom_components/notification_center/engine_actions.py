@@ -32,6 +32,7 @@ from .const import (
 from .model import (
     BUTTON_EFFECTS,
     DEFAULT_SNOOZE_CHOICES,
+    DEFAULT_STATE_SNOOZE,
     effective_buttons,
 )
 from .scheduler import HISTORY_SKIPPED
@@ -193,40 +194,66 @@ class EngineActions:
         context: Context | None = None,
         choice: str | None = None,
     ) -> None:
-        """Press a button of a card: change the card, then run its action.
+        """Press a button of a card: run its actions in their fixed order.
 
-        Done marks the card done, Dismiss dismisses it and Snooze snoozes it
-        (until the given time, or for the chosen or first of its times); the
-        Tap and the own buttons leave it as it is. More info and Navigate
-        happen where the button was pressed; the Home Assistant action and
-        the entity action run here.
+        The entity action, then the notification state (Done marks the card
+        done, Dismiss dismisses it and Snooze snoozes it: until the given
+        time, or for the chosen or first of its times), Silence, then the
+        Home Assistant actions. The navigation (More info or Navigate)
+        happens where the button was pressed. An action that cannot run is
+        skipped and the others still run.
         """
         button = self.button_of(card, button_id)
         if button is None:
             raise ServiceValidationError("The button is not there")
-        action = button.get("action") or {"type": "nothing"}
-        actions: list[dict[str, Any]] = []
-        if action["type"] == "ha_action":
-            actions = list(action["actions"])
-        elif action["type"] == "entity_action":
-            actions = self.entity_actions(card, button_id)
-        elif action["type"] == "silence":
-            self.silence_cards([card], SOURCE_BUTTON, context)
+        actions: Mapping[str, Any] = button.get("actions") or {}
         variables = self.variables(card)
+        if actions.get("entity_action"):
+            entity_actions = self.entity_actions(card, button_id)
+            if entity_actions:
+                await self._async_run_actions(
+                    card, button, entity_actions, variables, context
+                )
+        self._press_state(card, button, actions, until, context, choice)
+        if actions.get("silence"):
+            self.silence_cards([card], SOURCE_BUTTON, context)
+        if actions.get("ha_actions"):
+            await self._async_run_actions(
+                card, button, list(actions["ha_actions"]), variables, context
+            )
+
+    def _press_state(
+        self: Engine,
+        card: Card,
+        button: Mapping[str, Any],
+        actions: Mapping[str, Any],
+        until: datetime | None,
+        context: Context | None,
+        choice: str | None,
+    ) -> None:
+        """Set the notification state a pressed button sets, if any.
+
+        A built-in Done, Dismiss or Snooze button sets its own; an own
+        button or the Tap the one of its actions.
+        """
         effect = BUTTON_EFFECTS.get(button["type"])
+        state = actions.get("notification_state") or {}
+        if effect is None:
+            effect = state.get("type")
         if effect == CLOSED_DONE:
             self.close(card, CLOSED_DONE, SOURCE_BUTTON, context)
         elif effect == CLOSED_DISMISSED:
             self.close(card, CLOSED_DISMISSED, SOURCE_BUTTON, context)
         elif effect == "snooze":
-            self.snooze(
-                card,
-                until or self.snooze_until(card, button, choice),
-                SOURCE_BUTTON,
-                context,
-            )
-        if actions:
-            await self._async_run_actions(card, button, actions, variables, context)
+            if until is None:
+                until = (
+                    self.snooze_until(card, button, choice)
+                    if button["type"] == "snooze"
+                    else self.snooze_choice(
+                        card, state.get("snooze") or DEFAULT_STATE_SNOOZE
+                    )
+                )
+            self.snooze(card, until, SOURCE_BUTTON, context)
 
     async def _async_run_actions(
         self: Engine,
@@ -236,6 +263,7 @@ class EngineActions:
         variables: dict[str, Any],
         context: Context | None,
     ) -> None:
+        """Start a list of Home Assistant actions; skip it when it is not valid."""
         notification = self.notification_config(card.notification_id) or {}
         label = button.get("label") or button["type"]
         name = f"{notification.get('name', card.notification_id)}: {label}"
@@ -244,7 +272,8 @@ class EngineActions:
                 self.hass, cv.SCRIPT_SCHEMA(actions)
             )
         except (vol.Invalid, HomeAssistantError) as err:
-            raise ServiceValidationError(f"{name}: {err}") from err
+            _LOGGER.warning("%s: the action is skipped: %s", name, err)
+            return
         script = Script(self.hass, sequence, name, DOMAIN, script_mode="parallel")
         self.hass.async_create_background_task(
             script.async_run(variables, context),

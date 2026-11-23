@@ -145,6 +145,8 @@ BUTTON_TYPES: Final = (*BUILTIN_BUTTONS, "custom")
 INTERACTION_ORDER: Final = ("tap", "done", "dismiss", "snooze", "custom")
 # What a built-in button does to the card; the others only run their action.
 BUTTON_EFFECTS: Final = {"done": "done", "dismiss": "dismiss", "snooze": "snooze"}
+# The notification state an own button or the Tap can set.
+BUTTON_STATES: Final = ("done", "dismiss", "snooze")
 # The snooze times a Snooze button can offer, in this order. The minutes and
 # hours count from now; the days come back on that day, at the time the card
 # first came (a scheduled step) or at General's "Tomorrow" time.
@@ -164,6 +166,8 @@ SNOOZE_CHOICES: Final = (
     "1mo",
 )
 DEFAULT_SNOOZE_CHOICES: Final = ("1h", "3h", "tomorrow")
+# How long the Snooze notification state of an own button snoozes at first.
+DEFAULT_STATE_SNOOZE: Final = "1h"
 WEEKDAYS: Final = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 INTERVAL_UNITS: Final = ("days", "weeks", "months", "years")
 
@@ -651,10 +655,9 @@ DONE_WHEN_SCHEMA = vol.Schema(
     }
 )
 
-BUTTON_ACTION_SCHEMA = vol.Any(
-    vol.Schema({vol.Required("type"): "nothing"}),
-    vol.Schema({vol.Required("type"): "ha_action", vol.Required("actions"): ACTIONS}),
-    vol.Schema({vol.Required("type"): "entity_action"}),
+# Where a button takes the user, on the device it was pressed on: the
+# entity's more info dialog (empty: the card's entity) or a page.
+NAVIGATION_SCHEMA = vol.Any(
     vol.Schema(
         {
             vol.Required("type"): "more_info",
@@ -662,10 +665,61 @@ BUTTON_ACTION_SCHEMA = vol.Any(
         }
     ),
     vol.Schema({vol.Required("type"): "navigate", vol.Required("path"): cv.string}),
-    vol.Schema({vol.Required("type"): "show_attachment"}),
-    # Stop the lights, speakers and sirens; the card stays.
-    vol.Schema({vol.Required("type"): "silence"}),
 )
+
+# What an own button or the Tap does to the card. Snooze snoozes for one
+# of the Snooze times.
+NOTIFICATION_STATE_SCHEMA = vol.Schema(
+    {
+        vol.Required("type"): vol.In(BUTTON_STATES),
+        vol.Optional("snooze"): _optional(vol.In(SNOOZE_CHOICES)),
+    }
+)
+
+# The actions of a button. They run in this fixed order: the entity
+# action, the notification state, Silence, the Home Assistant actions (in
+# their order), then the navigation (where the button was pressed). One
+# that cannot run is skipped; the others still run.
+BUTTON_ACTIONS_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entity_action"): cv.boolean,
+        vol.Optional("notification_state"): _optional(NOTIFICATION_STATE_SCHEMA),
+        # Stop the lights, speakers and sirens; the card stays.
+        vol.Optional("silence"): cv.boolean,
+        vol.Optional("ha_actions"): ACTIONS,
+        vol.Optional("navigation"): _optional(NAVIGATION_SCHEMA),
+    }
+)
+
+
+def _clean_actions(kind: str, actions: dict[str, Any]) -> dict[str, Any]:
+    """Leave out what a button's actions do not use.
+
+    A built-in Done, Dismiss or Snooze button has its own notification
+    state, so it stores none.
+    """
+    result: dict[str, Any] = {}
+    if actions.get("entity_action"):
+        result["entity_action"] = True
+    state = actions.get("notification_state")
+    if state and kind not in BUTTON_EFFECTS:
+        result["notification_state"] = {"type": state["type"]}
+        if state["type"] == "snooze":
+            result["notification_state"]["snooze"] = (
+                state.get("snooze") or DEFAULT_STATE_SNOOZE
+            )
+    if actions.get("silence"):
+        result["silence"] = True
+    if actions.get("ha_actions"):
+        result["ha_actions"] = list(actions["ha_actions"])
+    navigation = actions.get("navigation")
+    # A Navigate without a page goes nowhere.
+    if navigation and (navigation["type"] != "navigate" or navigation.get("path")):
+        result["navigation"] = {
+            key: value for key, value in navigation.items() if value is not None
+        }
+    return result
+
 
 # A button of a step. The buttons of the step's category (the four built-in
 # ones and the category's custom buttons) are inherited: the step stores
@@ -679,7 +733,7 @@ BUTTON_SCHEMA = _with_id(
         # A category button's label is changed in YAML only.
         vol.Optional("label"): _optional(cv.string),
         vol.Optional("icon"): _optional(cv.icon),
-        vol.Optional("action", default={"type": "nothing"}): BUTTON_ACTION_SCHEMA,
+        vol.Optional("actions", default=dict): BUTTON_ACTIONS_SCHEMA,
         # The Snooze button's times: one snoozes at once, more are offered.
         vol.Optional("snooze"): _optional(
             vol.All(cv.ensure_list, [vol.In(SNOOZE_CHOICES)])
@@ -721,10 +775,10 @@ CATEGORY_BUTTON_DEFAULTS: Final[dict[str, bool]] = {
 }
 # The action of a built-in button a step has not stored yet.
 BUILTIN_ACTION_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
-    "tap": {"type": "more_info"},
-    "done": {"type": "nothing"},
-    "dismiss": {"type": "nothing"},
-    "snooze": {"type": "nothing"},
+    "tap": {"navigation": {"type": "more_info"}},
+    "done": {},
+    "dismiss": {},
+    "snooze": {},
 }
 
 
@@ -756,12 +810,13 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
     )
     seen = _check_builtins_once(buttons)
     missing = [
-        BUTTON_SCHEMA({"type": kind, "action": BUILTIN_ACTION_DEFAULTS[kind]})
+        BUTTON_SCHEMA({"type": kind, "actions": BUILTIN_ACTION_DEFAULTS[kind]})
         for kind in BUILTIN_BUTTONS
         if kind not in seen
     ]
     buttons = missing + buttons if missing else buttons
     for button in buttons:
+        button["actions"] = _clean_actions(button["type"], button["actions"])
         if button["type"] != "snooze" or not button.get("snooze"):
             button.pop("snooze", None)
         else:
@@ -907,7 +962,7 @@ def detach_category_buttons(
                 button["icon"] = source["icon"]
             if button.get("show_in_push") is None:
                 button["show_in_push"] = source.get("show_in_push", True)
-            button.setdefault("action", {"type": "nothing"})
+            button.setdefault("actions", {})
         step["buttons"] = buttons
 
 
@@ -919,8 +974,10 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
         "enabled": entry.get("enabled", base.get("enabled", True)),
         "label": entry.get("label") or base.get("label"),
         "icon": entry.get("icon") or base.get("icon"),
-        "action": entry.get("action")
-        or BUILTIN_ACTION_DEFAULTS.get(kind, {"type": "nothing"}),
+        # Not stored: the built-in button's default (the Tap shows more info).
+        "actions": entry["actions"]
+        if "actions" in entry
+        else dict(BUILTIN_ACTION_DEFAULTS.get(kind, {})),
         "confirm": entry.get("confirm", False),
         "category": True,
     }
@@ -1419,9 +1476,10 @@ async def _validate_step_automation(
         hass, step["done_when"]["triggers"], _path(where, "done when")
     )
     for button in step["buttons"]:
-        if button["action"]["type"] == "ha_action":
+        if button["actions"].get("ha_actions"):
             _validate_actions(
-                button["action"]["actions"], _path(where, "buttons", button["type"])
+                button["actions"]["ha_actions"],
+                _path(where, "buttons", button["type"]),
             )
 
 

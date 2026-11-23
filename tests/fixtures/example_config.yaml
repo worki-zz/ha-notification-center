@@ -1,4 +1,4 @@
-version: 1
+version: 2
 modes:
 - id: away
   name: Away
@@ -168,7 +168,7 @@ notifications:
       enabled: true
       label: Mute
       icon: mdi:volume-off
-      action: {type: entity_action}
+      actions: {entity_action: true}
     - {type: done, enabled: false}
     - {type: snooze, enabled: false}
     activation:
@@ -199,7 +199,7 @@ notifications:
       enabled: true
       label: Mute
       icon: mdi:volume-off
-      action: {type: entity_action}
+      actions: {entity_action: true}
     - {type: done, enabled: false}
     - {type: snooze, enabled: false}
     activation:
@@ -243,23 +243,20 @@ notifications:
       label: Disarm
       icon: mdi:shield-off
       confirm: true
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: alarm_control_panel.alarm_disarm
           target: {entity_id: alarm_control_panel.home}
     - type: custom
       label: Silence
       icon: mdi:volume-off
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: siren.turn_off
           target: {entity_id: siren.home}
     - type: custom
       label: Clips
       icon: mdi:filmstrip
-      action: {type: show_attachment}
     activation:
       type: triggers
       triggers:
@@ -276,7 +273,7 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      action: {type: more_info}
+      actions: {navigation: {type: more_info}}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     activation:
@@ -298,7 +295,7 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      action: {type: more_info}
+      actions: {navigation: {type: more_info}}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     activation:
@@ -378,9 +375,8 @@ notifications:
     - type: custom
       label: Start
       icon: mdi:play
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: script.turn_on
           target: {entity_id: script.water_the_garden}
     activation:
@@ -444,11 +440,11 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      action: {type: more_info, entity_id: camera.front_door}
+      actions: {navigation: {type: more_info, entity_id: camera.front_door}}
     - type: custom
       label: Camera
       icon: mdi:cctv
-      action: {type: more_info, entity_id: camera.front_door}
+      actions: {navigation: {type: more_info, entity_id: camera.front_door}}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     - {type: snooze, enabled: false}
@@ -635,9 +631,8 @@ notifications:
   - message: Refill the dishwasher salt
     buttons:
     - type: done
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: counter.reset
           target: {entity_id: counter.dishwasher_cycles}
     activation:
@@ -749,9 +744,8 @@ notifications:
     - type: custom
       label: Arm anyway
       icon: mdi:shield-lock
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: alarm_control_panel.alarm_arm_night
           target: {entity_id: alarm_control_panel.home}
     - {type: dismiss, enabled: true}
@@ -779,17 +773,15 @@ notifications:
     - type: custom
       label: Arm away
       icon: mdi:shield-lock
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: alarm_control_panel.alarm_arm_away
           target: {entity_id: alarm_control_panel.home}
     - type: custom
       label: Arm night
       icon: mdi:shield-moon
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: alarm_control_panel.alarm_arm_night
           target: {entity_id: alarm_control_panel.home}
     activation:
@@ -829,9 +821,8 @@ notifications:
       label: Disarm
       icon: mdi:shield-off
       confirm: true
-      action:
-        type: ha_action
-        actions:
+      actions:
+        ha_actions:
         - action: alarm_control_panel.alarm_disarm
           target: {entity_id: alarm_control_panel.home}
     activation:

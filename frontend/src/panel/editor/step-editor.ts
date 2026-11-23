@@ -44,7 +44,7 @@ import {
   effectiveButtons,
   snoozeChoices,
 } from "../../shared/live";
-import { INTERACTION_DEFAULTS, actionText } from "./interaction-dialog";
+import { INTERACTION_DEFAULTS, actionsText } from "./interaction-dialog";
 import "./interaction-dialog";
 import { HELP, type StartKind } from "./step-editor.help";
 import { STEP_EDITOR_STYLES } from "./step-editor.styles";
@@ -905,9 +905,7 @@ export class NcStepEditor extends LitElement {
           .join(", "),
       );
     }
-    if ((button.action?.type ?? "nothing") !== "nothing") {
-      parts.push(actionText(this.hass, button.action));
-    }
+    parts.push(...actionsText(this.hass, button.actions));
     const inherited = this._base(button);
     const entry = (): Button => {
       const index = this._entryIndex(step, button, button.category);
@@ -916,7 +914,7 @@ export class NcStepEditor extends LitElement {
         : ({
             id: button.id,
             type: button.type,
-            action: button.action,
+            actions: button.actions,
           } as Button);
     };
     const open = () =>
@@ -964,7 +962,7 @@ export class NcStepEditor extends LitElement {
         type: "custom",
         enabled: true,
         label: "",
-        action: { type: "nothing" },
+        actions: {},
         show_in_push: true,
         confirm: false,
       },

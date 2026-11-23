@@ -148,14 +148,13 @@ async def test_button_press(
         "Doors",
         step(
             buttons=[
-                {"type": "done", "action": {"type": "entity_action"}, "id": "done"},
+                {"type": "done", "actions": {"entity_action": True}, "id": "done"},
                 {
                     "type": "custom",
                     "id": "ring",
                     "label": "Ring",
-                    "action": {
-                        "type": "ha_action",
-                        "actions": [
+                    "actions": {
+                        "ha_actions": [
                             {
                                 "action": "test.ring",
                                 "data": {"who": "{{ notification.name }}"},
@@ -232,6 +231,64 @@ async def test_button_press(
     assert result["error"]["code"] == "not_found"
 
 
+async def test_button_action_list(hass: HomeAssistant, center: Center) -> None:
+    """A button runs its actions in order; one that cannot run is skipped."""
+    calls = async_mock_service(hass, "test", "ring")
+    nid = await center.add(
+        "Plants",
+        step(
+            buttons=[
+                {
+                    "type": "custom",
+                    "id": "later",
+                    "label": "Later",
+                    "actions": {
+                        # Nothing to run: no entity has an action.
+                        "entity_action": True,
+                        "notification_state": {"type": "snooze", "snooze": "2h"},
+                        "silence": True,
+                        "ha_actions": [{"action": "test.ring"}],
+                        "navigation": {"type": "navigate", "path": "/lovelace/0"},
+                    },
+                },
+                {
+                    "type": "custom",
+                    "id": "finish",
+                    "label": "Finish",
+                    "actions": {
+                        "notification_state": {"type": "done"},
+                        # Not valid any more: skipped, the card is still done.
+                        "ha_actions": [
+                            {"device_id": "gone", "domain": "gone", "type": "x"}
+                        ],
+                    },
+                },
+            ]
+        ),
+    )
+    config = center.engine.notification_config(nid) or {}
+    buttons = {b["id"]: b for b in config["steps"][0]["buttons"]}
+    assert buttons["finish"]["actions"]["notification_state"] == {"type": "done"}
+    await hass.services.async_call(
+        DOMAIN, "trigger", {"entity_id": "sensor.nc_plants"}, blocking=True
+    )
+    card = center.engine.cards_of(nid)[0]
+    before = dt_util.utcnow()
+    await center.engine.async_press(card, "later", None)
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_plants") == "snoozed"
+    assert card.silenced
+    assert len(calls) == 1
+    until = card.snoozed_until
+    assert until is not None
+    assert timedelta(minutes=119) < until - before <= timedelta(minutes=121)
+
+    await center.engine.async_press(card, "finish", None)
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_plants") == "done"
+    assert len(calls) == 1
+
+
 async def test_snooze_choices(
     hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -270,7 +327,7 @@ async def test_group_member_custom_action(center: Center) -> None:
     await center.set("binary_sensor.back", "on", device_class="door")
     group_action = [{"action": "test.mute", "target": {"entity_id": "switch.a"}}]
     custom_action = [{"action": "test.mute", "target": {"entity_id": "switch.b"}}]
-    entity_action = {"type": "entity_action"}
+    entity_action = {"entity_action": True}
     nid = await center.add(
         "Doors",
         step(
@@ -281,8 +338,8 @@ async def test_group_member_custom_action(center: Center) -> None:
                 ],
             },
             buttons=[
-                {"type": "dismiss", "id": "dismiss", "action": entity_action},
-                {"type": "done", "id": "done", "action": entity_action},
+                {"type": "dismiss", "id": "dismiss", "actions": entity_action},
+                {"type": "done", "id": "done", "actions": entity_action},
             ],
         ),
         entity_groups=[
