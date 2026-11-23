@@ -20,7 +20,7 @@ import { chimeField, colorField, highlightField } from "../color-field";
 import { confirmDialog } from "../confirm";
 import { type FieldOptions, field, iconSelect } from "../fields";
 import { renderStatus, statusOf } from "../status";
-import { block } from "./block";
+import { BLOCK_INTROS, block } from "./block";
 import "./group-dialog";
 import { ACTION_SLOT_STYLES } from "./action-slots";
 import { type EditorNotification, type EditorStep, applyCategoryDefaults, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, toEditor, toSaved } from "./model";
@@ -544,6 +544,7 @@ export class NcNotificationEditor extends LitElement {
       icon,
       header,
       count,
+      intro: BLOCK_INTROS[key],
       expanded: this._expanded.has(key),
       toggled: (expanded) => this._toggle(key, expanded),
       content: content(),

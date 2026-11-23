@@ -12,6 +12,8 @@ export interface BlockOptions {
   expanded: boolean;
   toggled: (expanded: boolean) => void;
   content: unknown;
+  // One line above the content: what the block is about.
+  intro?: string;
   // Always open, without the arrow (the category editor).
   fixed?: boolean;
 }
@@ -41,9 +43,23 @@ export function block(options: BlockOptions) {
         ? nothing
         : html`<span class="block-count">${options.count}</span>`}
     </div>
-    ${options.fixed || options.expanded ? html`<div class="block-content">${options.content}</div>` : nothing}
+    ${options.fixed || options.expanded ? html`<div class="block-content">
+          ${options.intro ? html`<p class="block-intro">${options.intro}</p>` : nothing}${options.content}
+        </div>` : nothing}
   </ha-expansion-panel>`;
 }
+
+/** The line at the top of each block, by the block's key. */
+export const BLOCK_INTROS: Record<string, string> = {
+  message: "What the notification says",
+  interactions: "What people can do with the notification",
+  start: "When the notification becomes active",
+  show: "When the notification can become active, or when it is shown",
+  done: "When the notification is done by itself, without a button",
+  audience: "Who gets the notification in each state",
+  channels: "How the notification is delivered in each home mode",
+  entities: "Which entities the notification is about",
+};
 
 // The content is drawn only while the block is open. The panel animates to
 // the height its content had when it opened; editors that load later
@@ -83,6 +99,10 @@ export const BLOCK_STYLES = css`
     color: var(--secondary-text-color);
     font-weight: var(--ha-font-weight-normal, 400);
     font-size: var(--ha-font-size-s, 12px);
+  }
+  .block-intro {
+    margin: 0 0 16px;
+    color: var(--secondary-text-color);
   }
   .block-content {
     padding: 16px;

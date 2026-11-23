@@ -342,7 +342,7 @@ export class NcSettingsModes extends LitElement {
         if (this._channels) void this._saveChannels();
       }}
     >
-      <p class="hint">Which channels send in this home mode, in every category.</p>
+      <p class="hint">How the notification is delivered in each home mode</p>
       <ha-card outlined class="channels">
         ${this._channelList().map(
           (channel) => html`<label class="row channel">

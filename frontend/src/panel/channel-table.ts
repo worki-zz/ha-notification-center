@@ -121,9 +121,6 @@ export class NcChannelTable extends LitElement {
           ? this._renderList(modes)
           : this._renderTable(modes)}</ha-card
       >
-      <p class="hint secondary">
-        The columns are the home modes.
-      </p>
       ${silent
         ? html`<ha-alert alert-type="warning"
             >No home mode ticked: nothing is sent.</ha-alert

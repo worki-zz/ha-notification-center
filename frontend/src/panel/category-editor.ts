@@ -35,7 +35,7 @@ import { audienceCount, channelCount, channelsOf, sleepersOf } from "./channel-h
 import { confirmDialog } from "./confirm";
 import { chimeField, colorField, highlightField } from "./color-field";
 import { field } from "./fields";
-import { BLOCK_STYLES, block } from "./editor/block";
+import { BLOCK_INTROS, BLOCK_STYLES, block } from "./editor/block";
 import {
   INTERACTION_DEFAULTS,
   pushButtonsWarning,
@@ -340,24 +340,6 @@ export class NcCategoryEditor extends LitElement {
         () => this._renderInteractions(draft),
       )}
       ${this._panel(
-        "audience",
-        "mdi:account-multiple",
-        "Audience",
-        this._audienceCount(draft),
-        () =>
-          html`<nc-audience-table
-            .hass=${this.hass}
-            .sleepers=${sleepersOf(this.config?.people)}
-            .value=${draft.audience ?? {}}
-            @value-changed=${(
-              ev: CustomEvent<{ value: Category["audience"] }>,
-            ) => {
-              ev.stopPropagation();
-              this._change({ audience: ev.detail.value });
-            }}
-          ></nc-audience-table>`,
-      )}
-      ${this._panel(
         "channels",
         "mdi:broadcast",
         "Channels",
@@ -379,6 +361,24 @@ export class NcCategoryEditor extends LitElement {
             }}
           ></nc-channel-table>`,
       )}
+      ${this._panel(
+        "audience",
+        "mdi:account-multiple",
+        "Audience",
+        this._audienceCount(draft),
+        () =>
+          html`<nc-audience-table
+            .hass=${this.hass}
+            .sleepers=${sleepersOf(this.config?.people)}
+            .value=${draft.audience ?? {}}
+            @value-changed=${(
+              ev: CustomEvent<{ value: Category["audience"] }>,
+            ) => {
+              ev.stopPropagation();
+              this._change({ audience: ev.detail.value });
+            }}
+          ></nc-audience-table>`,
+      )}
     `;
   }
 
@@ -392,7 +392,7 @@ export class NcCategoryEditor extends LitElement {
   }
 
   private _panel(
-    _key: string,
+    key: string,
     icon: string,
     header: string,
     count: number | string | undefined,
@@ -402,6 +402,7 @@ export class NcCategoryEditor extends LitElement {
       icon,
       header,
       count,
+      intro: BLOCK_INTROS[key],
       expanded: true,
       fixed: true,
       toggled: () => undefined,

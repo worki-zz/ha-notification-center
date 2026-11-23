@@ -218,7 +218,7 @@ class StepRunner:
         self._hides = bool(show_when.get("hide_while_not_met", True)) or (
             self.schedule is not None and self.start_conditions is not None
         )
-        # Done when activation conditions no longer true also closes an
+        # When the activation is no longer true also closes an
         # active card when the Conditions it was activated with are not met.
         self._closes = (
             bool(self.step["done_when"].get("activation_conditions_no_longer_true"))
@@ -466,7 +466,7 @@ class StepRunner:
     def refresh_hidden(self) -> None:
         """Check Conditions again for the open cards of the step.
 
-        With Done when activation conditions no longer true, a card whose
+        With When the activation is no longer true, a card whose
         activation conditions are no longer met closes as done; otherwise it
         may be hidden.
         """

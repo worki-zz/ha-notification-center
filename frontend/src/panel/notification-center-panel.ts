@@ -366,24 +366,33 @@ export class NotificationCenterPanel extends LitElement {
       const names = modeColumns(config?.modes)
         .filter((mode) => settings.modes?.includes(mode.id))
         .map((mode) => mode.name);
-      return names.length ? `Waiting for ${orList(names)} home mode` : "Waiting for the home mode";
+      return names.length ? `Shows in ${orList(names)} home mode` : "Shows when the home mode changes";
     }
-    // The audience: what would make the card show (arrive, wake up, ...).
+    // The audience: what would make the card show (arrive, wake up, ...),
+    // with the names of the people who would have to do it.
     const states = this._store.state?.people ?? {};
     const sleepers = sleepersOf(config?.people);
     const viewer = this.hass ? personOf(this.hass) : undefined;
     const people = viewer && viewer in states ? [viewer] : Object.keys(states);
     const audience = audienceOf(live.category, live.step, people);
-    const changes = new Set<string>();
+    const byChange = new Map<StateChange, string[]>();
     for (const person of people) {
       for (const change of stateChanges(states[person], audience[person], sleepers.includes(person))) {
-        changes.add(change);
+        byChange.set(change, [...(byChange.get(change) ?? []), person]);
       }
     }
-    const order = ["arrive home", "wake up", "go to sleep", "arrive home and go to sleep", "go away"];
-    const list = order.filter((change) => changes.has(change));
-    if (!list.length) return "Waiting for the audience";
-    return viewer && people.length === 1 ? `Waiting to ${orList(list)}` : `Waiting for someone to ${orList(list)}`;
+    const list = CHANGE_ORDER.filter((change) => byChange.has(change));
+    if (!list.length) return "Shows when the audience can get it";
+    if (viewer && people.length === 1) return `Shows when you ${orList(list)}`;
+    const involved = new Set([...byChange.values()].flat());
+    if (involved.size > MAX_NAMES) {
+      return `Shows when someone ${orList(list.map((change) => THIRD_PERSON[change]))}`;
+    }
+    const name = (person: string) =>
+      String(this.hass?.states[person]?.attributes.friendly_name ?? person.replace(/^person\./, ""));
+    return `Shows when ${orList(
+      list.map((change) => `${orList(byChange.get(change)!.map(name))} ${THIRD_PERSON[change]}`),
+    )}`;
   }
 
   // An active card the Dashboard holds back: neutral, with the reason.
@@ -811,17 +820,32 @@ function orList(items: string[]): string {
   return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
 }
 
+type StateChange = "arrive home" | "wake up" | "go to sleep" | "arrive home and go to sleep" | "leave home";
+
+// The order the changes are listed in, and how they read after a name.
+const CHANGE_ORDER: StateChange[] = ["arrive home", "wake up", "go to sleep", "arrive home and go to sleep", "leave home"];
+const THIRD_PERSON: Record<StateChange, string> = {
+  "arrive home": "arrives home",
+  "wake up": "wakes up",
+  "go to sleep": "goes to sleep",
+  "arrive home and go to sleep": "arrives home and goes to sleep",
+  "leave home": "leaves home",
+};
+
+// With more people than this the Upcoming line says "someone".
+const MAX_NAMES = 3;
+
 /**
  * What a person has to do for a card to show to them: from their state now
  * to a state ticked for them (asleep only with a sleep condition).
  */
-function stateChanges(now: AudienceState | undefined, entry: AudienceEntry | undefined, canSleep: boolean): string[] {
+function stateChanges(now: AudienceState | undefined, entry: AudienceEntry | undefined, canSleep: boolean): StateChange[] {
   if (!now || !entry) return [];
-  const changes: string[] = [];
+  const changes: StateChange[] = [];
   if (entry.home && now !== "home") changes.push(now === "away" ? "arrive home" : "wake up");
   if (entry.sleep && canSleep && now !== "sleep") {
     changes.push(now === "away" ? "arrive home and go to sleep" : "go to sleep");
   }
-  if (entry.away && now !== "away") changes.push("go away");
+  if (entry.away && now !== "away") changes.push("leave home");
   return changes;
 }
