@@ -201,13 +201,17 @@ export class NcInfoDialog extends LitElement {
           const view = card.channels?.[channel.key];
           if (!view) return nothing;
           const line = this._channelLine(card, channel, view);
+          const people = this._renderPeople(card, channel, view);
+          // With a row per person below, the channel row is only a heading.
           return html`<ha-list-item-base>
               <span slot="start" class="channel-icon">${channelIcon(this.hass, channel)}</span>
               <span slot="headline">${channel.name}</span>
-              <span slot="supporting-text">${line.text}</span>
-              <ha-icon slot="end" class="row-icon ${line.tone}" .icon=${line.icon}></ha-icon>
+              ${people === nothing
+                ? html`<span slot="supporting-text">${line.text}</span>
+                    <ha-icon slot="end" class="row-icon ${line.tone}" .icon=${line.icon}></ha-icon>`
+                : nothing}
             </ha-list-item-base>
-            ${this._renderPeople(card, channel, view)}`;
+            ${people}`;
         })}
       </ha-list-base>`;
   }
@@ -216,7 +220,7 @@ export class NcInfoDialog extends LitElement {
    * Dashboard and Push: one row per person under the channel, when the
    * audience decides (not the home mode, the delay or a channel off).
    */
-  private _renderPeople(card: CardState, channel: ChannelInfo, view: ChannelView) {
+  private _renderPeople(card: CardState, channel: ChannelInfo, view: ChannelView): unknown {
     if (channel.kind !== "dashboard" && channel.kind !== "push") return nothing;
     if (view.reason !== null && view.reason !== "audience") return nothing;
     if (card.silenced && channel.kind === "push") return nothing;

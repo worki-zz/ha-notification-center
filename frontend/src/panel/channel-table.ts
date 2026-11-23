@@ -8,6 +8,7 @@ import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
 import { type ChannelInfo, channelIcon, testButton, testChannel } from "./devices";
+import { entityDisplay } from "./editor/model";
 import { field } from "./fields";
 import { STATUS_STYLES, renderStatus } from "./status";
 
@@ -111,6 +112,12 @@ export class NcChannelTable extends LitElement {
     this._resetPart(channel.key, "modes");
   }
 
+  /** A device's name as the Entities dialogs show it: name, then area ▸ device. */
+  private _title(channel: ChannelInfo): { primary: string; secondary: string } {
+    if (!channel.entity_id || !this.hass) return { primary: channel.name, secondary: "" };
+    return entityDisplay(this.hass, channel.entity_id);
+  }
+
   /** The channel's icon, with a live mark when the home mode is known. */
   private _icon(channel: ChannelInfo, settings: ChannelSettings) {
     const icon = channelIcon(this.hass, channel);
@@ -131,11 +138,11 @@ export class NcChannelTable extends LitElement {
 
   /**
    * The live colour of a tick in the home mode's column now: green when
-   * ticked, orange when not, none when the channel is off in every mode.
+   * ticked; an empty box keeps its colour.
    */
   private _liveClass(settings: ChannelSettings, modeId: string): string {
     if (modeId !== this.currentMode || !(settings.modes ?? []).length) return "";
-    return settings.modes!.includes(modeId) ? "now" : "now-off";
+    return settings.modes!.includes(modeId) ? "now" : "";
   }
 
   /** Whether a channel is ticked in the home mode now. */
@@ -303,7 +310,8 @@ export class NcChannelTable extends LitElement {
     return html`<ha-dialog
       open
       width="medium"
-      header-title=${channel.name}
+      header-title=${this._title(channel).primary}
+      header-subtitle=${this._title(channel).secondary}
       @closed=${(ev: Event) => {
         if (ev.target !== ev.currentTarget) return;
         ev.stopPropagation();

@@ -152,7 +152,11 @@ export class NcAudienceTable extends LitElement {
                         `${STATE_NAMES[now]} now: ${gets ? "gets it" : "does not get it"}`,
                       )
                     : nothing}</span
-                ><span class="name-text">${person.name}</span>
+                ><span class="name-text"
+                  >${person.name}${now
+                    ? html`<div class="secondary">${STATE_NAMES[now]}</div>`
+                    : nothing}</span
+                >
               </div>
               ${states.map((state) =>
                 state === "sleep" && !this.sleepers.includes(person.id)
@@ -164,7 +168,7 @@ export class NcAudienceTable extends LitElement {
                     </div>`
                   : html`<div class="cell tick">
                       <ha-checkbox
-                        class=${state === now ? (entry[state] ? "now" : "now-off") : ""}
+                        class=${state === now && entry[state] ? "now" : ""}
                         title=${state === now ? `${person.name} is ${STATE_NAMES[state].toLowerCase()} now` : ""}
                         .checked=${entry[state]}
                         .label=${`${person.name}: ${STATE_NAMES[state]}`}
