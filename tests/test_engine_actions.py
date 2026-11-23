@@ -479,8 +479,8 @@ async def test_trigger_only_me(
     assert center.engine.channel_view(card, "light").reason == "off"
 
     # A normal trigger afterwards makes it a normal card again.
+    await center.call("trigger", "sensor.nc_plants")
     assert center.engine.cards_of(nid, None)[0].only_people is None
-    assert card.only_people is None
 
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
