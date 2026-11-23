@@ -1,4 +1,4 @@
-"""The lights, speakers and sirens: the channels that drive devices.
+"""The lights, speakers, sirens and Push: the channels that drive devices.
 
 Each device follows the engine. After every change it works out which
 active cards it sends now (the channel rules of ``channels.py``; a silenced
@@ -13,6 +13,8 @@ card is left out) and acts:
   send (later too: someone arrives home, the mode changes), reads the
   message if asked, and repeats while the card still sends.
 - **A siren** is on while any card sends.
+- **Push** sends each card to the phones of the people it goes to
+  (``push.py``).
 
 The Test button of a channel runs a device once, outside these rules.
 """
@@ -59,6 +61,7 @@ from .media_source import sound_url
 from .model import (
     BUILTIN_CHIMES,
     CHANNEL_LIGHT_PREFIX,
+    CHANNEL_PUSH,
     CHANNEL_SIREN_PREFIX,
     CHANNEL_SPEAKER_PREFIX,
     CHIME_DEFAULT,
@@ -261,11 +264,19 @@ class DeviceManager:
 
     @callback
     def _config_changed(self, config: ConfigData) -> None:
+        push = self.devices.get(CHANNEL_PUSH)
+        if push is not None:
+            push.config_changed(config)
         self._build(config)
         self.update()
 
     def _build(self, config: ConfigData) -> None:
-        wanted: dict[str, tuple[type[Device], dict[str, Any]]] = {}
+        from .push import PushDevice  # noqa: PLC0415
+
+        wanted: dict[str, tuple[type[Device], dict[str, Any]]] = {
+            # Push is always there: it sends to the people who have a phone.
+            CHANNEL_PUSH: (PushDevice, {}),
+        }
         for light in config.get("lights", []):
             wanted[CHANNEL_LIGHT_PREFIX + light["id"]] = (LightDevice, light)
         for speaker in config.get("speakers", []):
@@ -388,6 +399,9 @@ class Device:
 
     def reconfigure(self) -> None:
         """Take the changed settings."""
+
+    def config_changed(self, config: ConfigData) -> None:
+        """Follow a change of the configuration (before the devices change)."""
 
     def release(self) -> None:
         """Leave the device as it was before: it was removed."""

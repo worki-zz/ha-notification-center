@@ -7,7 +7,8 @@ itself as soon as the problem does:
 - the entity that holds N of a schedule has no number (the schedule stops,
   as with N = 0);
 - the message or the info line has a template error;
-- a trigger or condition could not be set up.
+- a trigger or condition could not be set up;
+- the notify action of a person's push device does not exist.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Final
 
+from homeassistant.const import EVENT_SERVICE_REGISTERED, EVENT_SERVICE_REMOVED
 from homeassistant.core import CALLBACK_TYPE, Event, callback
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.event import async_track_time_interval
@@ -29,6 +31,7 @@ ISSUE_MISSING_ENTITY: Final = "missing_entity"
 ISSUE_INVALID_EVERY: Final = "invalid_every"
 ISSUE_TEMPLATE_ERROR: Final = "template_error"
 ISSUE_SETUP_ERROR: Final = "setup_error"
+ISSUE_MISSING_PUSH: Final = "missing_push_service"
 
 _CHECK_INTERVAL: Final = timedelta(minutes=15)
 _LINK: Final = f"/{PANEL_URL_PATH}"
@@ -59,6 +62,12 @@ class IssueTracker:
         self._unsubs.append(
             async_track_time_interval(self._hass, self._interval, _CHECK_INTERVAL)
         )
+        for event_type in (EVENT_SERVICE_REGISTERED, EVENT_SERVICE_REMOVED):
+            self._unsubs.append(
+                self._hass.bus.async_listen(
+                    event_type, self._service_changed, event_filter=_is_notify
+                )
+            )
         self.refresh()
 
     @callback
@@ -74,6 +83,10 @@ class IssueTracker:
 
     @callback
     def _registry_updated(self, _event: Event[Any]) -> None:
+        self.refresh()
+
+    @callback
+    def _service_changed(self, _event: Event[Any]) -> None:
         self.refresh()
 
     @callback
@@ -167,4 +180,25 @@ class IssueTracker:
                     "error": error,
                 },
             )
+        for person in engine.manager.config.get("people", []):
+            service = person.get("notify")
+            if not service:
+                continue
+            domain, _, name = str(service).partition(".")
+            if not name:
+                domain, name = "notify", domain
+            if self._hass.services.has_service(domain, name):
+                continue
+            state = self._hass.states.get(person["person"])
+            if state is None:
+                continue
+            problems[f"{ISSUE_MISSING_PUSH}_{person['person']}"] = (
+                ISSUE_MISSING_PUSH,
+                {"name": state.name, "service": str(service)},
+            )
         return problems
+
+
+@callback
+def _is_notify(event_data: Any) -> bool:
+    return bool(event_data.get("domain") == "notify")
