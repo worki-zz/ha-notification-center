@@ -132,13 +132,15 @@ export class NcSettingsLights extends LitElement {
     if (can.dims && light.brightness) parts.push(`Brightness ${light.brightness}%`);
     if (can.dims && light.illuminance_sensor) parts.push(`Dim: ${light.dim_brightness ?? 30}%`);
     parts.push(`Highlight: ${light.effect && light.effect !== BLINK ? light.effect : "Blink"}`);
-    return html`<div class="row" role="button" tabindex="0" @click=${() => this._open(light)}>
+    return html`<div class="row static">
       ${channelIcon(this.hass, { key: `light:${light.id}`, name, icon: "mdi:lightbulb-outline", entity_id: light.entity_id })}
       <div class="text">
         <div>${name}</div>
         <div class="secondary">${parts.join(" · ")}</div>
       </div>
-      <ha-icon-next></ha-icon-next>
+      <ha-icon-button .label=${"Edit"} @click=${() => this._open(light)}>
+        <ha-icon icon="mdi:pencil"></ha-icon>
+      </ha-icon-button>
     </div>`;
   }
 

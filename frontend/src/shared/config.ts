@@ -247,13 +247,16 @@ export interface Chime {
 }
 
 /** The sounds that come with the integration, by chime id. */
-export const BUILTIN_CHIMES: { id: string; name: string }[] = [
-  { id: "nc_chime", name: "Chime" },
-  { id: "nc_attention", name: "Attention" },
-  { id: "nc_doorbell", name: "Doorbell" },
-  { id: "nc_alarm", name: "Alarm" },
-  { id: "nc_alarm_indoor", name: "Indoor alarm" },
+export const BUILTIN_CHIMES: { id: string; name: string; file: string }[] = [
+  { id: "nc_chime", name: "Chime", file: "chime.mp3" },
+  { id: "nc_attention", name: "Attention", file: "attention.mp3" },
+  { id: "nc_doorbell", name: "Doorbell", file: "doorbell.mp3" },
+  { id: "nc_alarm", name: "Alarm", file: "alarm.mp3" },
+  { id: "nc_alarm_indoor", name: "Indoor alarm", file: "alarm-indoor.mp3" },
 ];
+
+/** Where the integration serves its built-in sounds (SOUNDS_URL_BASE in const.py). */
+export const SOUNDS_URL = "/notification_center_sounds";
 
 /**
  * Every chime, built-in and own, in the order of the Chimes page: as the

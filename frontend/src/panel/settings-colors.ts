@@ -47,18 +47,15 @@ export class NcSettingsColors extends LitElement {
             <div class="group-header">Custom colors</div>
             <div class="rows">
               ${own.map(
-                (color) => html`<div
-                  class="row"
-                  role="button"
-                  tabindex="0"
-                  @click=${() => this._open(structuredClone(color))}
-                >
+                (color) => html`<div class="row static">
                   <span class="dot" style=${`background-color: ${rgbToHex(color.rgb)}`}></span>
                   <div class="text">
                     <div>${color.name}</div>
                     <div class="secondary">${color.rgb.join(", ")}</div>
                   </div>
-                  <ha-icon-next></ha-icon-next>
+                  <ha-icon-button .label=${"Edit"} @click=${() => this._open(structuredClone(color))}>
+                    <ha-icon icon="mdi:pencil"></ha-icon>
+                  </ha-icon-button>
                 </div>`,
               )}
             </div>
