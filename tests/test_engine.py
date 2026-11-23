@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from pathlib import Path
 
@@ -571,3 +572,12 @@ async def test_references_of_conditions_and_steps(center: Center) -> None:
     await center.add("Check", user({"step": 1}))
     with pytest.raises(ConfigValidationError, match="used by: Check"):
         await center.manager.async_delete("notifications", waste)
+
+
+async def test_two_saves_at_once_both_stay(center: Center) -> None:
+    """Changes of the configuration run one after the other: none is lost."""
+    first = asyncio.create_task(center.add("First", step()))
+    second = asyncio.create_task(center.add("Second", step()))
+    await asyncio.gather(first, second)
+    names = {item["name"] for item in center.manager.config["notifications"]}
+    assert names == {"First", "Second"}

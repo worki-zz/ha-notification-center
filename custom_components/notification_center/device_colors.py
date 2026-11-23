@@ -5,17 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final
 
 from .model import (
     CHIME_DEFAULT,
     CHIME_NONE,
     SYSTEM_COLORS,
 )
-
-if TYPE_CHECKING:
-    pass
-
 
 _LOGGER = logging.getLogger(__name__)
 

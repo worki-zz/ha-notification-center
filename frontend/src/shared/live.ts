@@ -175,7 +175,6 @@ export function effectiveButtons(
       icon: entry.icon || base.icon,
       // Not stored: the built-in button's default (the Tap shows more info).
       actions: entry.actions ?? (base.type === "tap" ? { navigation: { type: "more_info" } } : {}),
-      confirm: entry.confirm ?? false,
       category: true,
     };
     if (base.type === "snooze") merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze;

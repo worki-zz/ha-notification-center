@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Any, Final
@@ -68,7 +69,7 @@ class LightDevice(Device):
         self._blink: CALLBACK_TYPE | None = None
         self._blink_on = True
         self._last_command: datetime | None = None
-        self._contexts: set[str] = set()
+        self._contexts: deque[str] = deque(maxlen=50)
         # A change by hand: the light is left alone until no card is left.
         self._hand = False
         self._testing = False
@@ -272,9 +273,7 @@ class LightDevice(Device):
 
     def _context(self) -> Context:
         context = Context()
-        self._contexts.add(context.id)
-        if len(self._contexts) > 50:
-            self._contexts.pop()
+        self._contexts.append(context.id)
         self._last_command = dt_util.utcnow()
         return context
 

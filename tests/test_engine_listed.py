@@ -6,12 +6,9 @@ from datetime import timedelta
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
 )
-
-from custom_components.notification_center.const import DOMAIN
 
 from .common import DOOR_GROUP, Center, load, step, tick
 
@@ -296,20 +293,3 @@ async def test_switched_on_again_entities_match(
     await center.manager.async_set_enabled(nid, True)
     await hass.async_block_till_done()
     assert center.state("sensor.nc_doors") == "active"
-
-
-async def test_old_event_entity_is_removed(
-    hass: HomeAssistant, config_entry: MockConfigEntry
-) -> None:
-    """The event entity of 0.2.x does not stay in the registry."""
-    config_entry.add_to_hass(hass)
-    registry = er.async_get(hass)
-    old = registry.async_get_or_create(
-        "event",
-        DOMAIN,
-        "event",
-        suggested_object_id="notification_center",
-        config_entry=config_entry,
-    )
-    await load(hass, config_entry)
-    assert registry.async_get(old.entity_id) is None

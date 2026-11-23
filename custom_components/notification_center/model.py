@@ -61,8 +61,6 @@ GENERAL_CATEGORY_ID: Final = "general"
 # are single channels, every light, speaker and siren is its own channel,
 # keyed by its id.
 CHANNEL_DASHBOARD: Final = "dashboard"
-# The earlier name of the Dashboard channel, renamed by the upgrade.
-CHANNEL_NOTIFICATION_CENTER: Final = "notification_center"
 CHANNEL_PUSH: Final = "push"
 CHANNEL_LIGHT_PREFIX: Final = "light:"
 CHANNEL_SPEAKER_PREFIX: Final = "speaker:"
@@ -73,16 +71,6 @@ PUSH_PRIORITIES: Final = ("silent", "normal", "time_sensitive", "critical")
 PUSH_PRIORITY_DEFAULT: Final = "normal"
 # The phones a person gets push notifications on.
 DEVICE_TYPES: Final = ("ios", "android", "other")
-# Push settings of the earlier data model, never used: dropped on load.
-_LEGACY_PUSH_KEYS: Final = (
-    "critical",
-    "send_again_after",
-    "sound",
-    "recipients",
-    "action_buttons",
-    "attachments",
-    "clear_when_done",
-)
 # The device sections and the prefix of their channel keys.
 DEVICE_PREFIXES: Final = {
     "lights": CHANNEL_LIGHT_PREFIX,
@@ -177,12 +165,8 @@ TRIGGER_ENTITIES_STATE: Final = f"{DOMAIN}.entities_state"
 TRIGGER_ENTITIES_NUMERIC: Final = f"{DOMAIN}.entities_numeric_state"
 # Both watch the entities a notification lists (its Entities block).
 ENTITIES_KINDS: Final = (TRIGGER_ENTITIES_STATE, TRIGGER_ENTITIES_NUMERIC)
-# The earlier single kind, read as one of the two above.
-TRIGGER_LISTED_ENTITIES: Final = f"{DOMAIN}.listed_entities"
 TRIGGER_NOTIFICATION_STATE: Final = f"{DOMAIN}.notification_state"
 NOTIFICATION_STATES: Final = ("active", "done", "snoozed", "dismissed")
-# Earlier name of a state, accepted and changed to the new one.
-_RENAMED_STATES: Final = {"shown": "active"}
 
 
 class ConfigValidationError(HomeAssistantError):
@@ -220,11 +204,7 @@ HIGHLIGHTS = ("none", "pulse", "glow", "alert")
 
 
 def _highlight(value: Any) -> str:
-    """Validate a highlight; the on/off of 0.6.8 and before is read too."""
-    if value is True:
-        return "alert"
-    if value is False:
-        return "none"
+    """Validate a highlight."""
     return str(vol.In(HIGHLIGHTS)(value))
 
 
@@ -310,9 +290,6 @@ GENERAL_SCHEMA = vol.Schema(
             {
                 vol.Optional("tts_service"): _optional(cv.entity_id),
                 vol.Optional("language"): _optional(cv.string),
-                vol.Optional("volume"): vol.Any(
-                    None, vol.All(vol.Coerce(float), vol.Range(0, 1))
-                ),
             }
         ),
     }
@@ -440,9 +417,7 @@ _REPEAT_TYPES = vol.Any(
 
 
 def _repeat(value: Any) -> dict[str, Any]:
-    """Validate a repeat; the Loop of 0.6.8 and before (until_muted) is Loop."""
-    if isinstance(value, dict) and value.get("type") == "until_muted":
-        value = {"type": "loop"}
+    """Validate a repeat."""
     return dict(_REPEAT_TYPES(value))
 
 
@@ -505,12 +480,8 @@ def _channels(value: Any) -> dict[str, dict[str, Any]]:
                 "light:<id>, speaker:<id> or siren:<id>"
             )
         schema = vol.Schema({**_CHANNEL_COMMON, **_CHANNEL_EXTRA[kind]})
-        settings = dict(given or {})
-        if kind == CHANNEL_PUSH:
-            for legacy in _LEGACY_PUSH_KEYS:
-                settings.pop(legacy, None)
         try:
-            result[str(key)] = schema(settings)
+            result[str(key)] = schema(dict(given or {}))
         except vol.Invalid as err:
             raise vol.Invalid(f"channel '{key}': {err}") from err
     return result
@@ -742,9 +713,6 @@ BUTTON_SCHEMA = _with_id(
         ),
         # Shown in the push notification (it takes effect with the push).
         vol.Optional("show_in_push"): _optional(cv.boolean),
-        vol.Optional("confirm", default=False): cv.boolean,
-        # Tap on the card: also when the push notification is tapped.
-        vol.Optional("push_tap"): _optional(cv.boolean),
         # Tap: the page the app opens when the push is tapped (empty: the
         # category's, then General's).
         vol.Optional("open_on_tap"): _optional(cv.string),
@@ -767,7 +735,6 @@ CATEGORY_BUTTON_SCHEMA = _with_id(
             vol.All(cv.ensure_list, [vol.In(SNOOZE_CHOICES)])
         ),
         vol.Optional("show_in_push"): _optional(cv.boolean),
-        vol.Optional("push_tap"): _optional(cv.boolean),
         vol.Optional("open_on_tap"): _optional(cv.string),
         # Tap: the button the Tap of its notifications runs (empty: their
         # own actions).
@@ -831,8 +798,6 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
             button.pop("snooze", None)
         else:
             button["snooze"] = _sorted_snooze(button["snooze"])
-        # A tap on the push always runs the Tap (0.6.9): push_tap is gone.
-        button.pop("push_tap", None)
         for key in ("label", "icon", "show_in_push"):
             if button.get(key) is None:
                 button.pop(key, None)
@@ -841,7 +806,6 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
         if button["type"] == "tap":
             button.pop("show_in_push", None)
         else:
-            button.pop("push_tap", None)
             button.pop("open_on_tap", None)
     return buttons
 
@@ -878,7 +842,6 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
             )
         else:
             button.pop("snooze", None)
-        button.pop("push_tap", None)
         if kind == "tap":
             button.pop("show_in_push", None)
             if not button.get("open_on_tap"):
@@ -1014,7 +977,6 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
         "actions": entry["actions"]
         if "actions" in entry
         else dict(BUILTIN_ACTION_DEFAULTS.get(kind, {})),
-        "confirm": entry.get("confirm", False),
         "category": True,
     }
     if kind == "snooze":
@@ -1043,19 +1005,6 @@ ENTITY_SCHEMA = vol.Schema(
 )
 
 
-def _group_lists(value: Any) -> Any:
-    """Turn the earlier single ``area`` and ``label`` into lists."""
-    if not isinstance(value, dict):
-        return value
-    value = dict(value)
-    for old, new in (("area", "areas"), ("label", "labels")):
-        if old in value:
-            single = value.pop(old)
-            if single and new not in value:
-                value[new] = [single]
-    return value
-
-
 _IDS = vol.All(cv.ensure_list, [cv.string])
 
 _ENTITY_GROUP_FIELDS = _with_id(
@@ -1079,13 +1028,7 @@ _ENTITY_GROUP_FIELDS = _with_id(
         vol.Optional("member_actions", default=dict): {cv.entity_id: {_id: ACTIONS}},
     }
 )
-ENTITY_GROUP_SCHEMA = vol.All(_group_lists, _ENTITY_GROUP_FIELDS)
-
-ATTACHMENT_SCHEMA = vol.Any(
-    vol.Schema({vol.Required("camera"): cv.entity_domain("camera")}),
-    vol.Schema({vol.Required("image"): cv.string}),
-    vol.Schema({vol.Required("video"): cv.string}),
-)
+ENTITY_GROUP_SCHEMA = _ENTITY_GROUP_FIELDS
 
 DATA_TYPES: Final = (
     "none",
@@ -1100,15 +1043,10 @@ DATA_TYPES: Final = (
 DATA_FORMATS: Final = ("relative", "duration", "time", "date", "datetime")
 
 
-def _old_data_type(value: Any) -> Any:
-    """Read the data types of 0.4.1 and before: Due is now Active since."""
-    return "active_since" if value == "due" else value
-
-
 # The text after the label of a card.
 DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("type"): vol.All(_old_data_type, vol.In(DATA_TYPES)),
+        vol.Required("type"): vol.In(DATA_TYPES),
         # State, attribute, last changed, last updated: the card's entity when
         # not given.
         vol.Optional("entity_id"): _optional(cv.entity_id),
@@ -1132,9 +1070,6 @@ STEP_SCHEMA = _with_id(
         vol.Optional("buttons", default=list): _buttons,
         # The people whose states differ from the category's audience.
         vol.Optional("audience", default=dict): _audience,
-        vol.Optional("attachments", default=list): vol.All(
-            cv.ensure_list, [ATTACHMENT_SCHEMA]
-        ),
         # Only what differs from the category's channel settings.
         vol.Optional("channels", default=dict): _channels,
     }
@@ -1409,10 +1344,8 @@ _ENTITIES_NOTIFICATION: dict[vol.Marker, Any] = {vol.Required("notification"): _
 
 
 def _notification_state(value: Any) -> str:
-    """Validate a notification state, accepting earlier names."""
-    text = cv.string(value)
-    text = _RENAMED_STATES.get(text, text)
-    return cast(str, vol.In(NOTIFICATION_STATES)(text))
+    """Validate a notification state."""
+    return cast(str, vol.In(NOTIFICATION_STATES)(cv.string(value)))
 
 
 _NOTIFICATION_STATE_FIELDS: dict[vol.Marker, Any] = {
@@ -1492,18 +1425,6 @@ def _own_items(step: dict[str, Any], kind: str) -> list[dict[str, Any]]:
     ]
 
 
-def _own_item(schema: vol.Schema, item: dict[str, Any]) -> dict[str, Any]:
-    """Validate an own trigger or condition, keeping the user's form.
-
-    Only a renamed state is changed in the stored item, so that an earlier
-    name (``shown``) is saved under its new name (``active``).
-    """
-    validated: dict[str, Any] = schema(item)
-    if "state" in validated:
-        item["state"] = validated["state"]
-    return validated
-
-
 async def _validate_triggers(
     hass: HomeAssistant, triggers: list[dict[str, Any]], where: str
 ) -> list[dict[str, Any]]:
@@ -1512,7 +1433,7 @@ async def _validate_triggers(
         kind = str(trigger.get("trigger", trigger.get("platform", "")))
         try:
             if kind in OWN_TRIGGER_SCHEMAS:
-                result.append(_own_item(OWN_TRIGGER_SCHEMAS[kind], trigger))
+                result.append(OWN_TRIGGER_SCHEMAS[kind](trigger))
             else:
                 checked = cv.TRIGGER_SCHEMA([trigger])
                 await async_validate_trigger_config(hass, checked)
@@ -1530,7 +1451,7 @@ async def _validate_conditions(
         kind = str(condition.get("condition", ""))
         try:
             if kind in OWN_CONDITION_SCHEMAS:
-                result.append(_own_item(OWN_CONDITION_SCHEMAS[kind], condition))
+                result.append(OWN_CONDITION_SCHEMAS[kind](condition))
             else:
                 checked = cv.CONDITIONS_SCHEMA([condition])
                 await async_validate_conditions_config(hass, checked)

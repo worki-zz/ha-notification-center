@@ -62,8 +62,6 @@ def test_colors() -> None:
     assert chime_of({"chime": "nc_alarm"}, {"chime": None}) == "nc_alarm"
     # A category without a chime plays the default one.
     assert chime_of({}, {}) == "nc_chime"
-    assert highlight_of({"highlight": False}, {"highlight": True}) is False
-    assert highlight_of({}, {"highlight": True}) is True
     assert highlight_of({}, {"highlight": "glow"}) is True
     assert highlight_of({"highlight": "none"}, {"highlight": "alert"}) is False
 
@@ -200,7 +198,7 @@ async def test_switch_blinks_for_highlight(
     off = async_mock_service(hass, "switch", "turn_off")
     item = await center.manager.async_create("lights", {"entity_id": "switch.lamp"})
     key = f"light:{item['id']}"
-    await _category(center, highlight=True, channels={key: {"modes": ["home"]}})
+    await _category(center, highlight="alert", channels={key: {"modes": ["home"]}})
     await center.add("Smoke", step())
     await center.call("trigger", "sensor.nc_smoke")
     assert len(on) == 1

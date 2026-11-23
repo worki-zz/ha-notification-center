@@ -33,6 +33,9 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.template import Template, is_template_string
 
 _LOGGER = logging.getLogger(__name__)
+# Texts whose error was logged already.
+_WARNED: set[str] = set()
+_WARNED_MAX = 200
 
 PLACEHOLDERS: Final = ("Floor", "Area", "Device", "Device class", "Entity", "State")
 
@@ -129,7 +132,10 @@ def render_text(
             )
         except TemplateError as err:
             error = str(err)
-            _LOGGER.warning("Error rendering %r: %s", text, err)
+            # Once per text: it is rendered again at every change.
+            if text not in _WARNED and len(_WARNED) < _WARNED_MAX:
+                _WARNED.add(text)
+                _LOGGER.warning("Error rendering %r: %s", text, err)
     return replace_placeholders(rendered, entity_placeholders(hass, entity_id)), error
 
 

@@ -555,9 +555,8 @@ export class NcCategoryEditor extends LitElement {
           });
           return;
         }
-        const { actions: _action, confirm: _confirm, ...rest } = result;
+        const { actions: _action, ...rest } = result;
         void _action;
-        void _confirm;
         this._setButton({
           ...rest,
           enabled: rest.enabled ?? true,

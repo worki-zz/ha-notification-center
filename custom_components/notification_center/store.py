@@ -9,8 +9,10 @@ Before an import replaces the configuration, the previous one is kept in
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Callable, Coroutine
 import copy
+from functools import wraps
 from typing import Any, Final, cast
 
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
@@ -43,7 +45,8 @@ from .normalize import normalize_notification
 STORAGE_VERSION: Final = 1
 # 2: the Push channel starts switched off (0.6.8).
 # 3: a button has a list of actions instead of one action (0.7.1).
-STORAGE_MINOR_VERSION: Final = 3
+# 4: the unused fields attachments, confirm and the read volume are gone.
+STORAGE_MINOR_VERSION: Final = 4
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -51,7 +54,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # The version written into YAML exports, so that an older export can be
 # migrated when it is imported.
 # 2: a button has a list of actions instead of one action (0.7.1).
-EXPORT_VERSION: Final = 2
+# 3: the unused fields attachments, confirm and the read volume are gone.
+EXPORT_VERSION: Final = 3
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -71,6 +75,8 @@ class _ConfigStore(Store[ConfigData]):
             switch_push_off(old_data)
         if old_major_version == 1 and old_minor_version < 3:
             upgrade_button_actions(old_data)
+        if old_major_version == 1 and old_minor_version < 4:
+            drop_unused_fields(old_data)
         return old_data
 
 
@@ -109,6 +115,32 @@ def upgrade_button_actions(data: dict[str, Any]) -> None:
                 button["actions"] = upgrade(old) if upgrade else {}
 
 
+def drop_unused_fields(data: dict[str, Any]) -> None:
+    """Drop the fields that were stored but never used.
+
+    A step's attachments, a button's confirm and the volume of Read the
+    message in General.
+    """
+    general = data.get("general")
+    reading = general.get("read_the_message") if isinstance(general, dict) else None
+    if isinstance(reading, dict):
+        reading.pop("volume", None)
+    for notification in data.get("notifications") or []:
+        steps = notification.get("steps") if isinstance(notification, dict) else None
+        for step in steps or []:
+            if not isinstance(step, dict):
+                continue
+            step.pop("attachments", None)
+            for button in step.get("buttons") or []:
+                if isinstance(button, dict):
+                    button.pop("confirm", None)
+    for category in data.get("categories") or []:
+        buttons = category.get("buttons") if isinstance(category, dict) else None
+        for button in buttons or []:
+            if isinstance(button, dict):
+                button.pop("confirm", None)
+
+
 def switch_push_off(data: dict[str, Any]) -> None:
     """Untick the Push channel everywhere: it starts off when it arrives.
 
@@ -129,6 +161,21 @@ def switch_push_off(data: dict[str, Any]) -> None:
                 push.pop("modes", None)
 
 
+def _serialized[F: Callable[..., Coroutine[Any, Any, Any]]](method: F) -> F:
+    """Run changes of the configuration one after the other.
+
+    Each one copies the configuration, changes the copy and saves it: two at
+    the same time would lose one of them.
+    """
+
+    @wraps(method)
+    async def wrapper(self: ConfigManager, *args: Any, **kwargs: Any) -> Any:
+        async with self._lock:
+            return await method(self, *args, **kwargs)
+
+    return cast(F, wrapper)
+
+
 class ConfigManager:
     """Hold the configuration, apply changes and notify listeners."""
 
@@ -141,6 +188,7 @@ class ConfigManager:
         self._backup_store = Store[dict[str, Any]](hass, 1, BACKUP_KEY)
         self._config: ConfigData = {}
         self._listeners: list[ConfigListener] = []
+        self._lock = asyncio.Lock()
         self._unsub_registry: CALLBACK_TYPE | None = None
 
     @property
@@ -204,6 +252,7 @@ class ConfigManager:
                 return index
         raise ConfigValidationError(f"{section}: no item with id '{item_id}'")
 
+    @_serialized
     async def async_create(self, section: str, data: dict[str, Any]) -> dict[str, Any]:
         """Add an item to the end of a collection and return it."""
         data = {**data, "id": data.get("id") or new_id()}
@@ -224,6 +273,7 @@ class ConfigManager:
         index = self._index(committed, section, item["id"])
         return cast(dict[str, Any], committed[section][index])
 
+    @_serialized
     async def async_update(
         self, section: str, item_id: str, data: dict[str, Any]
     ) -> dict[str, Any]:
@@ -256,6 +306,7 @@ class ConfigManager:
         committed = await self._async_commit(config)
         return cast(dict[str, Any], committed[section][index])
 
+    @_serialized
     async def async_delete(self, section: str, item_id: str) -> None:
         """Delete an item and the references to it."""
         config = self._copy()
@@ -284,6 +335,7 @@ class ConfigManager:
         _remove_references(config, section, item_id)
         await self._async_commit(config)
 
+    @_serialized
     async def async_set_mode_channels(self, mode_id: str, channels: list[str]) -> None:
         """Switch a mode on for the given channels of every category.
 
@@ -306,6 +358,7 @@ class ConfigManager:
                     modes.remove(mode_id)
         await self._async_commit(config)
 
+    @_serialized
     async def async_set_channel_modes(self, key: str, modes: list[str]) -> None:
         """Switch a channel on in the given modes of every category.
 
@@ -326,6 +379,7 @@ class ConfigManager:
             }
         await self._async_commit(config)
 
+    @_serialized
     async def async_reorder(self, section: str, item_ids: list[str]) -> None:
         """Put the items of a collection in the given order."""
         config = self._copy()
@@ -339,6 +393,7 @@ class ConfigManager:
         config[section] = [items[item_id] for item_id in item_ids]
         await self._async_commit(config)
 
+    @_serialized
     async def async_duplicate(self, notification_id: str) -> dict[str, Any]:
         """Copy a notification, with new ids, right after the original."""
         config = self._copy()
@@ -374,6 +429,7 @@ class ConfigManager:
         committed = await self._async_commit(config)
         return cast(dict[str, Any], committed["notifications"][index + 1])
 
+    @_serialized
     async def async_set_enabled(
         self, notification_id: str, enabled: bool, step_id: str | None = None
     ) -> None:
@@ -395,6 +451,7 @@ class ConfigManager:
 
     # -- People and general settings ----------------------------------------
 
+    @_serialized
     async def async_update_person(self, data: dict[str, Any]) -> None:
         """Save the settings of a person (push, device type, sleep condition)."""
         try:
@@ -408,6 +465,7 @@ class ConfigManager:
         config["people"].append(person)
         await self._async_commit(config)
 
+    @_serialized
     async def async_update_general(self, data: dict[str, Any]) -> None:
         """Save the general settings."""
         try:
@@ -425,6 +483,7 @@ class ConfigManager:
         data = {"version": EXPORT_VERSION, **self._config}
         return str(yaml_util.dump(data))
 
+    @_serialized
     async def async_import_yaml(self, text: str) -> None:
         """Replace the whole configuration with the one in a YAML text.
 
@@ -438,10 +497,12 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, EXPORT_VERSION):
+        if version not in (1, 2, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
+        if version < 3:
+            drop_unused_fields(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(
@@ -469,6 +530,7 @@ class ConfigManager:
 
     # -- Entity renames -----------------------------------------------------
 
+    @_serialized
     async def _async_entity_registry_updated(
         self, event: Event[er.EventEntityRegistryUpdatedData]
     ) -> None:

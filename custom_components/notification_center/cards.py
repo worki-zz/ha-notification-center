@@ -24,9 +24,6 @@ from .const import (
 )
 
 if TYPE_CHECKING:
-    pass
-
-if TYPE_CHECKING:
     from .engine import Engine
 
 
@@ -82,7 +79,6 @@ class Card:
     data: dict[str, Any] = field(default_factory=dict)
     message_override: str | None = None
     info_override: str | None = None
-    attachments: list[dict[str, Any]] | None = None
     message: str | None = None
     info: str | None = None
     # The step's custom data text (after the label), rendered.
@@ -133,7 +129,6 @@ class Card:
             "data": self.data,
             "message_override": self.message_override,
             "info_override": self.info_override,
-            "attachments": self.attachments,
             "message": self.message,
             "info": self.info,
             "data_text": self.data_text,
@@ -163,7 +158,6 @@ class Card:
             data=dict(data.get("data") or {}),
             message_override=data.get("message_override"),
             info_override=data.get("info_override"),
-            attachments=data.get("attachments"),
             message=data.get("message"),
             info=data.get("info"),
             data_text=data.get("data_text"),
@@ -189,7 +183,6 @@ class Overrides:
 
     message: str | None = None
     info: str | None = None
-    attachments: list[dict[str, Any]] | None = None
     data: dict[str, Any] | None = None
 
 

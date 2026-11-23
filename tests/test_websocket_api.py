@@ -266,7 +266,7 @@ async def test_people_follow_person_entities(
 async def test_general_settings(hass: HomeAssistant, client: Client) -> None:
     await client.ok(
         "general/update",
-        data={"read_the_message": {"tts_service": "tts.cloud", "volume": 0.5}},
+        data={"read_the_message": {"tts_service": "tts.cloud", "language": "en-US"}},
     )
     general = (await client.config())["general"]
     assert general["read_the_message"]["tts_service"] == "tts.cloud"
@@ -285,7 +285,7 @@ async def test_import_export_round_trip(
     exported = (await client.ok("config/export"))["yaml"]
     data = yaml_util.parse_yaml(exported)
     assert isinstance(data, dict)
-    assert data["version"] == 2
+    assert data["version"] == 3
     stored = hass_storage[CONFIG_KEY]["data"]
     assert {key: value for key, value in data.items() if key != "version"} == stored
 
@@ -332,6 +332,25 @@ async def test_import_of_an_older_export(
     assert actions["off"] == {"ha_actions": [{"action": "light.turn_off"}]}
     assert actions["quiet"] == {"silence": True}
     assert actions["clips"] == {}
+
+
+async def test_import_drops_the_unused_fields(
+    client: Client, hass_storage: dict[str, Any]
+) -> None:
+    """A version 2 export's attachments, confirm and read volume are dropped."""
+    data = yaml_util.parse_yaml(EXAMPLE.read_text())
+    assert isinstance(data, dict)
+    data["version"] = 2
+    data["general"]["read_the_message"]["volume"] = 0.5
+    step = data["notifications"][0]["steps"][0]
+    step["attachments"] = [{"camera": "camera.front_door"}]
+    step["buttons"] = [{"type": "custom", "label": "Go", "confirm": True}]
+    await client.ok("config/import", yaml=yaml_util.dump(data))
+    stored = hass_storage[CONFIG_KEY]["data"]
+    assert "volume" not in stored["general"]["read_the_message"]
+    saved = stored["notifications"][0]["steps"][0]
+    assert "attachments" not in saved
+    assert all("confirm" not in button for button in saved["buttons"])
 
 
 @pytest.mark.parametrize(

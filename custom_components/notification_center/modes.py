@@ -97,23 +97,12 @@ class ModeTracker:
         return None
 
     def _is_true(self, mode_id: str, condition: dict[str, Any]) -> bool:
-        kind = condition["type"]
-        if kind == "template":
-            if mode_id not in self._templates:
-                return False
-            try:
-                return result_as_boolean(
-                    self._templates[mode_id].async_render(parse_result=False)
-                )
-            except TemplateError as err:
-                _LOGGER.warning("Error in the condition of mode %s: %s", mode_id, err)
-                return False
-        state = self._hass.states.get(condition["entity_id"])
-        if state is None:
-            return False
-        if kind == "toggle":
-            return state.state == STATE_ON
-        return state.state == str(condition["state"])
+        return condition_true(
+            self._hass,
+            condition,
+            self._templates.get(mode_id),
+            f"mode {mode_id}",
+        )
 
 
 def _mode_id(mode: dict[str, Any] | None) -> str | None:

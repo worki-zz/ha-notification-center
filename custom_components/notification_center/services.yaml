@@ -22,10 +22,6 @@ trigger:
     info:
       selector:
         text:
-    attachments:
-      example: '[{"camera": "camera.front_door"}]'
-      selector:
-        object:
     data:
       example: '{"visitor": "Postman"}'
       selector:
