@@ -96,6 +96,16 @@ class _Conditions:
     def empty(self) -> bool:
         return not self._own and self._checker is None
 
+    @property
+    def has_own(self) -> bool:
+        """Return whether a Notification state or entities condition is in."""
+        return bool(self._own)
+
+    @property
+    def has_own_entities(self) -> bool:
+        """Return whether a Notification entities condition is in."""
+        return any(c["condition"] in ENTITIES_KINDS for c in self._own)
+
     def check(self, variables: Mapping[str, Any]) -> bool:
         """Return whether every condition is true."""
         for condition in self._own:
@@ -222,6 +232,10 @@ class StepRunner:
         if self._hides or self._closes:
             self._hide_entities = entities
             self.hide_timed = timed
+            # Own conditions follow the cards (see ``watches_own``); the
+            # states of listed entities are only checked again every minute.
+            if self.show_when.has_own_entities:
+                self.hide_timed = True
         if self._hide_entities:
             self._unsubs.append(
                 async_track_state_change_event(
@@ -467,6 +481,16 @@ class StepRunner:
                 self.engine.close(card, CLOSED_DONE, SOURCE_DONE_WHEN, transient=True)
                 continue
             self.engine.set_hidden(card, self.is_hidden(card))
+
+    @property
+    def watches_own(self) -> bool:
+        """Return whether Conditions on other cards decide hiding or closing."""
+        if not (self._hides or self._closes):
+            return False
+        return any(
+            conditions is not None and conditions.has_own
+            for conditions in (self.show_when, self.start_conditions)
+        )
 
     def is_hidden(self, card: Card) -> bool:
         """Return whether a card is hidden: the Conditions are not met for it."""
