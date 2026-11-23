@@ -149,7 +149,7 @@ export function newStep(category?: Category): EditorStep {
     conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
     done_when: { triggers: [], activation_conditions_no_longer_true: false },
     buttons: [
-      builtin("tap", enabled("tap"), { type: "more_info" }),
+      builtin("tap", enabled("tap"), { navigation: { type: "more_info" } }),
       builtin("done", enabled("done")),
       builtin("dismiss", enabled("dismiss")),
       builtin("snooze", enabled("snooze")),
@@ -162,9 +162,9 @@ export function newStep(category?: Category): EditorStep {
 function builtin(
   type: Button["type"],
   enabled: boolean,
-  action: Button["action"] = { type: "nothing" },
+  actions: Button["actions"] = {},
 ): Button {
-  return { id: newId(), type, enabled, action } as Button;
+  return { id: newId(), type, enabled, actions } as Button;
 }
 
 /**
@@ -199,7 +199,7 @@ export function detachCategoryButtons(
       let entry = step.buttons.find((b) => b.type === "custom" && b.id === source.id);
       if (!entry) {
         if (!source.enabled) continue;
-        entry = { id: source.id, type: "custom", action: { type: "nothing" } } as Button;
+        entry = { id: source.id, type: "custom", actions: {} } as Button;
         step.buttons.push(entry);
       }
       entry.enabled ??= source.enabled;
@@ -237,7 +237,7 @@ export function entityActionSlots(draft: EditorNotification, category?: Category
   const many = draft.steps.length > 1;
   return draft.steps.flatMap((step, index) =>
     effectiveButtons(category, step)
-      .filter((button) => button.enabled && button.action?.type === "entity_action" && button.id)
+      .filter((button) => button.enabled && !!button.actions?.entity_action && button.id)
       .map((button) => {
         const name = button.type === "tap" ? BUTTON_NAMES.tap : button.label || BUTTON_NAMES[button.type];
         return { id: button.id, label: many ? `Step ${index + 1} · ${name}` : name };

@@ -21,7 +21,7 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ## Medium priority
 
 ### Alarm images and clips
-*Area: Notification content.* Attach a snapshot or a short clip to an alarm notification, shown on the card and in the push. No Frigate: the images come from an own automation that saves them at alarm time; the options for passing them to the notification still need a discussion. The `show_attachment` button action already exists in the data model but does nothing yet. *(Scope cut, 2026-11-15; phase 3)*
+*Area: Notification content.* Attach a snapshot or a short clip to an alarm notification, shown on the card and in the push. No Frigate: the images come from an own automation that saves them at alarm time; the options for passing them to the notification still need a discussion. The earlier `show_attachment` button action was removed from the data model with the action list (0.7.1); it would come back as a Navigation choice. *(Scope cut, 2026-11-15; phase 3)*
 
 ### Scheduled preview card
 *Area: Cards and panel.* A dashboard card that shows the upcoming scheduled notifications (for example the next garbage collections), not only the active ones. *(Phase 3, 2026-11-18)*

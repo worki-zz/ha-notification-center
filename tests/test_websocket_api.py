@@ -285,13 +285,53 @@ async def test_import_export_round_trip(
     exported = (await client.ok("config/export"))["yaml"]
     data = yaml_util.parse_yaml(exported)
     assert isinstance(data, dict)
-    assert data["version"] == 1
+    assert data["version"] == 2
     stored = hass_storage[CONFIG_KEY]["data"]
     assert {key: value for key, value in data.items() if key != "version"} == stored
 
     # Importing the export gives the same configuration again.
     await client.ok("config/import", yaml=exported)
     assert hass_storage[CONFIG_KEY]["data"] == stored
+
+
+OLD_BUTTONS = """
+- {type: tap, action: {type: navigate, path: /lovelace/0}}
+- {type: done, action: {type: more_info, entity_id: light.hall}}
+- {type: custom, id: mute, label: Mute, action: {type: entity_action}}
+- type: custom
+  id: "off"
+  label: "Off"
+  action: {type: ha_action, actions: [{action: light.turn_off}]}
+- {type: custom, id: quiet, label: Quiet, action: {type: silence}}
+- {type: custom, id: clips, label: Clips, action: {type: show_attachment}}
+"""
+
+
+async def test_import_of_an_older_export(
+    client: Client, hass_storage: dict[str, Any]
+) -> None:
+    """A version 1 export's one button action becomes the button's actions."""
+    data = yaml_util.parse_yaml(EXAMPLE.read_text())
+    assert isinstance(data, dict)
+    data["version"] = 1
+    data["notifications"][0]["steps"][0]["buttons"] = yaml_util.parse_yaml(OLD_BUTTONS)
+    await client.ok("config/import", yaml=yaml_util.dump(data))
+    step = hass_storage[CONFIG_KEY]["data"]["notifications"][0]["steps"][0]
+    actions = {
+        button["id"] if button["type"] == "custom" else button["type"]: button.get(
+            "actions"
+        )
+        for button in step["buttons"]
+    }
+    assert all("action" not in button for button in step["buttons"])
+    assert actions["tap"] == {"navigation": {"type": "navigate", "path": "/lovelace/0"}}
+    assert actions["done"] == {
+        "navigation": {"type": "more_info", "entity_id": "light.hall"}
+    }
+    assert actions["mute"] == {"entity_action": True}
+    assert actions["off"] == {"ha_actions": [{"action": "light.turn_off"}]}
+    assert actions["quiet"] == {"silence": True}
+    assert actions["clips"] == {}
 
 
 @pytest.mark.parametrize(

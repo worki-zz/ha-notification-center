@@ -10,6 +10,7 @@ import {
   DOMAIN,
   type AudienceEntry,
   type Button,
+  type ButtonActions,
   type CategoryButton,
   type EffectiveButton,
   type CardState,
@@ -172,12 +173,16 @@ export function effectiveButtons(
       enabled: entry.enabled ?? base.enabled,
       label: entry.label || base.label,
       icon: entry.icon || base.icon,
-      action: entry.action ?? (base.type === "tap" ? { type: "more_info" } : { type: "nothing" }),
+      // Not stored: the built-in button's default (the Tap shows more info).
+      actions: entry.actions ?? (base.type === "tap" ? { navigation: { type: "more_info" } } : {}),
       confirm: entry.confirm ?? false,
       category: true,
     };
     if (base.type === "snooze") merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze;
-    if (base.type === "tap") merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
+    if (base.type === "tap") {
+      merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
+      merged.run_button = (entry.run_button !== undefined ? entry.run_button : base.run_button) || null;
+    }
     else merged.show_in_push = entry.show_in_push ?? base.show_in_push;
     return merged;
   });
@@ -214,12 +219,33 @@ export function liveButtons(live: LiveCard): LiveButton[] {
 
 /** The tap of the card, when it is switched on and does something. */
 export function tapButton(live: LiveCard): Button | undefined {
-  const tap = effectiveButtons(live.category, live.step).find(
-    (button) => button.type === "tap" && button.enabled,
-  );
+  const buttons = effectiveButtons(live.category, live.step);
+  const tap = buttons.find((button) => button.type === "tap" && button.enabled);
   if (!tap) return undefined;
-  if (tap.action.type === "nothing") return undefined;
+  const target = runButtonOf(buttons, tap);
+  if (target) return tap;
+  if (!hasActions(tap.actions)) return undefined;
   return tap;
+}
+
+/** The key a Tap names a button by: a built-in one's type, a custom one's id. */
+export function buttonRef(button: Pick<Button, "id" | "type">): string {
+  return button.type === "custom" ? button.id : button.type;
+}
+
+/**
+ * The switched on button a Tap runs instead of its own actions, as
+ * `run_button_of` in Home Assistant. None: the Tap's own actions.
+ */
+export function runButtonOf(
+  buttons: EffectiveButton[],
+  tap: Button,
+): EffectiveButton | undefined {
+  const ref = tap.type === "tap" ? tap.run_button : undefined;
+  if (!ref) return undefined;
+  return buttons.find(
+    (button) => button.type !== "tap" && button.enabled && buttonRef(button) === ref,
+  );
 }
 
 /** The person entity of the logged in user. */
@@ -348,11 +374,25 @@ export function liveCards(
   return result;
 }
 
+/** Whether a button's actions do anything. */
+export function hasActions(actions: ButtonActions | undefined): boolean {
+  return (
+    !!actions &&
+    (!!actions.entity_action ||
+      !!actions.notification_state ||
+      !!actions.silence ||
+      !!actions.ha_actions?.length ||
+      !!actions.navigation)
+  );
+}
+
 /**
  * Press a button of a card.
  *
- * The card changes and the Home Assistant and entity actions run in Home
- * Assistant; More info and Navigate happen here, from the given element.
+ * Its actions run in their fixed order: Silence, the entity action, the
+ * notification state and the Home Assistant actions in Home Assistant, then the
+ * navigation (More info or Navigate) here, from the given element. One that
+ * cannot run is skipped; the navigation still happens.
  */
 export async function pressButton(
   hass: HomeAssistant,
@@ -362,26 +402,34 @@ export async function pressButton(
   choice?: string,
 ): Promise<void> {
   const { card } = live;
-  const action = button.action ?? { type: "nothing" };
+  // A Tap that runs another button does what that button does.
+  if (button.type === "tap") {
+    button = runButtonOf(effectiveButtons(live.category, live.step), button) ?? button;
+  }
+  const actions = button.actions ?? {};
   // Done, Dismiss and Snooze change the card in Home Assistant, where the
-  // Home Assistant and entity actions run too.
+  // other actions but the navigation run too.
   const backend =
     ["done", "dismiss", "snooze"].includes(button.type) ||
-    action.type === "ha_action" ||
-    action.type === "entity_action" ||
-    action.type === "silence";
+    hasActions({ ...actions, navigation: undefined });
+  let failed: unknown;
   if (backend) {
-    await hass.callWS({
-      type: `${DOMAIN}/card/press`,
-      notification_id: card.notification_id,
-      step_id: card.step_id,
-      entity_id: card.entity_id,
-      button_id: button.id,
-      ...(choice ? { choice } : {}),
-    });
+    try {
+      await hass.callWS({
+        type: `${DOMAIN}/card/press`,
+        notification_id: card.notification_id,
+        step_id: card.step_id,
+        entity_id: card.entity_id,
+        button_id: button.id,
+        ...(choice ? { choice } : {}),
+      });
+    } catch (err) {
+      failed = err;
+    }
   }
-  if (action.type === "more_info") {
-    const entityId = action.entity_id || card.entity_id || live.entityId;
+  const navigation = actions.navigation;
+  if (navigation?.type === "more_info") {
+    const entityId = navigation.entity_id || card.entity_id || live.entityId;
     if (entityId) {
       element.dispatchEvent(
         new CustomEvent("hass-more-info", {
@@ -391,9 +439,10 @@ export async function pressButton(
         }),
       );
     }
-  } else if (action.type === "navigate" && action.path) {
-    navigate(action.path);
+  } else if (navigation?.type === "navigate" && navigation.path) {
+    navigate(navigation.path);
   }
+  if (failed) throw failed;
 }
 
 /** Go to a page of Home Assistant, as its own links do. */

@@ -439,7 +439,7 @@ async def test_silence_button(center: Center, hass: HomeAssistant) -> None:
                     "id": "quiet",
                     "type": "custom",
                     "label": "Quiet",
-                    "action": {"type": "silence"},
+                    "actions": {"silence": True},
                 }
             ]
         ),

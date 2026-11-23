@@ -267,7 +267,7 @@ async def test_silence_keeps_snooze_clears(center: Center, hass: HomeAssistant) 
                     "id": "quiet",
                     "type": "custom",
                     "label": "Quiet",
-                    "action": {"type": "silence"},
+                    "actions": {"silence": True},
                 }
             ],
         ),
@@ -341,10 +341,7 @@ async def test_tap_opens_the_page(center: Center, hass: HomeAssistant) -> None:
                     "type": "tap",
                     "enabled": True,
                     "open_on_tap": "/lovelace/garden",
-                    "action": {
-                        "type": "ha_action",
-                        "actions": [{"action": "light.turn_on"}],
-                    },
+                    "actions": {"ha_actions": [{"action": "light.turn_on"}]},
                 }
             ],
         ),

@@ -198,7 +198,7 @@ export class NcEntitiesBlock extends LitElement {
   }
 
   // A member of an entity group: its entity actions, each the group's or
-  // its own (Custom action).
+  // its own once changed (Reset brings the group's back).
   private _renderMemberDialog() {
     const edit = this._member!;
     const draft = this.draft;

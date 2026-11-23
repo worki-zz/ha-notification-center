@@ -44,10 +44,12 @@ from .device_colors import color_of, parse_color
 from .device_speaker import _token
 from .devices import DeviceManager
 from .model import (
+    BUTTON_EFFECTS,
     CHANNEL_PUSH,
     PUSH_PRIORITY_DEFAULT,
     SYSTEM_COLORS,
     effective_buttons,
+    run_button_of,
 )
 
 if TYPE_CHECKING:
@@ -474,11 +476,19 @@ class PushDevice(Device):
         page = (tap or {}).get("open_on_tap") or self.default_url()
         if tap is None or not tap.get("enabled"):
             return page
-        action = tap.get("action") or {"type": "nothing"}
-        if action["type"] == "nothing":
+        # A Tap that runs another button does what that button does.
+        target = run_button_of(self._buttons(card), tap) or tap
+        actions = target.get("actions") or {}
+        if not actions and target["type"] not in BUTTON_EFFECTS:
             return page
-        if action["type"] == "navigate" and action.get("path"):
-            return str(action["path"])
+        navigation = actions.get("navigation") or {}
+        # Only a page to open: no need to press it.
+        if (
+            set(actions) == {"navigation"}
+            and navigation.get("type") == "navigate"
+            and target["type"] not in BUTTON_EFFECTS
+        ):
+            return str(navigation["path"])
         return press_url(action_id(card, tap["id"]), page)
 
     def actions_of(self, card: Card) -> list[dict[str, Any]]:
@@ -495,8 +505,7 @@ class PushDevice(Device):
                 button.get("label") or DEFAULT_LABELS.get(button["type"]) or "Button"
             )
             identifier = action_id(card, button["id"])
-            kind = (button.get("action") or {}).get("type")
-            if kind in ("navigate", "more_info"):
+            if (button.get("actions") or {}).get("navigation"):
                 # It opens a page: the panel presses it and opens the page.
                 actions.append(
                     {"action": "URI", "title": title, "uri": press_url(identifier)}

@@ -44,7 +44,13 @@ import {
   effectiveButtons,
   snoozeChoices,
 } from "../../shared/live";
-import { INTERACTION_DEFAULTS, actionText } from "./interaction-dialog";
+import {
+  INTERACTION_DEFAULTS,
+  actionsText,
+  pushButtonsWarning,
+  runChoicesOf,
+  runText,
+} from "./interaction-dialog";
 import "./interaction-dialog";
 import { HELP, type StartKind } from "./step-editor.help";
 import { STEP_EDITOR_STYLES } from "./step-editor.styles";
@@ -700,22 +706,22 @@ export class NcStepEditor extends LitElement {
     return html`<div class="block">
       <div class="show-switches">
         <ha-card outlined class="own-row">
+          <ha-icon class="builtin" icon="mdi:play-circle-outline"></ha-icon>
+          <div class="own-text">Activate only while conditions are met</div>
           <ha-switch
             .checked=${show.activate_only_while_met}
             @change=${toggle("activate_only_while_met")}
           ></ha-switch>
-          <ha-icon class="builtin" icon="mdi:play-circle-outline"></ha-icon>
-          <div class="own-text">Activate only while conditions are met</div>
         </ha-card>
         <ha-card outlined class="own-row">
-          <ha-switch
-            .checked=${show.hide_while_not_met}
-            @change=${toggle("hide_while_not_met")}
-          ></ha-switch>
           <ha-icon class="builtin" icon="mdi:eye-off-outline"></ha-icon>
           <div class="own-text">
             Hide active notification while conditions are not met
           </div>
+          <ha-switch
+            .checked=${show.hide_while_not_met}
+            @change=${toggle("hide_while_not_met")}
+          ></ha-switch>
         </ha-card>
       </div>
       ${this._title("Conditions", "show")}
@@ -751,6 +757,10 @@ export class NcStepEditor extends LitElement {
     return html`<div class="block">
       ${listed
         ? html`<ha-card outlined class="own-row">
+            <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
+            <div class="own-text">
+              Done when activation conditions no longer true
+            </div>
             <ha-switch
               .checked=${step.done_when.activation_conditions_no_longer_true}
               @change=${(ev: Event) =>
@@ -763,10 +773,6 @@ export class NcStepEditor extends LitElement {
                   },
                 })}
             ></ha-switch>
-            <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
-            <div class="own-text">
-              Done when activation conditions no longer true
-            </div>
           </ha-card>`
         : nothing}
       ${this._title("Triggers", "done")}
@@ -871,7 +877,7 @@ export class NcStepEditor extends LitElement {
       </ha-card>`;
     return html`<div class="block">
       ${tap.length ? card(tap) : nothing}
-      ${this._title("Buttons", "interactions")} ${card(builtin)}
+      ${this._title("Buttons", "interactions")} ${pushButtonsWarning(rows)} ${card(builtin)}
       ${fromCategory.length ? card(fromCategory) : nothing}
       ${own.length ? card(own) : nothing}
       <div>
@@ -905,9 +911,9 @@ export class NcStepEditor extends LitElement {
           .join(", "),
       );
     }
-    if ((button.action?.type ?? "nothing") !== "nothing") {
-      parts.push(actionText(this.hass, button.action));
-    }
+    const run = runText(button, effectiveButtons(this.category, step));
+    if (run) parts.push(run);
+    else parts.push(...actionsText(this.hass, button.actions));
     const inherited = this._base(button);
     const entry = (): Button => {
       const index = this._entryIndex(step, button, button.category);
@@ -916,7 +922,7 @@ export class NcStepEditor extends LitElement {
         : ({
             id: button.id,
             type: button.type,
-            action: button.action,
+            actions: button.actions,
           } as Button);
     };
     const open = () =>
@@ -964,7 +970,7 @@ export class NcStepEditor extends LitElement {
         type: "custom",
         enabled: true,
         label: "",
-        action: { type: "nothing" },
+        actions: {},
         show_in_push: true,
         confirm: false,
       },
@@ -973,18 +979,6 @@ export class NcStepEditor extends LitElement {
 
   private _renderInteractionDialog(step: EditorStep) {
     const edit = this._interaction!;
-    const otherPushButtons = effectiveButtons(this.category, step).filter(
-      (button) =>
-        !(button.type === edit.button.type && button.id === edit.button.id) &&
-        !(
-          edit.inherited &&
-          edit.button.type !== "custom" &&
-          button.type === edit.button.type
-        ) &&
-        button.enabled &&
-        button.type !== "tap" &&
-        button.show_in_push,
-    ).length;
     return html`<nc-interaction-dialog
       .hass=${this.hass}
       .narrow=${this.narrow}
@@ -992,7 +986,7 @@ export class NcStepEditor extends LitElement {
       .inherited=${edit.inherited}
       .isNew=${edit.isNew}
       .entityActionSet=${this.entityActions.has(edit.button.id)}
-      .otherPushButtons=${otherPushButtons}
+      .runChoices=${runChoicesOf(effectiveButtons(this.category, step))}
       @interaction-closed=${(
         ev: CustomEvent<{ result?: Button | "delete" }>,
       ) => {

@@ -70,7 +70,7 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert "push_tap" not in done
     tap = next(button for button in buttons if button["type"] == "tap")
     assert "push_tap" not in tap
-    assert tap["action"] == {"type": "more_info"}
+    assert tap["actions"] == {"navigation": {"type": "more_info"}}
     assert "show_in_push" not in tap
     snooze = next(button for button in buttons if button["type"] == "snooze")
     assert snooze["enabled"] is False
@@ -273,7 +273,13 @@ async def test_0_6_8_highlight_repeat_and_push_tap_are_upgraded(
 ) -> None:
     """Highlight on/off, the speaker's until_muted and push_tap of 0.6.8."""
     config = _with_notification(
-        buttons=[{"type": "tap", "push_tap": False, "action": {"type": "more_info"}}]
+        buttons=[
+            {
+                "type": "tap",
+                "push_tap": False,
+                "actions": {"navigation": {"type": "more_info"}},
+            }
+        ]
     )
     config["speakers"] = [{"id": "x", "entity_id": "media_player.x"}]
     category = config["categories"][0]

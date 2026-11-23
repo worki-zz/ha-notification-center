@@ -36,7 +36,12 @@ import { confirmDialog } from "./confirm";
 import { chimeField, colorField, highlightField } from "./color-field";
 import { field } from "./fields";
 import { BLOCK_STYLES, block } from "./editor/block";
-import { INTERACTION_DEFAULTS } from "./editor/interaction-dialog";
+import {
+  INTERACTION_DEFAULTS,
+  pushButtonsWarning,
+  runChoicesOf,
+  runText,
+} from "./editor/interaction-dialog";
 import "./editor/interaction-dialog";
 import {
   type EditorNotification,
@@ -448,7 +453,7 @@ export class NcCategoryEditor extends LitElement {
     return html`<div class="block">
       ${card(tap)}
       <div class="title">Buttons</div>
-      ${card(builtin)} ${custom.length ? card(custom) : nothing}
+      ${pushButtonsWarning(draft.buttons)} ${card(builtin)} ${custom.length ? card(custom) : nothing}
       <div>
         <ha-button appearance="filled" size="s" @click=${this._addButton}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -467,7 +472,7 @@ export class NcCategoryEditor extends LitElement {
         ? snoozeChoices(button)
             .map((choice) => choice.text)
             .join(", ")
-        : "";
+        : runText(button, this._draft!.buttons);
     const open = () => (this._button = { button, isNew: false });
     return html`<div
       class="interaction ${button.enabled ? "" : "off"}"
@@ -528,20 +533,13 @@ export class NcCategoryEditor extends LitElement {
 
   private _renderButtonDialog() {
     const edit = this._button!;
-    const otherPushButtons = this._draft!.buttons.filter(
-      (button) =>
-        button.id !== edit.button.id &&
-        button.enabled &&
-        button.type !== "tap" &&
-        button.show_in_push,
-    ).length;
     return html`<nc-interaction-dialog
       .hass=${this.hass}
       .narrow=${this.narrow}
       mode="category"
-      .button=${{ ...edit.button, action: { type: "nothing" } } as Button}
+      .button=${{ ...edit.button, actions: {} } as Button}
       .isNew=${edit.isNew}
-      .otherPushButtons=${otherPushButtons}
+      .runChoices=${runChoicesOf(this._draft!.buttons)}
       @interaction-closed=${(
         ev: CustomEvent<{ result?: Button | "delete" }>,
       ) => {
@@ -557,7 +555,7 @@ export class NcCategoryEditor extends LitElement {
           });
           return;
         }
-        const { action: _action, confirm: _confirm, ...rest } = result;
+        const { actions: _action, confirm: _confirm, ...rest } = result;
         void _action;
         void _confirm;
         this._setButton({

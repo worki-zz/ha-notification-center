@@ -51,6 +51,7 @@ async function load(): Promise<boolean> {
   await loadSelectors();
   patchTriggerEditor();
   patchRowTitles();
+  patchActionAdd();
   patchPlatform("ha-automation-trigger-platform", "trigger");
   patchPlatform("ha-automation-condition-platform", "condition");
   return true;
@@ -123,6 +124,39 @@ function patchTriggerEditor(): void {
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(".card-content.card { padding: 16px; }");
   editor.elementStyles.push(sheet);
+}
+
+type ActionList = CustomElementConstructor & {
+  elementStyles?: unknown[];
+  prototype: { _addActionDialog?: unknown };
+  _ncAddPatched?: boolean;
+};
+
+/**
+ * Whether a button's Actions list can open Home Assistant's Add action
+ * dialog from its own Add action button (the action list's own one is
+ * hidden then).
+ */
+export function actionAddAvailable(): boolean {
+  const list = customElements.get("ha-automation-action") as ActionList | undefined;
+  return !!list?._ncAddPatched && typeof list.prototype._addActionDialog === "function";
+}
+
+// An action list with the nc-hide-add attribute hides its Add action
+// button: the button's Actions list has its own one, beside its other add
+// buttons.
+function patchActionAdd(): void {
+  const list = customElements.get("ha-automation-action") as ActionList | undefined;
+  if (
+    !list?.elementStyles ||
+    list._ncAddPatched ||
+    typeof list.prototype._addActionDialog !== "function"
+  )
+    return;
+  list._ncAddPatched = true;
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(":host([nc-hide-add]) .buttons { display: none; }");
+  list.elementStyles.push(sheet);
 }
 
 // The title of a trigger, condition or action row is an h3 that relies on

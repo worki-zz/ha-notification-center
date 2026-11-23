@@ -20,6 +20,20 @@ interface GeneralPage {
   color: string;
 }
 
+// The name of a page, as the navigation picker shows it: a panel's or
+// dashboard's title, else the path itself. Empty: the Overview.
+function pageName(hass: HomeAssistant | undefined, path: string | null | undefined): string {
+  if (!path) return "Overview";
+  const panels = (hass as { panels?: Record<string, { url_path?: string; title?: string | null }> } | undefined)
+    ?.panels;
+  const key = path.replace(/^\/+/, "").split(/[/?#]/)[0];
+  const title = panels?.[key]?.title;
+  if (!title) return path;
+  // Built-in panels have a translation key as their title.
+  const localize = (hass as { localize?: (key: string) => string } | undefined)?.localize;
+  return localize?.(`panel.${title}`) || title;
+}
+
 const count = (amount: number, one: string, more: string) => `${amount} ${amount === 1 ? one : more}`;
 
 /** The speakers and the sirens, leaving out what there is none of. */
@@ -108,18 +122,18 @@ export class NcSettingsGeneral extends LitElement {
         color: "#EC407A",
       },
       {
+        key: "push",
+        name: "Push",
+        description: pageName(this.hass, config.general?.open_on_tap),
+        icon: "mdi:cellphone-message",
+        color: "#29B6F6",
+      },
+      {
         key: "snooze",
         name: "Snooze",
         description: `At ${tomorrow.slice(0, 5)}`,
         icon: "mdi:alarm-snooze",
         color: "#26A69A",
-      },
-      {
-        key: "push",
-        name: "Push",
-        description: `Open on tap: ${config.general?.open_on_tap || "Overview"}`,
-        icon: "mdi:cellphone-message",
-        color: "#29B6F6",
       },
       {
         key: "import",
@@ -215,8 +229,7 @@ export class NcSettingsGeneral extends LitElement {
       }}
     >
       <p class="hint">
-        The page a tap on a push opens, unless its category or notification sets one. The phones are set on the
-        People page.
+        The page a tap on a push opens, unless its category or notification sets one.
       </p>
       ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
       ${field(

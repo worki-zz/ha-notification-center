@@ -41,14 +41,16 @@ from .normalize import normalize_notification
 
 STORAGE_VERSION: Final = 1
 # 2: the Push channel starts switched off (0.6.8).
-STORAGE_MINOR_VERSION: Final = 2
+# 3: a button has a list of actions instead of one action (0.7.1).
+STORAGE_MINOR_VERSION: Final = 3
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
 
 # The version written into YAML exports, so that an older export can be
 # migrated when it is imported.
-EXPORT_VERSION: Final = 1
+# 2: a button has a list of actions instead of one action (0.7.1).
+EXPORT_VERSION: Final = 2
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -66,7 +68,44 @@ class _ConfigStore(Store[ConfigData]):
         # here, step by step, so that an update never loses settings.
         if old_major_version == 1 and old_minor_version < 2:
             switch_push_off(old_data)
+        if old_major_version == 1 and old_minor_version < 3:
+            upgrade_button_actions(old_data)
         return old_data
+
+
+# What a button's one action of the earlier data model becomes in its list.
+_OLD_ACTIONS: Final[dict[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {
+    "ha_action": lambda old: {"ha_actions": list(old.get("actions") or [])},
+    "entity_action": lambda old: {"entity_action": True},
+    "silence": lambda old: {"silence": True},
+    "more_info": lambda old: {
+        "navigation": {
+            "type": "more_info",
+            **({"entity_id": old["entity_id"]} if old.get("entity_id") else {}),
+        }
+    },
+    "navigate": lambda old: {
+        "navigation": {"type": "navigate", "path": old.get("path") or ""}
+    },
+}
+
+
+def upgrade_button_actions(data: dict[str, Any]) -> None:
+    """Turn every button's one action into its list of actions.
+
+    Nothing (and the never offered Show attachment) becomes an empty list.
+    """
+    for notification in data.get("notifications") or []:
+        steps = notification.get("steps") if isinstance(notification, dict) else None
+        for step in steps or []:
+            buttons = step.get("buttons") if isinstance(step, dict) else None
+            for button in buttons or []:
+                if not isinstance(button, dict) or "action" not in button:
+                    continue
+                old = button.pop("action")
+                kind = old.get("type") if isinstance(old, dict) else None
+                upgrade = _OLD_ACTIONS.get(kind) if isinstance(kind, str) else None
+                button["actions"] = upgrade(old) if upgrade else {}
 
 
 def switch_push_off(data: dict[str, Any]) -> None:
@@ -392,8 +431,10 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version != EXPORT_VERSION:
+        if version not in (1, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
+        if version < 2:
+            upgrade_button_actions(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(
