@@ -424,6 +424,70 @@ async def test_sirens(center: Center, hass: HomeAssistant) -> None:
     assert select[-1].data["option"] == "stop"
 
 
+async def test_light_reconfigure_while_showing(
+    center: Center, hass: HomeAssistant
+) -> None:
+    """Saving a light's settings while it shows a card applies them at once."""
+    await center.set("light.strip", "off", supported_color_modes=["hs"])
+    on = async_mock_service(hass, "light", "turn_on")
+    key = await _light(center)
+    await _category(
+        center,
+        color="red",
+        channels={"dashboard": {"modes": ["home"]}, key: {"modes": ["home"]}},
+    )
+    await center.add("Leak", step())
+    await center.call("trigger", "sensor.nc_leak")
+    assert on[-1].data["brightness_pct"] == 70
+
+    item = dict(center.manager.config["lights"][0])
+    await center.manager.async_update("lights", item["id"], {**item, "brightness": 20})
+    await hass.async_block_till_done()
+    assert on[-1].data["brightness_pct"] == 20
+
+
+async def test_test_does_not_change_live_settings(
+    center: Center, hass: HomeAssistant
+) -> None:
+    """The Test button uses the dialog's values for the test only."""
+    await center.set("light.strip", "off", supported_color_modes=["hs"])
+    async_mock_service(hass, "light", "turn_on")
+    async_mock_service(hass, "light", "turn_off")
+    key = await _light(center, brightness=40)
+    devices = center.entry.runtime_data.devices
+    await devices.async_test(
+        key,
+        {"color": "red", "device": {"entity_id": "light.strip", "brightness": 90}},
+    )
+    assert devices.devices[key].settings["brightness"] == 40
+
+
+async def test_siren_follows_a_change_and_stops(
+    center: Center, hass: HomeAssistant
+) -> None:
+    """A sounding siren moves to a new entity, and stops when unloaded."""
+    await center.set("siren.balcony", "off")
+    await center.set("siren.hall", "off")
+    on = async_mock_service(hass, "siren", "turn_on")
+    off = async_mock_service(hass, "siren", "turn_off")
+    item = await center.manager.async_create("sirens", {"entity_id": "siren.balcony"})
+    await center.manager.async_set_channel_modes(f"siren:{item['id']}", ["home"])
+    await center.add("Smoke", step())
+    await center.call("trigger", "sensor.nc_smoke")
+    assert [call.data["entity_id"] for call in on] == ["siren.balcony"]
+
+    await center.manager.async_update(
+        "sirens", item["id"], {**item, "entity_id": "siren.hall"}
+    )
+    await hass.async_block_till_done()
+    assert [call.data["entity_id"] for call in off] == ["siren.balcony"]
+    assert on[-1].data["entity_id"] == "siren.hall"
+
+    assert await hass.config_entries.async_unload(center.entry.entry_id)
+    await hass.async_block_till_done()
+    assert off[-1].data["entity_id"] == "siren.hall"
+
+
 async def test_silence_button(center: Center, hass: HomeAssistant) -> None:
     """A button with the Silence action keeps the card and stops the siren."""
     await center.set("switch.siren", "off")

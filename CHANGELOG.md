@@ -6,6 +6,9 @@
 
 - Conditions with a *Notification state* or *Notification entities* condition on other cards (Show when, Hide while, Done when activation conditions no longer true) are checked again when a card changes; entity conditions also every minute.
 - A *Notification state* trigger on *Dismissed* or *Expired* with *For* never fired: the card is gone at once. It fires now, unless a newer card took its place.
+- A light shows the new settings (brightness, colour, effect) at once when they are saved while it shows a card; it also blinks again.
+- A channel's **Test** uses the values of the dialog for the test only; the running light, speaker or siren keeps its saved settings (closing the dialog with Cancel used to leave the tried values in use).
+- A sounding siren moves to a changed entity, and stops when the integration unloads or reloads.
 
 ## 0.7.1
 

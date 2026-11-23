@@ -120,6 +120,9 @@ class LightDevice(Device):
         """Follow the (maybe new) entity and sensor, and show again."""
         self.stop()
         self._follow()
+        # The look follows the settings (colour, brightness): it is made
+        # again by the update that follows a change, and shown.
+        self.look = None
         self._applied = None
 
     def stop(self) -> None:
@@ -344,16 +347,6 @@ class LightDevice(Device):
 
     async def async_test(self, data: dict[str, Any]) -> None:
         """Show a colour for a few seconds, then go back."""
-        if data.get("device"):
-            self.settings = {**self.settings, **data["device"]}
-        color = data.get("color") or color_of(
-            data.get("notification"), data.get("category")
-        )
-        look = Look(
-            rgb=light_rgb(self.settings, color, self._colors()),
-            highlight=bool(data.get("highlight"))
-            or highlight_of(data.get("notification"), data.get("category")),
-        )
         # A test while another runs: the light goes back to how it was
         # before the first one, after the last one.
         if self._test_before is None:
@@ -365,17 +358,26 @@ class LightDevice(Device):
         self._test_run += 1
         run = self._test_run
         self._testing = True
-        self.look = look
         self._applied = None
         self._stop_blink()
         try:
-            await self._async_on(self._on_data(look))
-            if self._own_blink(look):
-                self._blink_on = True
-                self._blink = async_track_time_interval(
-                    self.hass, self._blink_step, BLINK_INTERVAL
+            with self._test_settings(data):
+                color = data.get("color") or color_of(
+                    data.get("notification"), data.get("category")
                 )
-            await asyncio.sleep(TEST_SECONDS)
+                look = Look(
+                    rgb=light_rgb(self.settings, color, self._colors()),
+                    highlight=bool(data.get("highlight"))
+                    or highlight_of(data.get("notification"), data.get("category")),
+                )
+                self.look = look
+                await self._async_on(self._on_data(look))
+                if self._own_blink(look):
+                    self._blink_on = True
+                    self._blink = async_track_time_interval(
+                        self.hass, self._blink_step, BLINK_INTERVAL
+                    )
+                await asyncio.sleep(TEST_SECONDS)
         finally:
             if run == self._test_run:
                 await self._async_end_test(previous, saved)

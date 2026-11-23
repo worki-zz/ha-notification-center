@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -40,6 +42,9 @@ class Device:
         self.settings = settings
         self.standalone = standalone
         self.cards: list[Card] = []
+        self._test_depth = 0
+        self._live_settings: dict[str, Any] | None = None
+        self._tested: dict[str, Any] | None = None
 
     @property
     def entity_id(self) -> str:
@@ -68,6 +73,29 @@ class Device:
 
     async def async_test(self, data: dict[str, Any]) -> None:
         """Run the device once."""
+
+    @contextmanager
+    def _test_settings(self, data: dict[str, Any]) -> Iterator[None]:
+        """Use the unsaved settings of a dialog for a test only.
+
+        The live device gets its own settings back afterwards (unless the
+        configuration changed meanwhile).
+        """
+        device = data.get("device")
+        if not device or self.standalone:
+            yield
+            return
+        if self._test_depth == 0:
+            self._live_settings = self.settings
+        self._test_depth += 1
+        self.settings = self._tested = {**self.settings, **device}
+        try:
+            yield
+        finally:
+            self._test_depth -= 1
+            if self._test_depth == 0 and self.settings is self._tested:
+                self.settings = self._live_settings or self.settings
+                self._live_settings = None
 
     async def _call(
         self,

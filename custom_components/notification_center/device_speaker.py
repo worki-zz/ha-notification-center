@@ -377,27 +377,26 @@ class SpeakerDevice(Device):
 
     async def async_test(self, data: dict[str, Any]) -> None:
         """Play the chime and read a sample text."""
-        if data.get("device"):
-            self.settings = {**self.settings, **data["device"]}
-        settings = data.get("settings") or {}
-        category = data.get("category") or {}
-        chime = (
-            chime_of(data.get("notification"), category)
-            if settings.get("play_chime", True)
-            else None
-        )
-        text = None
-        if settings.get("read_the_message"):
-            text = spoken_text(
-                data.get("name"),
-                data.get("message") or "This is a test of Notification Center.",
-                data.get("info"),
-                with_name=bool(settings.get("read_name")),
-                with_info=bool(settings.get("read_info")),
+        with self._test_settings(data):
+            settings = data.get("settings") or {}
+            category = data.get("category") or {}
+            chime = (
+                chime_of(data.get("notification"), category)
+                if settings.get("play_chime", True)
+                else None
             )
-        await self._async_play(
-            Sound(chime=chime, text=text, volume=settings.get("volume"))
-        )
+            text = None
+            if settings.get("read_the_message"):
+                text = spoken_text(
+                    data.get("name"),
+                    data.get("message") or "This is a test of Notification Center.",
+                    data.get("info"),
+                    with_name=bool(settings.get("read_name")),
+                    with_info=bool(settings.get("read_info")),
+                )
+            await self._async_play(
+                Sound(chime=chime, text=text, volume=settings.get("volume"))
+            )
 
 
 def spoken_text(

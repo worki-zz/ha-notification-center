@@ -36,6 +36,8 @@ class SirenDevice(Device):
         """Set up the siren."""
         super().__init__(manager, key, settings, standalone=standalone)
         self.on = False
+        # The settings of the entity that sounds now.
+        self._sounding: dict[str, Any] | None = None
 
     @property
     def domain(self) -> str:
@@ -53,13 +55,25 @@ class SirenDevice(Device):
             )
             self.manager.changed()
 
+    def reconfigure(self) -> None:
+        """Move the sound to a changed entity or setting."""
+        old = self._sounding
+        if self.on and old is not None and old != self.settings:
+            self.hass.async_create_task(self._async_off(old), eager_start=True)
+            self.hass.async_create_task(self._async_on(), eager_start=True)
+
     def release(self) -> None:
         """Stop the siren: it was removed from the settings."""
         if self.on:
             self.on = False
             self.hass.async_create_task(self._async_off(), eager_start=True)
 
+    def stop(self) -> None:
+        """Stop the siren: the integration unloads."""
+        self.release()
+
     async def _async_on(self) -> None:
+        self._sounding = self.settings
         target = {ATTR_ENTITY_ID: self.entity_id}
         if self.domain == "select":
             if option := self.settings.get("option"):
@@ -79,15 +93,18 @@ class SirenDevice(Device):
             data["duration"] = int(self.settings["duration"])
         await self._call("siren", "turn_on", data)
 
-    async def _async_off(self) -> None:
-        target = {ATTR_ENTITY_ID: self.entity_id}
-        if self.domain == "select":
-            if option := self.settings.get("stop_option"):
+    async def _async_off(self, settings: dict[str, Any] | None = None) -> None:
+        settings = settings or self.settings
+        entity_id = str(settings["entity_id"])
+        domain = entity_id.split(".", 1)[0]
+        target = {ATTR_ENTITY_ID: entity_id}
+        if domain == "select":
+            if option := settings.get("stop_option"):
                 await self._call(
                     "select", "select_option", {**target, "option": option}
                 )
             return
-        await self._call(self.domain, "turn_off", target)
+        await self._call(domain, "turn_off", target)
 
     def summary(self) -> dict[str, Any]:
         """Return whether the siren sounds."""
@@ -95,11 +112,10 @@ class SirenDevice(Device):
 
     async def async_test(self, data: dict[str, Any]) -> None:
         """Sound for a few seconds."""
-        if data.get("device"):
-            self.settings = {**self.settings, **data["device"]}
         if self.on and not self.standalone:
             return
-        await self._async_on()
-        await asyncio.sleep(SIREN_TEST_SECONDS)
-        if not self.on or self.standalone:
-            await self._async_off()
+        with self._test_settings(data):
+            await self._async_on()
+            await asyncio.sleep(SIREN_TEST_SECONDS)
+            if not self.on or self.standalone:
+                await self._async_off()
