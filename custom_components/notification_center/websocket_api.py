@@ -10,10 +10,11 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from datetime import datetime, time
 from functools import wraps
-from typing import Any, Final
+import logging
+from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
@@ -37,6 +38,12 @@ from .schedule import (
     every,
 )
 from .store import ConfigManager, async_people_view
+
+if TYPE_CHECKING:
+    from .cards import Card
+    from .engine import Engine
+
+_LOGGER = logging.getLogger(__name__)
 
 ERR_INVALID: Final = "invalid_config"
 
@@ -589,18 +596,31 @@ async def ws_card_press(
         if until is None:
             connection.send_error(msg["id"], ERR_INVALID, "until is not a time")
             return
+    if engine.button_of(card, msg["button_id"]) is None:
+        connection.send_error(msg["id"], ERR_INVALID, "The button is not there")
+        return
+    # The actions run one after the other; the panel does not wait for a
+    # long one (a delay) before it goes on.
+    hass.async_create_background_task(
+        _async_press(engine, card, msg, until, connection.context(msg)),
+        f"{DOMAIN} press {msg['button_id']}",
+    )
+    connection.send_result(msg["id"])
+
+
+async def _async_press(
+    engine: Engine,
+    card: Card,
+    msg: dict[str, Any],
+    until: datetime | None,
+    context: Context,
+) -> None:
     try:
         await engine.async_press(
-            card,
-            msg["button_id"],
-            until,
-            connection.context(msg),
-            choice=msg.get("choice"),
+            card, msg["button_id"], until, context, choice=msg.get("choice")
         )
     except HomeAssistantError as err:
-        connection.send_error(msg["id"], ERR_INVALID, str(err))
-        return
-    connection.send_result(msg["id"])
+        _LOGGER.warning("Button %s: %s", msg["button_id"], err)
 
 
 @websocket_api.websocket_command(

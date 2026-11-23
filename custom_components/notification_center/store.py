@@ -35,6 +35,7 @@ from .model import (
     default_config,
     detach_category_buttons,
     new_id,
+    notifications_using,
     validate_item,
 )
 from .normalize import normalize_notification
@@ -272,6 +273,12 @@ class ConfigManager:
             if used:
                 raise ConfigValidationError(
                     "the category is used by: " + ", ".join(used)
+                )
+        if section == "notifications":
+            users = notifications_using(config, item_id)
+            if users:
+                raise ConfigValidationError(
+                    "the notification is used by: " + ", ".join(users)
                 )
         del config[section][index]
         _remove_references(config, section, item_id)

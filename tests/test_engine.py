@@ -15,6 +15,8 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.notification_center.model import ConfigValidationError
+
 from .common import Center, load, state_trigger, step, tick
 
 
@@ -539,3 +541,33 @@ async def test_notification_state_trigger_dismissed_for(
     assert center.state("sensor.nc_follow_up") == "idle"
     await tick(hass, freezer, timedelta(seconds=61))
     assert center.state("sensor.nc_follow_up") == "active"
+
+
+async def test_references_of_conditions_and_steps(center: Center) -> None:
+    """Conditions and steps are checked too; a delete names who uses it."""
+    waste = await center.add("Waste", step())
+    condition = {
+        "condition": "notification_center.notification_state",
+        "notification": waste,
+        "state": "done",
+    }
+
+    def user(extra: dict[str, str | int]) -> dict[str, object]:
+        return step(
+            conditions={
+                "activate_only_while_met": False,
+                "hide_while_not_met": True,
+                "conditions": [{**condition, **extra}],
+            }
+        )
+
+    with pytest.raises(ConfigValidationError, match="no notification 'gone'"):
+        await center.add("Bad", user({"notification": "gone"}))
+    with pytest.raises(ConfigValidationError, match="no step 'gone'"):
+        await center.add("Bad step", user({"step": "gone"}))
+    with pytest.raises(ConfigValidationError, match="no step '3'"):
+        await center.add("Bad number", user({"step": 3}))
+
+    await center.add("Check", user({"step": 1}))
+    with pytest.raises(ConfigValidationError, match="used by: Check"):
+        await center.manager.async_delete("notifications", waste)

@@ -9,6 +9,9 @@
 - A light shows the new settings (brightness, colour, effect) at once when they are saved while it shows a card; it also blinks again.
 - A channel's **Test** uses the values of the dialog for the test only; the running light, speaker or siren keeps its saved settings (closing the dialog with Cancel used to leave the tried values in use).
 - A sounding siren moves to a changed entity, and stops when the integration unloads or reloads.
+- A button's actions run one after the other: each waits for the one before it (Silence, the entity action, the notification state, then the Home Assistant actions). The panel does not wait for the actions to finish.
+- A *Notification entities* trigger in an automation keeps following the lists after the integration is reloaded, and passes the context of the state change on.
+- Saving checks the notification and step named by a *Notification state* or *Notification entities* condition too (not only triggers), and the step of a trigger or condition. Deleting a notification that others refer to says which ones.
 
 ## 0.7.1
 
