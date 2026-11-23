@@ -25,7 +25,7 @@ const STATE_HELP: Record<AudienceState, string> = {
 
 
 /** "As Home Assistant draws a person": the picture, or the initials. */
-function avatar(person: PersonInfo) {
+export function avatar(person: PersonInfo) {
   if (customElements.get("ha-person-badge")) {
     return html`<ha-person-badge
       class="avatar"

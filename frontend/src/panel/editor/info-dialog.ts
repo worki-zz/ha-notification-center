@@ -16,6 +16,7 @@ import type {
 import { formatWhen } from "../../shared/format";
 import { categoryOf } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
+import { avatar } from "../audience-table";
 import { STATE_NAMES, effectiveChannel, haPeople } from "../channel-helpers";
 import { type ChannelInfo, channelIcon, channelsOf } from "../devices";
 
@@ -39,11 +40,6 @@ const TONE_ICONS: Record<Tone, string> = {
   off: "mdi:close-circle-outline",
 };
 
-const PERSON_ICONS: Record<AudienceState, string> = {
-  home: "mdi:home-account",
-  sleep: "mdi:sleep",
-  away: "mdi:account-arrow-right",
-};
 
 /** "Anna", "Anna and Béla", "Anna, Béla and Cecil". */
 function names(list: string[]): string {
@@ -237,7 +233,7 @@ export class NcInfoDialog extends LitElement {
       else if (!gets) text += ` · Not in the audience while ${STATE_NAMES[state].toLowerCase()}`;
       const ok = gets && !noPhone;
       return html`<ha-list-item-base class="person">
-        <ha-icon slot="start" class="row-icon" .icon=${PERSON_ICONS[state]}></ha-icon>
+        <span slot="start" class="person-avatar">${avatar(person)}</span>
         <span slot="headline">${person.name}</span>
         <span slot="supporting-text">${text}</span>
         <ha-icon
@@ -346,6 +342,21 @@ export class NcInfoDialog extends LitElement {
     /* A person under Dashboard or Push: indented to the channel's name. */
     ha-list-item-base.person {
       margin-inline-start: 40px;
+    }
+    /* The person's picture or initials, as in the Audience table. */
+    .person-avatar .avatar {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      overflow: hidden;
+      background-color: var(--light-primary-color);
+      color: var(--text-light-primary-color, var(--primary-text-color));
+      font-size: var(--ha-font-size-s, 12px);
+      --ha-person-badge-size: 32px;
     }
     .row-icon.waits {
       color: var(--ha-color-fill-warning-loud-resting, var(--warning-color, #ff9800));
