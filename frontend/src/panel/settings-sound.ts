@@ -10,12 +10,14 @@ import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import {
+  BUILTIN_CHIMES,
   type Chime,
   DOMAIN,
   type GeneralSettings,
   type NotificationCenterConfig,
   type Siren,
   type Speaker,
+  SOUNDS_URL,
   orderedChimes,
 } from "../shared/config";
 import { errorText, navigate } from "../shared/live";
@@ -88,6 +90,11 @@ export class NcSettingsSound extends LitElement {
   @state() private _dialogError?: string;
 
   @state() private _busy = false;
+
+  // The chime that plays on this device, from the Chimes list's play button.
+  @state() private _playing?: string;
+
+  private _audio?: HTMLAudioElement;
 
   // The Read the message dialog, while open.
   @state() private _reading?: Reading;
@@ -166,18 +173,15 @@ export class NcSettingsSound extends LitElement {
   private _deviceRow(section: DeviceSection, item: Speaker | Siren) {
     const name = entityName(this.hass, item.entity_id);
     const icon = section === "speakers" ? "mdi:speaker" : "mdi:alarm-light-outline";
-    return html`<div
-      class="row"
-      role="button"
-      tabindex="0"
-      @click=${() => this._open({ section, item: structuredClone(item) } as Edit)}
-    >
+    return html`<div class="row static">
       ${channelIcon(this.hass, { key: `${KIND[section]}:${item.id}`, name, icon, entity_id: item.entity_id })}
       <div class="text">
         <div>${name}</div>
         <div class="secondary">${this._summary(section, item)}</div>
       </div>
-      <ha-icon-next></ha-icon-next>
+      <ha-icon-button .label=${"Edit"} @click=${() => this._open({ section, item: structuredClone(item) } as Edit)}>
+        <ha-icon icon="mdi:pencil"></ha-icon>
+      </ha-icon-button>
     </div>`;
   }
 
@@ -243,15 +247,8 @@ export class NcSettingsSound extends LitElement {
               (chime) => chime.id,
               (chime) => {
                 const item = own.get(chime.id);
-                return html`<div
-                  class=${item ? "row" : "row static"}
-                  role=${item ? "button" : nothing}
-                  tabindex=${item ? "0" : nothing}
-                  @click=${() => {
-                    if (item) this._open({ section: "chimes", item: structuredClone(item) });
-                  }}
-                >
-                  <div class="handle" title="Drag to reorder" @click=${(ev: Event) => ev.stopPropagation()}>
+                return html`<div class="row static">
+                  <div class="handle" title="Drag to reorder">
                     <ha-icon icon="mdi:drag-horizontal-variant"></ha-icon>
                   </div>
                   <ha-icon .icon=${item ? "mdi:music-note-outline" : "mdi:music-note"}></ha-icon>
@@ -259,7 +256,20 @@ export class NcSettingsSound extends LitElement {
                     <div>${chime.name}</div>
                     <div class="secondary">${item ? (item.media?.media_content_id ?? "") : "Built-in"}</div>
                   </div>
-                  ${item ? html`<ha-icon-next></ha-icon-next>` : nothing}
+                  <ha-icon-button
+                    .label=${this._playing === chime.id ? "Stop" : "Play"}
+                    @click=${() => void this._play(chime.id)}
+                  >
+                    <ha-icon .icon=${this._playing === chime.id ? "mdi:stop" : "mdi:play"}></ha-icon>
+                  </ha-icon-button>
+                  ${item
+                    ? html`<ha-icon-button
+                        .label=${"Edit"}
+                        @click=${() => this._open({ section: "chimes", item: structuredClone(item) })}
+                      >
+                        <ha-icon icon="mdi:pencil"></ha-icon>
+                      </ha-icon-button>`
+                    : html`<span class="edit-space"></span>`}
                 </div>`;
               },
             )}
@@ -272,6 +282,53 @@ export class NcSettingsSound extends LitElement {
           Add chime
         </ha-button>
       </div>`;
+  }
+
+  // Plays a chime on this device (the browser); again stops it.
+  private async _play(id: string): Promise<void> {
+    const again = this._playing === id;
+    this._stopPlaying();
+    if (again || !this.hass) return;
+    this._error = undefined;
+    try {
+      const builtin = BUILTIN_CHIMES.find((chime) => chime.id === id);
+      let url: string;
+      if (builtin) {
+        url = `${SOUNDS_URL}/${builtin.file}`;
+      } else {
+        const media = this.config?.chimes?.find((chime) => chime.id === id)?.media;
+        if (!media) return;
+        url = media.media_content_id;
+        if (url.startsWith("media-source://")) {
+          const resolved = await this.hass.callWS<{ url: string }>({
+            type: "media_source/resolve_media",
+            media_content_id: url,
+          });
+          url = resolved.url;
+        }
+      }
+      const audio = new Audio(url);
+      this._audio = audio;
+      this._playing = id;
+      audio.addEventListener("ended", () => {
+        if (this._audio === audio) this._stopPlaying();
+      });
+      await audio.play();
+    } catch (err) {
+      this._stopPlaying();
+      this._error = errorText(err);
+    }
+  }
+
+  private _stopPlaying(): void {
+    this._audio?.pause();
+    this._audio = undefined;
+    this._playing = undefined;
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._stopPlaying();
   }
 
   private async _chimeMoved(ev: CustomEvent<{ oldIndex: number; newIndex: number }>): Promise<void> {
@@ -635,7 +692,7 @@ export class NcSettingsSound extends LitElement {
         title: `Delete ${name}?`,
         text:
           edit.section === "chimes"
-            ? "Categories and notifications that play it play nothing instead."
+            ? "Categories that play it play Chime instead, and notifications their category's."
             : "It leaves its channel in every category and notification.",
         confirm: "Delete",
         destructive: true,
@@ -662,6 +719,11 @@ export class NcSettingsSound extends LitElement {
       }
       .nav-icon {
         color: var(--secondary-text-color);
+      }
+      /* Where a built-in chime has no Edit, so the play buttons line up. */
+      .edit-space {
+        flex: none;
+        width: 48px;
       }
       /* A line between the rows, as in the General list. */
       ha-list-item-button + ha-list-item-button {

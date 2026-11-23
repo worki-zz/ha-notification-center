@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.7
+
+### Changed
+
+- Light, Sound (speakers and sirens), Chimes and Colors: a pencil at the end of each row opens its dialog, as in the People and Home modes lists; the row itself is not a button any more.
+- Chimes: a play button before the pencil plays the sound on this device; pressed again, it stops.
+- Deleting an own chime: its categories play Chime and its notifications their category's (the delete text said nothing plays).
+
 ## 0.6.6
 
 ### Changed

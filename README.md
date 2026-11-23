@@ -83,7 +83,7 @@ A home mode tells which channels deliver a notification (the Channels table of t
 
 ### Light
 
-The lights of the Light channel: lights and switches (a lamp on a plug). *Add light* is a button like Home Assistant's *Add target*, which opens an entity picker: the light is added at once with the default settings, then asks which home modes it sends in, the same in every category (each category can change it later). A row shows *Brightness 70% · Dim: 30% · Highlight: Blink* and opens the light's dialog; its entity cannot be changed (delete it and add another). The dialog's fields follow what the light can do:
+The lights of the Light channel: lights and switches (a lamp on a plug). *Add light* is a button like Home Assistant's *Add target*, which opens an entity picker: the light is added at once with the default settings, then asks which home modes it sends in, the same in every category (each category can change it later). A row shows *Brightness 70% · Dim: 30% · Highlight: Blink*; its pencil opens the light's dialog; its entity cannot be changed (delete it and add another). The dialog's fields follow what the light can do:
 
 - **Settings:** *Brightness* (70% by default), *Color temperature* for a white-only light (empty: its own), *Highlight effect* (Blink, one second on and one off, or an effect of the light when it has effects), and **Dim when dark**: an illuminance sensor (empty: no dimming) with *Dim below* (30 lx) beside it, *Dim brightness* (30%), and *Measure illuminance continuously* (on by default: follow the sensor while the light is on; off, it is read when the light turns on, for a sensor the light shines on).
 - **Colors** (colour lights): each system and custom colour as this light shows it, in a *System colors* and a *Custom colors* list, with a picker, a reset for a changed one and a Test per row. A lamp has no grey, so Light grey, Grey and Dark grey are white by default. Tests one after the other bring the light back to how it was before the first.
@@ -92,21 +92,21 @@ A light shows the colour of the first notification it sends, in the order of the
 
 ### Sound
 
-The speakers and the sirens are one list, with a *Speakers* and a *Sirens* header and a line between the rows. *Add speaker* and *Add siren* below are buttons like Home Assistant's *Add target*, which open an entity picker: the device is added at once with its defaults (a select first asks which option sounds), then asks which home modes it sends in. A row opens the device's dialog; its entity cannot be changed.
+The speakers and the sirens are two lists, *Speakers* and *Sirens*, with a line between the rows. *Add speaker* and *Add siren* below them are buttons like Home Assistant's *Add target*, which open an entity picker: the device is added at once with its defaults (a select first asks which option sounds), then asks which home modes it sends in. A row's pencil opens the device's dialog; its entity cannot be changed.
 
 - **Speakers:** a media player with an optional *Volume* (empty: its volume stays; X clears it). A speaker that can announce plays the chime over what it plays; another one stops, plays the chime and gets its volume back.
 - **Sirens:** a siren (with tone, volume and duration when it has them), a switch, or a select with a *Sound option* and a *Stop option* (such as a smoke alarm's siren select).
 
 Below them, two rows:
 
-- **Chimes** opens its own page: the built-in sounds (Chime, Attention, Doorbell, Alarm, Indoor alarm) and your own, any media of Home Assistant's media browser. Drag the rows to set their order in the chime lists (alphabetical by default).
+- **Chimes** opens its own page: the built-in sounds (Chime, Attention, Doorbell, Alarm, Indoor alarm) and your own, any media of Home Assistant's media browser. Drag the rows to set their order in the chime lists (alphabetical by default). Each row has a play button that plays the sound on this device (again stops it), and an own chime a pencil that opens its dialog.
 - **Read the message** opens a dialog: the text-to-speech service that reads the message aloud, and its language (empty: the service's own; X clears it).
 
 A speaker plays the chime once when a notification starts to send there, then reads the message if asked, and repeats if set. A siren sounds while a notification sends. A button's **Silence** action stops the lights, speakers and sirens of the notification; the card stays.
 
 ### Colors
 
-The colours of the categories and notifications. *System colors* shows Home Assistant's system colours as a palette (the name shows on hover); they cannot be changed. *Custom colors* lists your own colours below it. *Add color* and a row of a custom colour open its dialog: *Name* and the colour. A custom colour shows in every Color field, after the system colours, and on each light's Colors tab, where the light can show it with its own RGB. Deleting a custom colour gives its categories the default colour and its notifications their category's.
+The colours of the categories and notifications. *System colors* shows Home Assistant's system colours as a palette (the name shows on hover); they cannot be changed. *Custom colors* lists your own colours below it. *Add color* and the pencil of a custom colour open its dialog: *Name* and the colour. A custom colour shows in every Color field, after the system colours, and on each light's Colors tab, where the light can show it with its own RGB. Deleting a custom colour gives its categories the default colour and its notifications their category's.
 
 ### People
 
