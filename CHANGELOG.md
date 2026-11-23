@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0
+
 First round of phase 7 (moving a real setup into the panel).
 
 ### Added
@@ -13,6 +15,7 @@ First round of phase 7 (moving a real setup into the panel).
 
 ### Changed
 
+- The configuration is saved when loading changed it (earlier forms are upgraded once, not at every start).
 - The Tap behavior has no "Also when the push notification is tapped" switch: a tap on the push always opens the app and runs the Tap. `push_tap` is dropped when the configuration is loaded.
 - Highlight on/off of earlier versions becomes *Alert* / *Normal*; a speaker's earlier Loop (`until_muted`) becomes the new *Loop*.
 - A category's Color, Highlight and Chime fields do not mark a value *(default)*; only a notification marks its category's.
