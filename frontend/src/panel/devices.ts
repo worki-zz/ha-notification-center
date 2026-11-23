@@ -8,6 +8,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import {
   CHANNEL_DASHBOARD,
+  CHANNEL_PUSH,
   DOMAIN,
   type Mode,
   type NotificationCenterConfig,
@@ -15,7 +16,7 @@ import {
 import { errorText } from "../shared/live";
 import type { HassEntity, HomeAssistant } from "../shared/types";
 
-export type ChannelKind = "dashboard" | "light" | "speaker" | "siren";
+export type ChannelKind = "dashboard" | "push" | "light" | "speaker" | "siren";
 
 export interface ChannelInfo {
   key: string;
@@ -34,6 +35,7 @@ export const SIREN_DURATION = 16;
 
 const KIND_ICONS: Record<ChannelKind, string> = {
   dashboard: "mdi:view-dashboard-outline",
+  push: "mdi:cellphone-message",
   light: "mdi:lightbulb-outline",
   speaker: "mdi:speaker",
   siren: "mdi:alarm-light-outline",
@@ -53,13 +55,14 @@ export function features(state: HassEntity | undefined): number {
   return Number(state?.attributes.supported_features ?? 0);
 }
 
-/** The channels in their order: Dashboard, the lights, the speakers, the sirens. */
+/** The channels in their order: Dashboard, Push, the lights, the speakers, the sirens. */
 export function channelsOf(
   hass: HomeAssistant | undefined,
   config: NotificationCenterConfig | undefined,
 ): ChannelInfo[] {
   const channels: ChannelInfo[] = [
     { key: CHANNEL_DASHBOARD, name: "Dashboard", icon: KIND_ICONS.dashboard, kind: "dashboard" },
+    { key: CHANNEL_PUSH, name: "Push", icon: KIND_ICONS.push, kind: "push" },
   ];
   const add = (items: { id: string; entity_id: string }[] | undefined, kind: ChannelKind) => {
     for (const item of items ?? []) {
@@ -97,9 +100,15 @@ export async function testChannel(
 }
 
 /** The Test button of a dialog's header: a play icon. */
-export function testButton(label: string, run: () => void, disabled = false) {
-  return html`<ha-icon-button slot="headerActionItems" .label=${label} .disabled=${disabled} @click=${run}>
-    <ha-icon icon="mdi:play"></ha-icon>
+export function testButton(label: string, run: () => void, disabled = false, icon = "mdi:play") {
+  return html`<ha-icon-button
+    slot="headerActionItems"
+    .label=${label}
+    title=${label}
+    .disabled=${disabled}
+    @click=${run}
+  >
+    <ha-icon .icon=${icon}></ha-icon>
   </ha-icon-button>`;
 }
 
