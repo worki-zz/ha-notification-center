@@ -232,14 +232,17 @@ export class NcInfoDialog extends LitElement {
       else if (!view.audience.includes(person.id)) text += " · Not in the audience";
       else if (!gets) text += ` · Not in the audience while ${STATE_NAMES[state].toLowerCase()}`;
       const ok = gets && !noPhone;
+      // Not in the audience now: it waits, like a channel waiting for its
+      // home mode. No phone: nothing to wait for, so off.
+      const tone: Tone = ok ? "sends" : noPhone ? "off" : "waits";
       return html`<ha-list-item-base class="person">
         <span slot="start" class="person-avatar">${avatar(person)}</span>
         <span slot="headline">${person.name}</span>
         <span slot="supporting-text">${text}</span>
         <ha-icon
           slot="end"
-          class="row-icon ${ok ? "sends" : "waits"}"
-          .icon=${ok ? "mdi:check-circle" : "mdi:close-circle-outline"}
+          class="row-icon ${tone}"
+          .icon=${TONE_ICONS[tone]}
         ></ha-icon>
       </ha-list-item-base>`;
     });
@@ -269,7 +272,7 @@ export class NcInfoDialog extends LitElement {
         return {
           text: why.length ? `Nobody in the audience: ${names(why)}` : "Nobody in the audience",
           tone: "waits",
-          icon: "mdi:account-off-outline",
+          icon: TONE_ICONS.waits,
         };
       }
       default:
