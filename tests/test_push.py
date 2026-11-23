@@ -395,7 +395,11 @@ async def test_push_test_and_repairs(
     await hass.async_block_till_done()
     issue = ir.async_get(hass).async_get_issue(DOMAIN, f"missing_push_service_{DORA}")
     assert issue is not None
-    assert issue.translation_placeholders == {"name": "Dóra", "service": "notify.gone"}
+    assert issue.translation_placeholders == {
+        "name": "Dóra",
+        "service": "notify.gone",
+        "link": "/notification-center/settings/general/people",
+    }
 
 
 async def test_no_phone_for_the_viewer(
