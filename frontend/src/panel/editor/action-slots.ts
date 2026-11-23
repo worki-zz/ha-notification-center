@@ -42,8 +42,8 @@ export function renderActionSlots(
 
 /**
  * The entity actions of a member of an entity group: for each button the
- * group's action, or with Custom action switched on its own one (it starts
- * as a copy of the group's).
+ * group's action until it is changed here; Reset beside the button brings
+ * the group's back.
  */
 export function renderMemberSlots(
   hass: HomeAssistant | undefined,
@@ -61,30 +61,28 @@ export function renderMemberSlots(
       return html`<div class="slot">
         <div class="slot-head">
           <div class="slot-label">${slot.label}</div>
-          <label class="slot-custom">
-            <ha-switch
-              .checked=${own}
-              @change=${(ev: Event) => {
-                const next: Obj = { ...custom };
-                if ((ev.target as HTMLInputElement).checked) {
-                  next[slot.id] = structuredClone((groupActions?.[slot.id] as unknown[] | undefined) ?? []);
-                } else {
+          ${own
+            ? html`<ha-button
+                appearance="plain"
+                size="s"
+                @click=${() => {
+                  const next: Obj = { ...custom };
                   delete next[slot.id];
-                }
-                changed(next);
-              }}
-            ></ha-switch>
-            <span>Custom action</span>
-          </label>
+                  changed(next);
+                }}
+              >
+                <ha-icon slot="start" icon="mdi:restore"></ha-icon>
+                Reset
+              </ha-button>`
+            : nothing}
         </div>
         <ha-automation-action
           .hass=${hass}
           .narrow=${narrow}
-          .disabled=${!own}
           .actions=${actions}
           @value-changed=${(ev: CustomEvent<{ value: unknown[] }>) => {
             ev.stopPropagation();
-            if (own) changed({ ...custom, [slot.id]: ev.detail.value });
+            changed({ ...custom, [slot.id]: ev.detail.value });
           }}
         ></ha-automation-action>
       </div>`;
@@ -109,19 +107,14 @@ export const ACTION_SLOT_STYLES = css`
   }
   .slot-head {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
+    min-height: 32px;
     margin-bottom: 8px;
   }
   .slot-head .slot-label {
     margin-bottom: 0;
-  }
-  .slot-custom {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
   }
   .slots-empty {
     color: var(--secondary-text-color);

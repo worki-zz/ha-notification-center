@@ -6,8 +6,8 @@ import type { Notification, NotificationState } from "../shared/config";
 
 export interface Status {
   label: string;
-  // green, yellow, purple or grey
-  tone: "green" | "yellow" | "purple" | "grey";
+  // green, yellow, purple, red or grey
+  tone: "green" | "yellow" | "purple" | "red" | "grey";
 }
 
 /** Active, Upcoming, Snoozed or Disabled; nothing when idle. */
@@ -54,6 +54,10 @@ export const STATUS_STYLES = `
   .status.yellow {
     color: var(--amber-color, #ff9800);
     background-color: rgb(from var(--amber-color, #ff9800) r g b / 0.15);
+  }
+  .status.red {
+    color: var(--red-color, #f44336);
+    background-color: rgb(from var(--red-color, #f44336) r g b / 0.15);
   }
   .status.purple {
     color: var(--deep-purple-color, #673ab7);

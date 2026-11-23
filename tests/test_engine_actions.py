@@ -289,6 +289,46 @@ async def test_button_action_list(hass: HomeAssistant, center: Center) -> None:
     assert len(calls) == 1
 
 
+async def test_tap_runs_another_button(hass: HomeAssistant, center: Center) -> None:
+    """A Tap with Button action runs that button; one that is off, its own."""
+    nid = await center.add(
+        "Plants",
+        step(
+            buttons=[
+                {"type": "tap", "id": "tap", "enabled": True, "run_button": "done"},
+                {"type": "done", "id": "done", "enabled": True},
+            ]
+        ),
+    )
+    await hass.services.async_call(
+        DOMAIN, "trigger", {"entity_id": "sensor.nc_plants"}, blocking=True
+    )
+    card = center.engine.cards_of(nid)[0]
+    button = center.engine.button_of(card, "tap")
+    assert button is not None
+    assert button["type"] == "done"
+    await center.engine.async_press(card, "tap", None)
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_plants") == "done"
+
+    nid = await center.add(
+        "Bins",
+        step(
+            buttons=[
+                {"type": "tap", "id": "tap", "enabled": True, "run_button": "done"},
+                {"type": "done", "id": "done", "enabled": False},
+            ]
+        ),
+    )
+    await hass.services.async_call(
+        DOMAIN, "trigger", {"entity_id": "sensor.nc_bins"}, blocking=True
+    )
+    card = center.engine.cards_of(nid)[0]
+    button = center.engine.button_of(card, "tap")
+    assert button is not None
+    assert button["type"] == "tap"
+
+
 async def test_snooze_choices(
     hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
 ) -> None:

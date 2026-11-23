@@ -28,6 +28,9 @@ export interface CategoryButton {
   snooze?: string[] | null;
   show_in_push?: boolean;
   open_on_tap?: string | null;
+  // Tap: the button its notifications' Tap runs (a built-in one by its
+  // type, a custom one by its id; empty: their own actions).
+  run_button?: string | null;
 }
 
 /**
@@ -126,6 +129,11 @@ export interface Button {
   show_in_push?: boolean;
   /** Tap behavior: the page a tap on the push opens (empty: the default). */
   open_on_tap?: string | null;
+  /**
+   * Tap behavior: run this button instead of its own actions (left out:
+   * the category's; empty: its own actions). See `runButtonOf`.
+   */
+  run_button?: string | null;
   confirm?: boolean;
 }
 

@@ -179,7 +179,10 @@ export function effectiveButtons(
       category: true,
     };
     if (base.type === "snooze") merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze;
-    if (base.type === "tap") merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
+    if (base.type === "tap") {
+      merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
+      merged.run_button = (entry.run_button !== undefined ? entry.run_button : base.run_button) || null;
+    }
     else merged.show_in_push = entry.show_in_push ?? base.show_in_push;
     return merged;
   });
@@ -216,12 +219,33 @@ export function liveButtons(live: LiveCard): LiveButton[] {
 
 /** The tap of the card, when it is switched on and does something. */
 export function tapButton(live: LiveCard): Button | undefined {
-  const tap = effectiveButtons(live.category, live.step).find(
-    (button) => button.type === "tap" && button.enabled,
-  );
+  const buttons = effectiveButtons(live.category, live.step);
+  const tap = buttons.find((button) => button.type === "tap" && button.enabled);
   if (!tap) return undefined;
+  const target = runButtonOf(buttons, tap);
+  if (target) return tap;
   if (!hasActions(tap.actions)) return undefined;
   return tap;
+}
+
+/** The key a Tap names a button by: a built-in one's type, a custom one's id. */
+export function buttonRef(button: Pick<Button, "id" | "type">): string {
+  return button.type === "custom" ? button.id : button.type;
+}
+
+/**
+ * The switched on button a Tap runs instead of its own actions, as
+ * `run_button_of` in Home Assistant. None: the Tap's own actions.
+ */
+export function runButtonOf(
+  buttons: EffectiveButton[],
+  tap: Button,
+): EffectiveButton | undefined {
+  const ref = tap.type === "tap" ? tap.run_button : undefined;
+  if (!ref) return undefined;
+  return buttons.find(
+    (button) => button.type !== "tap" && button.enabled && buttonRef(button) === ref,
+  );
 }
 
 /** The person entity of the logged in user. */
@@ -365,8 +389,8 @@ export function hasActions(actions: ButtonActions | undefined): boolean {
 /**
  * Press a button of a card.
  *
- * Its actions run in their fixed order: the entity action, the notification
- * state, Silence and the Home Assistant actions in Home Assistant, then the
+ * Its actions run in their fixed order: Silence, the entity action, the
+ * notification state and the Home Assistant actions in Home Assistant, then the
  * navigation (More info or Navigate) here, from the given element. One that
  * cannot run is skipped; the navigation still happens.
  */
@@ -378,6 +402,10 @@ export async function pressButton(
   choice?: string,
 ): Promise<void> {
   const { card } = live;
+  // A Tap that runs another button does what that button does.
+  if (button.type === "tap") {
+    button = runButtonOf(effectiveButtons(live.category, live.step), button) ?? button;
+  }
   const actions = button.actions ?? {};
   // Done, Dismiss and Snooze change the card in Home Assistant, where the
   // other actions but the navigation run too.

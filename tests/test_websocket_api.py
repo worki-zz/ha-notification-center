@@ -318,9 +318,9 @@ async def test_import_of_an_older_export(
     await client.ok("config/import", yaml=yaml_util.dump(data))
     step = hass_storage[CONFIG_KEY]["data"]["notifications"][0]["steps"][0]
     actions = {
-        button["id"] if button["type"] == "custom" else button["type"]: button[
+        button["id"] if button["type"] == "custom" else button["type"]: button.get(
             "actions"
-        ]
+        )
         for button in step["buttons"]
     }
     assert all("action" not in button for button in step["buttons"])

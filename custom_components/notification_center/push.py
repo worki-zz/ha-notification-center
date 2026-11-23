@@ -44,10 +44,12 @@ from .device_colors import color_of, parse_color
 from .device_speaker import _token
 from .devices import DeviceManager
 from .model import (
+    BUTTON_EFFECTS,
     CHANNEL_PUSH,
     PUSH_PRIORITY_DEFAULT,
     SYSTEM_COLORS,
     effective_buttons,
+    run_button_of,
 )
 
 if TYPE_CHECKING:
@@ -474,12 +476,18 @@ class PushDevice(Device):
         page = (tap or {}).get("open_on_tap") or self.default_url()
         if tap is None or not tap.get("enabled"):
             return page
-        actions = tap.get("actions") or {}
-        if not actions:
+        # A Tap that runs another button does what that button does.
+        target = run_button_of(self._buttons(card), tap) or tap
+        actions = target.get("actions") or {}
+        if not actions and target["type"] not in BUTTON_EFFECTS:
             return page
         navigation = actions.get("navigation") or {}
         # Only a page to open: no need to press it.
-        if set(actions) == {"navigation"} and navigation.get("type") == "navigate":
+        if (
+            set(actions) == {"navigation"}
+            and navigation.get("type") == "navigate"
+            and target["type"] not in BUTTON_EFFECTS
+        ):
             return str(navigation["path"])
         return press_url(action_id(card, tap["id"]), page)
 

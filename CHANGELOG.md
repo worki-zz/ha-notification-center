@@ -4,7 +4,13 @@
 
 ### Changed
 
-- A button's single **Action** is now an **Actions** list, in a fixed order: *Entity action* (a switch, always at the top), *Notification state* (Done, Dismiss or Snooze for a chosen time; fixed on the built-in Done, Dismiss and Snooze, where Snooze shows its times), *Silence*, any number of Home Assistant actions (each its own row, reorderable among themselves), and *Navigation* (Navigate or More info) last. Under the list: *Add action*, *Add notification state*, *Add silence* and *Add navigation* (each but Add action hidden once the button has one). An action that cannot run is skipped and the others still run.
+- A button's single **Action** is now an **Actions** list, in a fixed order: *Silence* and *Entity action* (switch rows, as the Conditions and Done rows), *Notification state* (Done, Dismiss or Snooze for a chosen time; fixed on the built-in Done, Dismiss and Snooze, where Snooze shows its times), any number of Home Assistant actions (each its own row, reorderable among themselves), and *Navigation* (Navigate or More info) last. Under the list: *Add action*, *Add notification state* and *Add navigation*. *Reset* beside Actions brings back the default of a category's button. An action that cannot run is skipped and the others still run.
+- **Tap behavior** can be *Custom* (its own actions) or *Button action* (runs another button, for example Done). Set in the category, changed in a notification.
+- The built-in rows of Conditions and Done have their switch at the end.
+- An entity group member's entity action: no *Custom action* switch; changing the action makes it the member's own, *Reset* beside the button brings the group's back.
+- People: the *Away* chip is red.
+- General: *Push* comes before *Snooze*; its row shows only the page's name, and its dialog drops the line about the People page.
+- The warning about more than three push buttons is under the Buttons title of Interactions: *Only the first three active buttons show in the Android push notification.*
 - The stored button field `action` becomes `actions`; the configuration and older YAML exports (export version 1) are upgraded when loaded or imported, and saved in the new form. The never offered *Show attachment* action is dropped.
 
 ### Removed

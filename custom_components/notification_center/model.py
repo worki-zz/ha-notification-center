@@ -733,7 +733,9 @@ BUTTON_SCHEMA = _with_id(
         # A category button's label is changed in YAML only.
         vol.Optional("label"): _optional(cv.string),
         vol.Optional("icon"): _optional(cv.icon),
-        vol.Optional("actions", default=dict): BUTTON_ACTIONS_SCHEMA,
+        # Left out on a category's button: the built-in button's default
+        # (the Tap shows more info; the others do only what they are).
+        vol.Optional("actions"): BUTTON_ACTIONS_SCHEMA,
         # The Snooze button's times: one snoozes at once, more are offered.
         vol.Optional("snooze"): _optional(
             vol.All(cv.ensure_list, [vol.In(SNOOZE_CHOICES)])
@@ -746,6 +748,10 @@ BUTTON_SCHEMA = _with_id(
         # Tap: the page the app opens when the push is tapped (empty: the
         # category's, then General's).
         vol.Optional("open_on_tap"): _optional(cv.string),
+        # Tap: run another button instead of its own actions (a built-in
+        # button by its type, a custom one by its id). Left out: the
+        # category's; empty: its own actions.
+        vol.Optional("run_button"): _optional(cv.string),
     }
 )
 
@@ -763,6 +769,9 @@ CATEGORY_BUTTON_SCHEMA = _with_id(
         vol.Optional("show_in_push"): _optional(cv.boolean),
         vol.Optional("push_tap"): _optional(cv.boolean),
         vol.Optional("open_on_tap"): _optional(cv.string),
+        # Tap: the button the Tap of its notifications runs (empty: their
+        # own actions).
+        vol.Optional("run_button"): _optional(cv.string),
     }
 )
 
@@ -810,13 +819,14 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
     )
     seen = _check_builtins_once(buttons)
     missing = [
-        BUTTON_SCHEMA({"type": kind, "actions": BUILTIN_ACTION_DEFAULTS[kind]})
-        for kind in BUILTIN_BUTTONS
-        if kind not in seen
+        BUTTON_SCHEMA({"type": kind}) for kind in BUILTIN_BUTTONS if kind not in seen
     ]
     buttons = missing + buttons if missing else buttons
     for button in buttons:
-        button["actions"] = _clean_actions(button["type"], button["actions"])
+        if "actions" in button:
+            button["actions"] = _clean_actions(button["type"], button["actions"])
+        if button["type"] != "tap" or button.get("run_button") is None:
+            button.pop("run_button", None)
         if button["type"] != "snooze" or not button.get("snooze"):
             button.pop("snooze", None)
         else:
@@ -873,8 +883,11 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
             button.pop("show_in_push", None)
             if not button.get("open_on_tap"):
                 button.pop("open_on_tap", None)
+            if not button.get("run_button"):
+                button.pop("run_button", None)
         else:
             button.pop("open_on_tap", None)
+            button.pop("run_button", None)
             if button.get("show_in_push") is None:
                 button["show_in_push"] = True
     return buttons
@@ -887,6 +900,29 @@ def category_custom_ids(category: dict[str, Any] | None) -> set[str]:
         for button in (category or {}).get("buttons", [])
         if button["type"] == "custom"
     }
+
+
+def run_button_of(
+    buttons: list[dict[str, Any]], tap: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Return the switched on button a Tap runs instead of its own actions.
+
+    A built-in button is named by its type, a custom one by its id. None:
+    the Tap runs its own actions (also when that button is off or gone).
+    """
+    ref = tap.get("run_button") if tap.get("type") == "tap" else None
+    if not ref:
+        return None
+    return next(
+        (
+            button
+            for button in buttons
+            if button["type"] != "tap"
+            and button.get("enabled", True)
+            and (button["id"] if button["type"] == "custom" else button["type"]) == ref
+        ),
+        None,
+    )
 
 
 def effective_buttons(
@@ -987,6 +1023,8 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
         )
     if kind == "tap":
         button["open_on_tap"] = entry.get("open_on_tap") or base.get("open_on_tap")
+        run = entry["run_button"] if "run_button" in entry else base.get("run_button")
+        button["run_button"] = run or None
     else:
         value = entry.get("show_in_push")
         button["show_in_push"] = (
@@ -1476,7 +1514,7 @@ async def _validate_step_automation(
         hass, step["done_when"]["triggers"], _path(where, "done when")
     )
     for button in step["buttons"]:
-        if button["actions"].get("ha_actions"):
+        if button.get("actions", {}).get("ha_actions"):
             _validate_actions(
                 button["actions"]["ha_actions"],
                 _path(where, "buttons", button["type"]),

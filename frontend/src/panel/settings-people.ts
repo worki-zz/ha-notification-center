@@ -22,7 +22,7 @@ import { conditionWords } from "./settings-modes";
 import { STATUS_STYLES, type Status, renderStatus } from "./status";
 
 // The colours of a person's state, as the Active chip of a home mode.
-const STATE_TONES: Record<AudienceState, Status["tone"]> = { home: "green", sleep: "purple", away: "grey" };
+const STATE_TONES: Record<AudienceState, Status["tone"]> = { home: "green", sleep: "purple", away: "red" };
 
 type ConditionType = "none" | "state" | "template";
 type DeviceType = Person["device_type"];

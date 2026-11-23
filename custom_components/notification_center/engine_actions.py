@@ -34,6 +34,7 @@ from .model import (
     DEFAULT_SNOOZE_CHOICES,
     DEFAULT_STATE_SNOOZE,
     effective_buttons,
+    run_button_of,
 )
 from .scheduler import HISTORY_SKIPPED
 
@@ -125,7 +126,25 @@ class EngineActions:
     # -- Buttons ------------------------------------------------------------
 
     def button_of(self: Engine, card: Card, button_id: str) -> dict[str, Any] | None:
-        """Return a switched on button of a card's step."""
+        """Return a switched on button of a card's step.
+
+        A Tap that runs another button gives that button.
+        """
+        buttons = self.buttons_of(card)
+        button = next(
+            (
+                button
+                for button in buttons
+                if button["id"] == button_id and button.get("enabled", True)
+            ),
+            None,
+        )
+        if button is not None and button["type"] == "tap":
+            return run_button_of(buttons, button) or button
+        return button
+
+    def buttons_of(self: Engine, card: Card) -> list[dict[str, Any]]:
+        """Return the buttons of a card's step, with what they inherit."""
         step = self._step_config(card.notification_id, card.step_id) or {}
         notification = self.notification_config(card.notification_id) or {}
         category = next(
@@ -136,14 +155,7 @@ class EngineActions:
             ),
             None,
         )
-        return next(
-            (
-                button
-                for button in effective_buttons(category, step)
-                if button["id"] == button_id and button.get("enabled", True)
-            ),
-            None,
-        )
+        return effective_buttons(category, step)
 
     def snooze_until(
         self: Engine, card: Card, button: Mapping[str, Any], choice: str | None = None
@@ -196,27 +208,28 @@ class EngineActions:
     ) -> None:
         """Press a button of a card: run its actions in their fixed order.
 
-        The entity action, then the notification state (Done marks the card
-        done, Dismiss dismisses it and Snooze snoozes it: until the given
-        time, or for the chosen or first of its times), Silence, then the
-        Home Assistant actions. The navigation (More info or Navigate)
-        happens where the button was pressed. An action that cannot run is
-        skipped and the others still run.
+        Silence, the entity action, then the notification state (Done marks
+        the card done, Dismiss dismisses it and Snooze snoozes it: until the
+        given time, or for the chosen or first of its times), then the Home
+        Assistant actions. The navigation (More info or Navigate) happens
+        where the button was pressed. An action that cannot run is skipped
+        and the others still run. A Tap that runs another button runs that
+        button's actions.
         """
         button = self.button_of(card, button_id)
         if button is None:
             raise ServiceValidationError("The button is not there")
         actions: Mapping[str, Any] = button.get("actions") or {}
         variables = self.variables(card)
+        if actions.get("silence"):
+            self.silence_cards([card], SOURCE_BUTTON, context)
         if actions.get("entity_action"):
-            entity_actions = self.entity_actions(card, button_id)
+            entity_actions = self.entity_actions(card, button["id"])
             if entity_actions:
                 await self._async_run_actions(
                     card, button, entity_actions, variables, context
                 )
         self._press_state(card, button, actions, until, context, choice)
-        if actions.get("silence"):
-            self.silence_cards([card], SOURCE_BUTTON, context)
         if actions.get("ha_actions"):
             await self._async_run_actions(
                 card, button, list(actions["ha_actions"]), variables, context
