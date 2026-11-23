@@ -1,8 +1,8 @@
 // The People page of the General tab: every person of Home Assistant, listed
 // by itself. A row shows when the person is asleep, written like a mode's
-// condition; the pencil opens the person's dialog. In 6.0 the dialog holds
-// the Sleep condition only (None, State or Template); push settings join it
-// later. Asleep counts only at home: a person away is Away.
+// condition, and the phone the pushes go to; the pencil opens the person's
+// dialog: the Sleep condition (None, State or Template) and the Push device
+// with its type. Asleep counts only at home: a person away is Away.
 
 import { LitElement, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -25,6 +25,7 @@ import { STATUS_STYLES, type Status, renderStatus } from "./status";
 const STATE_TONES: Record<AudienceState, Status["tone"]> = { home: "green", sleep: "purple", away: "grey" };
 
 type ConditionType = "none" | "state" | "template";
+type DeviceType = Person["device_type"];
 
 interface SleepDraft {
   person: Person;
@@ -32,7 +33,26 @@ interface SleepDraft {
   entity_id: string;
   state: string;
   value_template: string;
+  // The push device: a notify action, and how it shows a push.
+  notify: string;
+  device_type: DeviceType;
 }
+
+/** A notify action a push can go to (a phone of the Companion app first). */
+interface PushService {
+  service: string;
+  name: string;
+  // Known for a phone of the Companion app; null: the user picks it.
+  device_type: DeviceType | null;
+}
+
+const NO_DEVICE = "none";
+
+const DEVICE_TYPES: { value: DeviceType; label: string }[] = [
+  { value: "ios", label: "iOS" },
+  { value: "android", label: "Android" },
+  { value: "other", label: "Other" },
+];
 
 @customElement("nc-settings-people")
 export class NcSettingsPeople extends LitElement {
@@ -47,6 +67,33 @@ export class NcSettingsPeople extends LitElement {
   @state() private _error?: string;
 
   @state() private _busy = false;
+
+  @state() private _services: PushService[] = [];
+
+  @state() private _testError?: string;
+
+  @state() private _tested = false;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    void this._loadServices();
+  }
+
+  private async _loadServices(): Promise<void> {
+    if (!this.hass) return;
+    try {
+      const result = await this.hass.callWS<{ services: PushService[] }>({
+        type: `${DOMAIN}/push/services`,
+      });
+      this._services = result.services;
+    } catch {
+      // Not an admin, or not loaded: the rows show the action's id.
+    }
+  }
+
+  private _deviceName(service: string): string {
+    return this._services.find((item) => item.service === service)?.name ?? service;
+  }
 
   protected override render() {
     const people = this.config?.people ?? [];
@@ -84,9 +131,14 @@ export class NcSettingsPeople extends LitElement {
       <div class="text">
         <div>${person.name}</div>
         <div class="secondary">
-          ${person.sleep
-            ? `Sleep when ${conditionWords(this.hass, person.sleep)}`
-            : "No sleep condition"}
+          ${[
+            person.sleep
+              ? `Sleep when ${conditionWords(this.hass, person.sleep)}`
+              : "No sleep condition",
+            person.notify ? this._deviceName(person.notify) : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </div>
       </div>
       ${now ? renderStatus({ label: STATE_NAMES[now], tone: STATE_TONES[now] }) : nothing}
@@ -107,7 +159,12 @@ export class NcSettingsPeople extends LitElement {
       entity_id: String(condition.entity_id ?? ""),
       state: toggle ? "on" : String(condition.state ?? ""),
       value_template: String(condition.value_template ?? ""),
+      notify: person.notify ?? "",
+      device_type: person.device_type,
     };
+    this._testError = undefined;
+    this._tested = false;
+    if (!this._services.length) void this._loadServices();
   }
 
   private _set(changes: Partial<SleepDraft>): void {
@@ -157,6 +214,8 @@ export class NcSettingsPeople extends LitElement {
         ></ha-button-toggle-group>
         ${this._renderCondition(edit)}
       </div>
+      <div class="separator"></div>
+      ${this._renderPush(edit)}
       <ha-dialog-footer slot="footer">
         <ha-button
           slot="secondaryAction"
@@ -174,6 +233,77 @@ export class NcSettingsPeople extends LitElement {
         </ha-button>
       </ha-dialog-footer>
     </ha-dialog>`;
+  }
+
+  // The phone the person's pushes go to, and how it shows them.
+  private _renderPush(edit: SleepDraft) {
+    const options = [
+      { value: NO_DEVICE, label: "None" },
+      ...this._services.map((item) => ({ value: item.service, label: item.name })),
+    ];
+    // An action that is gone is still shown, by its id.
+    if (edit.notify && !this._services.some((item) => item.service === edit.notify)) {
+      options.push({ value: edit.notify, label: edit.notify });
+    }
+    return html`<div class="form">
+      <div class="title-row">
+        <div class="title">Push</div>
+        <ha-icon-button
+          .label=${"Test"}
+          title="Test"
+          .disabled=${!edit.notify}
+          @click=${() => void this._test(edit)}
+        >
+          <ha-icon icon="mdi:play"></ha-icon>
+        </ha-icon-button>
+      </div>
+      <p class="hint">The phone the person's pushes go to.</p>
+      ${this._testError
+        ? html`<ha-alert alert-type="error">${this._testError}</ha-alert>`
+        : this._tested
+          ? html`<ha-alert alert-type="success">Test sent.</ha-alert>`
+          : nothing}
+      <div class="columns">
+        ${field(
+          this.hass,
+          { select: { mode: "dropdown", options } },
+          edit.notify || NO_DEVICE,
+          "Device",
+          (value) => {
+            const notify = !value || value === NO_DEVICE ? "" : String(value);
+            const known = this._services.find((item) => item.service === notify)?.device_type;
+            this._set({ notify, ...(known ? { device_type: known } : {}) });
+          },
+        )}
+        ${edit.notify
+          ? field(
+              this.hass,
+              { select: { mode: "dropdown", options: DEVICE_TYPES } },
+              edit.device_type,
+              "Type",
+              (value) => this._set({ device_type: (value as DeviceType | undefined) ?? "other" }),
+              { helper: edit.device_type === "other" ? "Only the title and the message." : undefined },
+            )
+          : nothing}
+      </div>
+    </div>`;
+  }
+
+  private async _test(edit: SleepDraft): Promise<void> {
+    if (!this.hass) return;
+    this._testError = undefined;
+    this._tested = false;
+    try {
+      await this.hass.callWS({
+        type: `${DOMAIN}/channel/test`,
+        channel: "push",
+        scope: "person",
+        person: { person: edit.person.person, notify: edit.notify, device_type: edit.device_type },
+      });
+      this._tested = true;
+    } catch (err) {
+      this._testError = errorText(err);
+    }
   }
 
   private _renderCondition(edit: SleepDraft) {
@@ -227,8 +357,8 @@ export class NcSettingsPeople extends LitElement {
         type: `${DOMAIN}/person/update`,
         data: {
           person: person.person,
-          notify: person.notify ?? null,
-          device_type: person.device_type,
+          notify: edit.notify || null,
+          device_type: edit.device_type,
           sleep,
         },
       });
@@ -296,6 +426,30 @@ export class NcSettingsPeople extends LitElement {
     }
     ha-button-toggle-group {
       align-self: flex-start;
+    }
+    .separator {
+      border-top: 1px solid var(--divider-color);
+      /* Full width, as in the channel dialog. */
+      margin: 24px -24px;
+    }
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: -12px 0 -16px;
+    }
+    .title-row .title {
+      margin-bottom: 0;
+    }
+    .columns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .columns > * {
+      flex: 1 1 220px;
+      min-width: 0;
     }
   `;
 }

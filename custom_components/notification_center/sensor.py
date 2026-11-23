@@ -6,7 +6,8 @@ like any Home Assistant entity. The summary sensor
 ``sensor.notification_center`` counts the active cards and shows the mode.
 
 Every channel has a diagnostic sensor, ``sensor.nc_channel_<channel>``: the
-Dashboard's counts the cards it shows now. A light, speaker or siren's is
+Dashboard's counts the cards it shows now, Push's
+(``sensor.nc_channel_push``) the cards on the phones. A light, speaker or siren's is
 named after its entity (``sensor.nc_channel_light_kitchen_strip``) and counts
 the cards it sends now.
 """
@@ -35,7 +36,7 @@ from .const import (
     UNIQUE_ID_SUMMARY,
 )
 from .entity import device_info
-from .model import DEVICE_PREFIXES, ConfigData
+from .model import CHANNEL_PUSH, DEVICE_PREFIXES, ConfigData
 
 if TYPE_CHECKING:
     from . import NotificationCenterConfigEntry
@@ -107,7 +108,11 @@ async def async_setup_entry(
                     hass.async_create_task(sensor.async_remove())
 
     async_add_entities(
-        [SummarySensor(engine, info), DashboardChannelSensor(engine, info)]
+        [
+            SummarySensor(engine, info),
+            DashboardChannelSensor(engine, info),
+            PushChannelSensor(engine, info),
+        ]
     )
     sync(runtime.manager.config)
     sync_devices(runtime.manager.config)
@@ -283,6 +288,54 @@ class DashboardChannelSensor(SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the cards held back (upcoming, by what they wait for) and off."""
         summary = self._engine.dashboard_summary()
+        summary.pop("state")
+        return summary
+
+
+class PushChannelSensor(SensorEntity):
+    """The cards on the phones now, and the ones Push holds back."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:cellphone-message"
+    _attr_translation_key = "push_channel"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, engine: Engine, info: Any) -> None:
+        """Set up the sensor."""
+        self._engine = engine
+        self._attr_unique_id = f"{UNIQUE_ID_CHANNEL_PREFIX}{CHANNEL_PUSH}"
+        self._attr_device_info = info
+        self.entity_id = "sensor.nc_channel_push"
+
+    async def async_added_to_hass(self) -> None:
+        """Follow the engine and the phones."""
+        self.async_on_remove(self._engine.async_add_listener(self._changed, late=True))
+        if self._engine.devices is not None:
+            self.async_on_remove(self._engine.devices.add_listener(self._changed))
+
+    @callback
+    def _changed(self) -> None:
+        if (context := self._engine.summary_context) is not None:
+            self.async_set_context(context)
+        self.async_write_ha_state()
+
+    def _summary(self) -> dict[str, Any]:
+        summary = self._engine.dashboard_summary(CHANNEL_PUSH)
+        if self._engine.devices is not None:
+            summary.update(self._engine.devices.summary(CHANNEL_PUSH))
+        return summary
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of cards on the phones."""
+        return int(self._summary()["state"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return when each person got a push, and the cards held back."""
+        summary = self._summary()
         summary.pop("state")
         return summary
 

@@ -892,6 +892,7 @@ export class NcStepEditor extends LitElement {
           name: this.notification?.name,
           message: step.message,
           info: step.info ?? null,
+          step: { audience: step.audience ?? {} },
         }}
         .base=${this.category?.channels ?? {}}
         .value=${step.channels ?? {}}

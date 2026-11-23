@@ -16,6 +16,9 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import {
   AUDIENCE_STATES,
+  PUSH_PRIORITIES,
+  PUSH_PRIORITY_DEFAULT,
+  type PushPriority,
   type AudienceEntry,
   type AudienceState,
   type ChannelSettings,
@@ -167,10 +170,32 @@ export function channelSummary(
 ): string {
   const ticked = modes.filter((mode) => settings.modes?.includes(mode.id));
   if (!ticked.length) return "Off";
+  return `${ticked.map((mode) => mode.name).join(", ")} · ${whenText(settings)}`;
+}
+
+/** The names of the push priorities and what each does, in one line. */
+export const PUSH_PRIORITY_INFO: Record<PushPriority, { name: string; help: string }> = {
+  silent: { name: "Silent", help: "No sound: it waits in the list on the phone." },
+  normal: { name: "Normal", help: "Sound and banner, as the phone's settings allow." },
+  time_sensitive: {
+    name: "Time-sensitive",
+    help: "Comes through Focus and Do Not Disturb, at once.",
+  },
+  critical: {
+    name: "Critical",
+    help: "Sounds even when the phone is muted. Stays until it ends.",
+  },
+};
+
+/** When a channel sends, and a push's priority unless Normal. */
+function whenText(settings: ChannelSettings): string {
   const when = hasDelay(settings.delay)
     ? `After ${durationText(settings.delay)}`
     : "Immediately";
-  return `${ticked.map((mode) => mode.name).join(", ")} · ${when}`;
+  const priority = settings.priority as PushPriority | undefined;
+  return priority && priority !== PUSH_PRIORITY_DEFAULT
+    ? `${when} · ${PUSH_PRIORITY_INFO[priority].name}`
+    : when;
 }
 
 /** "As Home Assistant draws a person": the picture, or the initials. */
@@ -552,9 +577,7 @@ export class NcChannelTable extends LitElement {
       ${this.channels.map((channel) => {
         const settings = this._effective(channel.key);
         const own = this._isStep && this._own(channel.key).modes !== undefined;
-        const delay = hasDelay(settings.delay)
-          ? `After ${durationText(settings.delay)}`
-          : "Immediately";
+        const delay = whenText(settings);
         return html`<div class="row">
           <div class="cell name">
             ${channelIcon(this.hass, channel)}
@@ -670,7 +693,17 @@ export class NcChannelTable extends LitElement {
         this._testError = undefined;
       }}
     >
-      ${device ? testButton("Test", () => void this._test(key, settings)) : nothing}
+      ${channel.kind === "push"
+        ? html`${testButton("Test on my phone", () => void this._test(key, settings, "me"))}
+          ${testButton(
+            "Test on every phone it can go to",
+            () => void this._test(key, settings, "all"),
+            false,
+            "mdi:play-box-multiple-outline",
+          )}`
+        : device
+          ? testButton("Test", () => void this._test(key, settings))
+          : nothing}
       ${this._testError ? html`<ha-alert alert-type="error">${this._testError}</ha-alert>` : nothing}
       ${section("Home modes", ownModes, "modes")}
       <p class="hint secondary">
@@ -740,6 +773,7 @@ export class NcChannelTable extends LitElement {
             : nothing}
         </div>
         ${channel.kind === "speaker" ? this._renderSpeaker(key, settings) : nothing}
+        ${channel.kind === "push" ? this._renderPriority(key, settings) : nothing}
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button slot="primaryAction" @click=${() => (this._open = undefined)}
@@ -749,13 +783,43 @@ export class NcChannelTable extends LitElement {
     </ha-dialog>`;
   }
 
-  private async _test(key: string, settings: ChannelSettings): Promise<void> {
+  private async _test(
+    key: string,
+    settings: ChannelSettings,
+    scope?: "me" | "all",
+  ): Promise<void> {
     this._testError = undefined;
     try {
-      await testChannel(this.hass, key, { ...this.testContext, settings });
+      await testChannel(this.hass, key, {
+        ...this.testContext,
+        settings,
+        ...(scope ? { scope } : {}),
+      });
     } catch (err) {
       this._testError = errorText(err);
     }
+  }
+
+  // A push: how it arrives on the phone.
+  private _renderPriority(key: string, settings: ChannelSettings) {
+    const priority = (settings.priority as PushPriority | undefined) ?? PUSH_PRIORITY_DEFAULT;
+    return field(
+      this.hass,
+      {
+        select: {
+          mode: "dropdown",
+          options: PUSH_PRIORITIES.map((value) => ({
+            value,
+            label: PUSH_PRIORITY_INFO[value].name,
+          })),
+        },
+      },
+      priority,
+      "Priority",
+      (value) =>
+        this._store(key, { ...this._own(key), priority: (value as PushPriority | undefined) ?? PUSH_PRIORITY_DEFAULT }),
+      { helper: PUSH_PRIORITY_INFO[priority].help },
+    );
   }
 
   // A speaker: whether the message is read out (with the name and the Info

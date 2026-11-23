@@ -78,6 +78,9 @@
             "name": "Waiting"
           }
         }
+      },
+      "push_channel": {
+        "name": "Push channel"
       }
     }
   },
@@ -378,6 +381,10 @@
     "setup_error": {
       "title": "{name}: a trigger or condition does not work",
       "description": "Step {step} of **{name}** could not be set up: {error}"
+    },
+    "missing_push_service": {
+      "title": "{name}: the push device is missing",
+      "description": "The push notifications of **{name}** go to {service}, but there is no such action. Choose the phone again on the People page of Notification Center, or bring the action back."
     }
   }
 }

@@ -78,6 +78,9 @@
             "name": "Várakozik"
           }
         }
+      },
+      "push_channel": {
+        "name": "Push csatorna"
       }
     }
   },
@@ -378,6 +381,10 @@
     "setup_error": {
       "title": "{name}: egy trigger vagy feltétel nem működik",
       "description": "A(z) **{name}** {step}. lépését nem sikerült elindítani: {error}"
+    },
+    "missing_push_service": {
+      "title": "{name}: hiányzik a push eszköz",
+      "description": "**{name}** push értesítései a(z) {service} actionre mennének, de ilyen nincs. Válaszd ki újra a telefont a Notification Center People oldalán, vagy hozd vissza az actiont."
     }
   }
 }

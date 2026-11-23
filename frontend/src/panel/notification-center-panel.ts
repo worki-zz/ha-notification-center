@@ -18,11 +18,13 @@ import {
   cardKey,
   categoryOf,
   doneEarly,
+  effectiveButtons,
   errorText,
   inAudience,
   liveCards,
   navigate,
   personOf,
+  pressButton,
   stepOf,
   type LiveCard,
 } from "../shared/live";
@@ -137,7 +139,44 @@ export class NotificationCenterPanel extends LitElement {
     if (!this._unsubscribe && this.hass && this.isConnected) {
       this._unsubscribe = subscribeStore(this.hass.connection, (data) => {
         this._store = data;
+        void this._pushTapped();
       });
+    }
+  }
+
+  // A push was tapped (or its button opens a page): the address names the
+  // button to press ("nc_press") and maybe the page to open then ("nc_then").
+  private async _pushTapped(): Promise<void> {
+    const query = new URLSearchParams(window.location.search);
+    const press = query.get("nc_press");
+    const { config, state } = this._store;
+    if (!press || !config || !state || !this.hass) return;
+    const then = query.get("nc_then");
+    // Once: the address loses the query at once.
+    navigate(then || window.location.pathname, true);
+    const [prefix, notificationId, stepId, entityId, buttonId] = press.split("|");
+    if (prefix !== "NC") return;
+    const live = liveCards(config, state, {
+      statuses: ["active"],
+      ignoreAudience: true,
+      withHeld: true,
+    }).find(
+      ({ card }) =>
+        card.notification_id === notificationId &&
+        card.step_id === stepId &&
+        (card.entity_id ?? "") === (entityId ?? ""),
+    );
+    // Ended meanwhile: only the page opens.
+    if (!live) return;
+    const button = effectiveButtons(live.category, live.step).find((item) => item.id === buttonId);
+    if (!button?.enabled) return;
+    // The panel may be gone after the page changed: Home Assistant's root
+    // opens the more-info dialog.
+    const root = document.querySelector<HTMLElement>("home-assistant") ?? this;
+    try {
+      await pressButton(this.hass, root, live, button);
+    } catch (err) {
+      this._error = errorText(err);
     }
   }
 

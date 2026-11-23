@@ -67,6 +67,22 @@ CHANNEL_PUSH: Final = "push"
 CHANNEL_LIGHT_PREFIX: Final = "light:"
 CHANNEL_SPEAKER_PREFIX: Final = "speaker:"
 CHANNEL_SIREN_PREFIX: Final = "siren:"
+# How a push notification alerts: silently, normally, through Focus
+# (time-sensitive), or through mute and Do Not Disturb (critical).
+PUSH_PRIORITIES: Final = ("silent", "normal", "time_sensitive", "critical")
+PUSH_PRIORITY_DEFAULT: Final = "normal"
+# The phones a person gets push notifications on.
+DEVICE_TYPES: Final = ("ios", "android", "other")
+# Push settings of the earlier data model, never used: dropped on load.
+_LEGACY_PUSH_KEYS: Final = (
+    "critical",
+    "send_again_after",
+    "sound",
+    "recipients",
+    "action_buttons",
+    "attachments",
+    "clear_when_done",
+)
 # The device sections and the prefix of their channel keys.
 DEVICE_PREFIXES: Final = {
     "lights": CHANNEL_LIGHT_PREFIX,
@@ -269,6 +285,9 @@ GENERAL_SCHEMA = vol.Schema(
         # The order of the chimes (built-in and own) in the lists; the ones
         # not in it follow by name.
         vol.Optional("chime_order", default=list): vol.All(cv.ensure_list, [cv.string]),
+        # The page the app opens when a push notification is tapped (empty:
+        # the panel's Overview). A category's or step's Tap can change it.
+        vol.Optional("open_on_tap"): _optional(cv.string),
         vol.Optional("read_the_message", default=dict): vol.Schema(
             {
                 vol.Optional("tts_service"): _optional(cv.entity_id),
@@ -310,9 +329,7 @@ PERSON_SCHEMA = vol.Schema(
     {
         vol.Required("person"): cv.entity_domain("person"),
         vol.Optional("notify"): _optional(cv.string),
-        vol.Optional("device_type", default="other"): vol.In(
-            ("ios", "android", "other")
-        ),
+        vol.Optional("device_type", default="other"): vol.In(DEVICE_TYPES),
         # When the person is asleep (only counted at home), set like the
         # condition of a mode.
         vol.Optional("sleep"): _optional(MODE_CONDITION_SCHEMA),
@@ -401,14 +418,6 @@ REPEAT_SCHEMA = vol.Any(
     vol.Schema({vol.Required("type"): "until_muted", vol.Required("every"): DURATION}),
 )
 
-RECIPIENTS_SCHEMA = vol.Schema(
-    {
-        vol.Optional("at_home"): cv.boolean,
-        vol.Optional("away"): cv.boolean,
-        vol.Optional("sleeping"): cv.boolean,
-    }
-)
-
 # Every key is optional so that a step can store only what it changes. A
 # channel sends after its delay (none: at once); in a step, ``delay: null``
 # overrides the category's delay with "at once".
@@ -429,13 +438,7 @@ _CHANNEL_EXTRA: dict[str, dict[Any, Any]] = {
         vol.Optional("read_info"): cv.boolean,
     },
     CHANNEL_PUSH: {
-        vol.Optional("critical"): cv.boolean,
-        vol.Optional("send_again_after"): _optional(DURATION),
-        vol.Optional("sound"): _optional(cv.string),
-        vol.Optional("recipients"): RECIPIENTS_SCHEMA,
-        vol.Optional("action_buttons"): cv.boolean,
-        vol.Optional("attachments"): cv.boolean,
-        vol.Optional("clear_when_done"): cv.boolean,
+        vol.Optional("priority"): vol.In(PUSH_PRIORITIES),
     },
 }
 
@@ -460,7 +463,7 @@ def _channels(value: Any) -> dict[str, dict[str, Any]]:
     if not isinstance(value, dict):
         raise vol.Invalid("expected a mapping of channels")
     result: dict[str, dict[str, Any]] = {}
-    for key, settings in value.items():
+    for key, given in value.items():
         kind = channel_kind(str(key))
         if kind is None:
             raise vol.Invalid(
@@ -468,8 +471,12 @@ def _channels(value: Any) -> dict[str, dict[str, Any]]:
                 "light:<id>, speaker:<id> or siren:<id>"
             )
         schema = vol.Schema({**_CHANNEL_COMMON, **_CHANNEL_EXTRA[kind]})
+        settings = dict(given or {})
+        if kind == CHANNEL_PUSH:
+            for legacy in _LEGACY_PUSH_KEYS:
+                settings.pop(legacy, None)
         try:
-            result[str(key)] = schema(settings or {})
+            result[str(key)] = schema(settings)
         except vol.Invalid as err:
             raise vol.Invalid(f"channel '{key}': {err}") from err
     return result
@@ -651,6 +658,9 @@ BUTTON_SCHEMA = _with_id(
         vol.Optional("confirm", default=False): cv.boolean,
         # Tap on the card: also when the push notification is tapped.
         vol.Optional("push_tap"): _optional(cv.boolean),
+        # Tap: the page the app opens when the push is tapped (empty: the
+        # category's, then General's).
+        vol.Optional("open_on_tap"): _optional(cv.string),
     }
 )
 
@@ -667,6 +677,7 @@ CATEGORY_BUTTON_SCHEMA = _with_id(
         ),
         vol.Optional("show_in_push"): _optional(cv.boolean),
         vol.Optional("push_tap"): _optional(cv.boolean),
+        vol.Optional("open_on_tap"): _optional(cv.string),
     }
 )
 
@@ -727,10 +738,13 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
         for key in ("label", "icon", "show_in_push", "push_tap"):
             if button.get(key) is None:
                 button.pop(key, None)
+        if not button.get("open_on_tap"):
+            button.pop("open_on_tap", None)
         if button["type"] == "tap":
             button.pop("show_in_push", None)
         else:
             button.pop("push_tap", None)
+            button.pop("open_on_tap", None)
     return buttons
 
 
@@ -770,8 +784,11 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
             button.pop("show_in_push", None)
             if button.get("push_tap") is None:
                 button["push_tap"] = True
+            if not button.get("open_on_tap"):
+                button.pop("open_on_tap", None)
         else:
             button.pop("push_tap", None)
+            button.pop("open_on_tap", None)
             if button.get("show_in_push") is None:
                 button["show_in_push"] = True
     return buttons
@@ -883,6 +900,7 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
     if kind == "tap":
         value = entry.get("push_tap")
         button["push_tap"] = base.get("push_tap", True) if value is None else value
+        button["open_on_tap"] = entry.get("open_on_tap") or base.get("open_on_tap")
     else:
         value = entry.get("show_in_push")
         button["show_in_push"] = (

@@ -25,6 +25,7 @@ export interface CategoryButton {
   snooze?: string[] | null;
   show_in_push?: boolean;
   push_tap?: boolean;
+  open_on_tap?: string | null;
 }
 
 /**
@@ -44,6 +45,18 @@ export const AUDIENCE_STATES: AudienceState[] = ["home", "sleep", "away"];
 
 /** The Dashboard channel: the panel and the dashboard cards. */
 export const CHANNEL_DASHBOARD = "dashboard";
+/** The Push channel: the phones of the people (their notify actions). */
+export const CHANNEL_PUSH = "push";
+
+/** How a push arrives: silent, normal, time-sensitive or critical. */
+export type PushPriority = "silent" | "normal" | "time_sensitive" | "critical";
+export const PUSH_PRIORITIES: PushPriority[] = [
+  "silent",
+  "normal",
+  "time_sensitive",
+  "critical",
+];
+export const PUSH_PRIORITY_DEFAULT: PushPriority = "normal";
 
 export interface Category {
   id: string;
@@ -93,6 +106,8 @@ export interface Button {
   show_in_push?: boolean;
   /** Tap behavior: also when the push notification is tapped (default on). */
   push_tap?: boolean;
+  /** Tap behavior: the page a tap on the push opens (empty: the default). */
+  open_on_tap?: string | null;
   confirm?: boolean;
 }
 
@@ -163,6 +178,8 @@ export interface GeneralSettings {
   read_the_message?: { tts_service?: string | null; language?: string | null; volume?: number | null };
   // The order of the chimes (ids); the others follow by name.
   chime_order?: string[];
+  // The page a tap on a push opens (empty: the panel's Overview).
+  open_on_tap?: string | null;
   [key: string]: unknown;
 }
 

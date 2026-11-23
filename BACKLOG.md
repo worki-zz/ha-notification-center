@@ -10,7 +10,7 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Notification editor.* A button's Action (Home Assistant action) can target the card's own entity, so one button action fits every entity of the notification without entity actions. *(Kristóf, 2026-11-20; phase 4)*
 
 ### Notification details view
-*Area: Notification content.* A detail page per notification (like a more-info dialog of its own) with the full message, data, attachments and history. Once it exists, it is also offered as a button action ("Notification details") next to Entity action, More info, Action and Navigate. *(Phase 3 and phase 4, 2026-11-19)*
+*Area: Notification content.* A detail page per notification (like a more-info dialog of its own) with the title, the message, the Info line, the buttons, the attachments and the time, plus the data and history. Once it exists, it is also offered as a button action ("Notification details") next to Entity action, More info, Action and Navigate, and as one of the pages a tapped push can open (besides a path). *(Phase 3 and phase 4, 2026-11-19; extended by Kristóf, 2026-11-23, phase 6.2)*
 
 ### Skip next
 *Area: Buttons and interactions.* Skip the next occurrence of a scheduled or repeating notification without marking it done, for example when the garbage collection is moved or the family is away. *(Dev plan, 2026-11-15)*
@@ -35,7 +35,25 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### Resume Cast music after a chime
 *Area: Channels.* A Google Cast speaker cannot announce, so a chime stops what it plays. Resume the music (or the stream) after the chime instead of leaving it stopped. *(Kristóf, 2026-11-22; phase 6.1)*
 
+### Keep when done
+*Area: Channels (Push).* A *Keep when done* switch of the push: when the notification ends, the push is not removed but silently replaced by a closing line, such as *Ended at 14:32*, *Done by Dóra at 14:32* or *Silenced by Kristóf*. Until then the push follows the card (Silence keeps it). *(Kristóf, 2026-11-23; phase 6.2)*
+
 ## Low priority
+
+### Send to
+*Area: Channels (Push).* A *Send to* setting of the push channel: only people who are in the selected state (Home, Sleep, Away) get the push, apart from the Audience. For now Home modes cover the cases (push only in a "nobody home" mode, speaker off in a "someone asleep" mode). *(Kristóf, 2026-11-23; phase 6.2)*
+
+### Repeat a push
+*Area: Channels (Push).* Send the push again every so often until the notification is done or silenced (Once or Loop), as a speaker repeats. Examples: a leak or an open freezer that nobody reacts to. Not needed for 1.0. *(Kristóf, 2026-11-23; phase 6.2)*
+
+### Live push text
+*Area: Channels (Push).* When the text of an active notification changes (for example the washing machine's time left), update the push silently, at most every 5 minutes (the Companion app allows about 500 pushes a day per phone). Together with iOS Live Activities and Android Live Updates, which show such a value live. Now the push keeps the text it was sent with; a new step replaces it (one push per notification and phone). *(Kristóf, 2026-11-23; phase 6.2)*
+
+### More push devices per person
+*Area: Channels (Push).* More than one phone or tablet per person on the People page. Now each person has one push device. *(Phase 6.2, 2026-11-23)*
+
+### Require unlocked phone
+*Area: Buttons and interactions.* A per-button *Require unlocked phone* setting for the push (the Companion app's `authenticationRequired`), for buttons such as opening the garage door. *(Kristóf, 2026-11-23; phase 6.2)*
 
 ### On departure
 *Area: Channels.* Send a channel when a person leaves home (for example a reminder that is only useful on the way out). Mostly covered by the Away state of the Audience and the late send; a separate trigger may still be useful. *(Kristóf, 2026-11-21; phase 6.0)*

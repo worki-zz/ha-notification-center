@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.8
+
+### Added
+
+- **Push channel:** sends notifications to the people's phones through their notify actions (Companion app). A Push row after the Dashboard in every Channels table, switched off until you tick a home mode. Title, message and Info line; on iOS the notification's icon on its colour, on Android the icon and colour; pushes grouped per category.
+- Push **Priority**: Silent, Normal, Time-sensitive and Critical (iOS interruption levels; on Android a channel per category for Normal and shared Silent, Time-sensitive and alarm-stream channels for the others; Critical cannot be swiped away until the notification ends).
+- Push buttons: the buttons shown in the push work from the phone, as the person who pressed them. iOS shows all of them, Android the first 3; Snooze uses its first time.
+- One push per notification and phone: the next step replaces it; it goes away on Done, Dismiss, Snooze, expiry and Hide while, and comes back with the card. Silence keeps it.
+- **Open on tap:** the page a tapped push opens, in General › Push (Overview by default) and in the Tap behavior's dialog of a category or notification. A Tap behavior action that is on for the push runs too.
+- People: the dialog's **Push** part with *Device* (the notify action) and *Type* (iOS, Android, Other; filled in for a Companion app phone) and a Test; the row shows the device after the sleep condition.
+- Test buttons in the Push channel's dialog: to your own phone, and to every phone the notification can reach.
+- `sensor.nc_channel_push` (cards on the phones, last sent per person) and a Repairs issue when a person's notify action is missing.
+
+### Changed
+
+- Push ticks of earlier versions are removed once with the update, so nothing is sent before the phones are set. The unused push settings of the early data model (`critical`, `send_again_after`, `sound`, `recipients`, `action_buttons`, `attachments`, `clear_when_done`) are dropped when the configuration is loaded.
+
 ## 0.6.7
 
 ### Changed

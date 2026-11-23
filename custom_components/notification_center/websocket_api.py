@@ -20,7 +20,14 @@ import voluptuous as vol
 
 from .const import CLOSED_DISMISSED, CLOSED_DONE, DOMAIN, SOURCE_BUTTON
 from .engine import async_get_engine
-from .model import COLLECTIONS, SCHEDULE_SCHEMA, ConfigData, ConfigValidationError
+from .model import (
+    CHANNEL_PUSH,
+    COLLECTIONS,
+    SCHEDULE_SCHEMA,
+    ConfigData,
+    ConfigValidationError,
+)
+from .push import mobile_app_phones
 from .render import render_text
 from .schedule import (
     SCHEDULE_CALENDAR,
@@ -94,6 +101,7 @@ def async_register(hass: HomeAssistant) -> None:
         ws_duplicate,
         ws_set_enabled,
         ws_update_person,
+        ws_push_services,
         ws_update_general,
         ws_set_mode_channels,
         ws_set_channel_modes,
@@ -299,6 +307,18 @@ async def ws_update_person(
     connection.send_result(msg["id"])
 
 
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/push/services"})
+@websocket_api.require_admin
+@callback
+def ws_push_services(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """List the notify actions a person's push can use, with the phone's type."""
+    connection.send_result(msg["id"], {"services": mobile_app_phones(hass)})
+
+
 @websocket_api.websocket_command(
     {vol.Required("type"): f"{DOMAIN}/general/update", vol.Required("data"): dict}
 )
@@ -373,6 +393,11 @@ async def ws_set_channel_modes(
         vol.Optional("name"): vol.Any(None, str),
         vol.Optional("message"): vol.Any(None, str),
         vol.Optional("info"): vol.Any(None, str),
+        # Push: to whom (me, all, person), the step's audience being edited,
+        # and the person's phone as the People dialog edits it.
+        vol.Optional("scope"): vol.In(("me", "all", "person")),
+        vol.Optional("step"): vol.Any(None, dict),
+        vol.Optional("person"): vol.Any(None, dict),
     }
 )
 @websocket_api.require_admin
@@ -394,6 +419,16 @@ async def ws_channel_test(
         return
     data = {key: value for key, value in msg.items() if key not in ("id", "type")}
     key = data.pop("channel")
+    if key == CHANNEL_PUSH:
+        # A push is sent at once: a missing phone is told back.
+        data["user_id"] = connection.user.id if connection.user else None
+        try:
+            await devices.async_test(key, data)
+        except HomeAssistantError as err:
+            connection.send_error(msg["id"], ERR_INVALID, str(err))
+            return
+        connection.send_result(msg["id"])
+        return
     if key not in devices.devices and not data.get("device"):
         connection.send_error(msg["id"], "not_found", f"No device '{key}'")
         return

@@ -168,6 +168,7 @@ export class NcInteractionDialog extends LitElement {
             ? nothing
             : this._iconField(button)}
         ${inherited ? this._renderPushChoice(button, inherited) : this._renderPush(button)}
+        ${button.type === "tap" ? this._renderOpenOnTap(button) : nothing}
         ${button.type === "snooze" ? this._renderSnooze(button) : nothing}
         ${category ? nothing : this._renderActionPart(action)}
       </div>
@@ -361,6 +362,30 @@ export class NcInteractionDialog extends LitElement {
             3, in the order of this list.
           </ha-alert>`
         : nothing}`;
+  }
+
+  // Tap: the page the app opens when the push is tapped. A Navigate action
+  // opens its own path.
+  private _renderOpenOnTap(button: Button) {
+    if (this.mode === "step" && button.action?.type === "navigate") return nothing;
+    const base = this.inherited?.open_on_tap;
+    return field(
+      this.hass,
+      { navigation: {} },
+      button.open_on_tap ?? "",
+      "Open on tap",
+      (value) => {
+        const copy = { ...this._button! };
+        if (value) copy.open_on_tap = String(value);
+        else delete copy.open_on_tap;
+        this._button = copy;
+      },
+      {
+        helper: base
+          ? `The page the push opens. Empty: ${base} (category).`
+          : "The page the push opens. Empty: the default under General, Push.",
+      },
+    );
   }
 
   // A category's button in a notification: Push follows the category unless
