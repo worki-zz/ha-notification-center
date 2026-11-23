@@ -25,6 +25,10 @@ export class NcChannelTable extends LitElement {
 
   @property({ attribute: false }) public channels: ChannelInfo[] = [];
 
+  // The home mode now (a notification's editor only): its column is marked,
+  // its ticks are green and a delay that applies now is orange.
+  @property({ attribute: false }) public currentMode?: string | null;
+
   // The configuration: the chimes a speaker can play.
   @property({ attribute: false }) public config?: NotificationCenterConfig;
 
@@ -106,6 +110,11 @@ export class NcChannelTable extends LitElement {
     this._resetPart(channel.key, "modes");
   }
 
+  /** Whether a channel is ticked in the home mode now. */
+  private _sendsNow(settings: ChannelSettings): boolean {
+    return !!this.currentMode && (settings.modes ?? []).includes(this.currentMode);
+  }
+
   private _hasOwnSettings(key: string): boolean {
     return Object.keys(this._own(key)).some((name) => name !== "modes");
   }
@@ -140,19 +149,29 @@ export class NcChannelTable extends LitElement {
     >
       <div class="row head">
         <div class="cell name">Channel</div>
-        ${modes.map((mode) => html`<div class="cell tick">${mode.name}</div>`)}
+        ${modes.map(
+          (mode) =>
+            html`<div class="cell tick">
+              ${mode.id === this.currentMode
+                ? html`<span class="now" title="The home mode now"
+                    ><ha-icon class="now-dot" icon="mdi:circle-medium"></ha-icon>${mode.name}</span
+                  >`
+                : mode.name}
+            </div>`,
+        )}
         <div class="cell end"></div>
       </div>
       ${this.channels.map((channel) => {
         const settings = this._effective(channel.key);
         const own = this._isStep && this._own(channel.key).modes !== undefined;
         const delay = whenText(settings);
+        const late = this._sendsNow(settings) && hasDelay(settings.delay);
         return html`<div class="row">
           <div class="cell name">
             ${channelIcon(this.hass, channel)}
             <div class="name-text">
               <div>${channel.name}</div>
-              <div class="secondary">
+              <div class="secondary ${late ? "late" : ""}">
                 ${(settings.modes ?? []).length ? delay : "Off"}
               </div>
             </div>
@@ -161,6 +180,7 @@ export class NcChannelTable extends LitElement {
             (mode) =>
               html`<div class="cell tick">
                 <ha-checkbox
+                  class=${mode.id === this.currentMode ? "now" : ""}
                   .checked=${(settings.modes ?? []).includes(mode.id)}
                   .label=${`${channel.name}: ${mode.name}`}
                   @change=${(ev: Event) =>
@@ -212,8 +232,14 @@ export class NcChannelTable extends LitElement {
         >
           ${channelIcon(this.hass, channel)}
           <div class="name-text">
-            <div>${channel.name}</div>
-            <div class="secondary">${channelSummary(settings, modes)}</div>
+            <div>
+              ${channel.name}${this._sendsNow(settings)
+                ? html`<ha-icon class="now-dot" icon="mdi:circle-medium" title="Sends in the home mode now"></ha-icon>`
+                : nothing}
+            </div>
+            <div class="secondary ${this._sendsNow(settings) && hasDelay(settings.delay) ? "late" : ""}">
+              ${channelSummary(settings, modes)}
+            </div>
           </div>
           ${own
             ? html`<ha-icon

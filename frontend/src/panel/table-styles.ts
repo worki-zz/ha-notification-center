@@ -77,6 +77,50 @@ export const TABLE_STYLES = css`
   .reset {
     color: var(--secondary-text-color);
   }
+  /* Live marks: the home mode now, the ticks valid now, a delay that
+     applies now and the people who get the notification now. */
+  .now {
+    display: inline-flex;
+    align-items: center;
+  }
+  .now-dot {
+    --mdc-icon-size: 16px;
+    color: var(--ha-color-fill-success-loud-resting, var(--success-color, #4caf50));
+  }
+  .head .now-dot {
+    margin-inline-start: -4px;
+  }
+  .name-text .now-dot {
+    vertical-align: middle;
+    margin-inline-start: 2px;
+  }
+  ha-checkbox.now {
+    --ha-checkbox-checked-background-color: var(
+      --ha-color-fill-success-loud-resting,
+      var(--success-color, #4caf50)
+    );
+    --ha-checkbox-checked-background-color-hover: var(
+      --ha-color-fill-success-loud-hover,
+      var(--success-color, #4caf50)
+    );
+  }
+  .secondary.late {
+    color: var(--ha-color-on-warning-normal, var(--warning-color, #ff9800));
+  }
+  .avatar-wrap {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+  }
+  .avatar-wrap .gets {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    --mdc-icon-size: 16px;
+    color: var(--ha-color-fill-success-loud-resting, var(--success-color, #4caf50));
+    background-color: var(--card-background-color, #fff);
+    border-radius: 50%;
+  }
   .hint {
     margin: 0;
     color: var(--secondary-text-color);

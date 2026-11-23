@@ -6,8 +6,8 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## High priority
 
-### Why a notification is (not) active: diagnostics and trace
-*Area: Insight.* Answers to "why did this fire, why did this not, why is nothing sent": a trace view like the one for automations (which trigger and conditions matched, which channels were sent or held back and why), the Activity log entries behind it, a "why is this notification not active" answer, and in the editor a live view of whether each condition is true right now, as in the automation editor. Any simple part may be built before 1.0; the logic and the views are discussed in a thread of their own. Replaces the earlier *Trace* idea. *(Kristóf, 2026-11-23; v0.7.2 review)*
+### Run snapshots (trace)
+*Area: Insight.* At each run event of a notification (a step becomes active; a trigger fires but the conditions are false; a notification is closed) store one snapshot: the time, the trigger with its entity and from/to states, the result of the conditions that were checked (as in Home Assistant's automation trace, checking stops at the first false one, so the rest show as not checked; likely recorded with Home Assistant's own condition trace), and the Information dialog's status and channel rows at that moment (which channels sent, to whom, and why the others held back). Keep the last N runs or X days per notification, in a Store key of its own. Shown as a History section in the Information dialog, one expandable row per snapshot. No visualisation of the whole logic chain. Builds on the Information dialog (0.7.x) and also covers "fired but the conditions were false" of the trigger statistics. Replaces the earlier *Why a notification is (not) active* and *Trace* ideas. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
 
 ### Button action on the card's entity
 *Area: Notification editor.* A button's Action (Home Assistant action) can target the card's own entity, so one button action fits every entity of the notification without entity actions. *(Kristóf, 2026-11-20; phase 4)*
@@ -22,6 +22,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Insight.* Simple statistics per notification, such as how often it fired and how long it took until it was done. Built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*
 
 ## Medium priority
+
+### Live condition badges in the editor
+*Area: Notification editor.* Home Assistant's automation editor marks each condition with a live green or orange badge (true or false right now). It renders that badge only when the conditions open their options in the sidebar; the notification editor shows them inline, so they get no badge. Show the live result next to each condition of a step, Notification state and Notification entities included. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
 
 ### First steps and a full guide in the panel
 *Area: Panel.* Guidance for a new installation: first steps on an empty Overview (add a person, a push device, a first notification), and a full description that can be opened from the panel, not only in the README. *(Kristóf, 2026-11-23; v0.7.2 review)*
@@ -84,6 +87,12 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ### Confirmation for buttons
 *Area: Buttons and interactions.* Ask "Are you sure?" before a button runs its action, like the confirmation option of Home Assistant's tap actions. *(Phase 3, 2026-11-19)*
+
+### Debug mode
+*Area: Insight.* A switch in General settings that writes an Activity (logbook) entry for every push, light, speaker and siren send, with whom it went to. Off by default: in daily use these entries are noise. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
+
+### Trigger statistics
+*Area: Insight.* When each trigger of a step last fired, how often, and when it last fired while the conditions were false. Belongs with *Statistics*; the "conditions false" part is covered by *Run snapshots*. Home Assistant itself could keep the trigger times. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
 
 ### History
 *Area: Insight.* A history of each notification: when it became active, which step it was on, who marked it done, dismissed or snoozed it, and when. Can be built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*

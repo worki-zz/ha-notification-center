@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- *Information* in the notification editor's menu (and a click on its status chip) opens a dialog of the notification's status: active since, snoozed until, hidden, last active, last done, next due. For each active step it lists every channel and what it does now: *Sends to Anna and Béla*, *Waiting for Night home mode*, *Delay until 18:40*, *Nobody in the audience: Anna is not home*, *Off*, and for Push the people with no phone set. *Step information* in the step menu shows the same for one step. The entity's more-info is a button of the dialog.
+- A single-step notification shows a green dot on its step tab while it is active, as a numbered step shows a green number.
+- Live marks in the editor's Channels and Audience tables: a green dot before the home mode now, green ticks that apply now, the delay text in orange where it applies now, and a check on the avatar of each person who gets the notification in their state now.
+- The *Test* item of a condition row works for Notification state and Notification entities conditions without a notification set: they test this (saved) notification.
+
 ### Changed
 
 - A step's *Done* block is called *Done when* in the editor, its help and the README.

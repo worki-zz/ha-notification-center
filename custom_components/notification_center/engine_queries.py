@@ -27,6 +27,9 @@ from .const import (
 )
 from .listed import ListedMatcher, matching_entities
 from .model import (
+    CHANNEL_DASHBOARD,
+    CHANNEL_PUSH,
+    DEVICE_PREFIXES,
     ENTITIES_KINDS,
 )
 from .render import render_text
@@ -247,7 +250,31 @@ class EngineQueries:
         data = card.as_dict()
         # For a card not active, only who it is for counts (``audience``).
         data["dashboard"] = self.channel_view(card).as_dict()
+        if card.status == STATE_ACTIVE:
+            data["channels"] = self._channel_views(card)
         return data
+
+    def _channel_views(self: Engine, card: Card) -> dict[str, dict[str, Any]]:
+        """Return whether each channel sends an active card now, for the Info.
+
+        Push also lists the people it would go to who have no phone set.
+        """
+        config = self._config
+        keys = [CHANNEL_DASHBOARD, CHANNEL_PUSH]
+        for section, prefix in DEVICE_PREFIXES.items():
+            keys.extend(prefix + item["id"] for item in config.get(section, []))
+        phones = {
+            item["person"] for item in config.get("people", []) if item.get("notify")
+        }
+        views: dict[str, dict[str, Any]] = {}
+        for key in keys:
+            view = self.channel_view(card, key).as_dict()
+            if key == CHANNEL_PUSH:
+                view["no_phone"] = [
+                    person for person in view["people"] if person not in phones
+                ]
+            views[key] = view
+        return views
 
     def snapshot(self: Engine) -> dict[str, Any]:
         """Return every notification's state and cards for the websocket API."""
@@ -267,6 +294,13 @@ class EngineQueries:
                     ),
                     "next_due": to_iso(self.next_due(notification["id"])),
                     "upcoming": self.upcoming(notification["id"]),
+                    # When each step last reached each state, for the Info.
+                    "history": {
+                        step_id: dict(states)
+                        for step_id, states in self.history.get(
+                            notification["id"], {}
+                        ).items()
+                    },
                 }
                 for notification in self._config["notifications"]
             },

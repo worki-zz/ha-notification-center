@@ -399,6 +399,8 @@ export interface CardState {
   silenced?: boolean;
   since: string;
   state_since: string;
+  // When it last became active (an active card).
+  active_since?: string | null;
   snoozed_until: string | null;
   closed_at?: string | null;
   message: string | null;
@@ -407,6 +409,8 @@ export interface CardState {
   data_text?: string | null;
   // Whether the Dashboard channel shows the card now, and to whom.
   dashboard?: ChannelView;
+  // An active card: what every channel does now, by channel key.
+  channels?: Record<string, ChannelView>;
 }
 
 /** Why a channel does not send a card now. */
@@ -420,6 +424,8 @@ export interface ChannelView {
   reason: ChannelReason | null;
   // The end of the delay.
   until: string | null;
+  // Push: the people it goes to who have no phone set.
+  no_phone?: string[];
 }
 
 export interface NotificationState {
@@ -431,6 +437,8 @@ export interface NotificationState {
   next_due: string | null;
   // When each scheduled step is next due.
   upcoming?: { step_id: string; due: string }[];
+  // When each step last reached each state (active, done, ...), by step id.
+  history?: Record<string, Record<string, string>>;
 }
 
 export interface StateMessage {
