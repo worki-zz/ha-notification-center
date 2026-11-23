@@ -19,9 +19,9 @@ from custom_components.notification_center.channels import (
     channel_settings,
     channel_view,
 )
+from custom_components.notification_center.migrations import upgrade_channels
 from custom_components.notification_center.model import (
     async_validate_config,
-    upgrade_channels,
 )
 
 from .common import Center, step

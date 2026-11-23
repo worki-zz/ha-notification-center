@@ -8,9 +8,9 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 ## Reading rules (token budget)
 
 - Never read a file over ~400 lines in full. Find the spot with `grep -n` and read a
-  line range. Large files: `engine.py`, `model.py`, `devices.py`, `websocket_api.py`,
-  `push.py`, `notification-editor.ts`, `step-editor.ts`, `channel-tables.ts`, and the
-  big test files.
+  line range. Large files: `engine.py`, `model.py`, `websocket_api.py`, `push.py`,
+  `notification-editor.ts`, `step-editor.ts`, `channel-tables.ts`, and the big test
+  files. Engine tests are split: `tests/test_engine*.py` (core, listed, causes, actions).
 - `CHANGELOG.md`: read only the top section (`head -40`). `README.md` and `BACKLOG.md`:
   grep for the heading you need.
 - Use the file map below instead of exploring the tree.
@@ -21,13 +21,20 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 | --- | --- |
 | `__init__.py` | Setup and unload; wires store, engine, platforms, panel |
 | `const.py` | Constants and keys |
-| `model.py` | Config schema (voluptuous): sections at the `# ---` markers; buttons and category buttons (~520-920); `default_config` (~1077); reference checks (~1114); 0.x `upgrade_*` migrations (~1190-1700, removed at 1.0); `async_validate_config` (~1820) |
+| `model.py` | Config schema (voluptuous): sections at the `# ---` markers; buttons and category buttons (~520-920); `default_config` (~1106); reference checks (~1143); `async_validate_config` (~1449) |
+| `migrations.py` | 0.x `upgrade_*` migrations, called from `async_validate_config` and `normalize.py`; removed at 1.0 |
 | `normalize.py` | Editor form to stored form |
 | `store.py` | Storage of config and runtime state |
-| `engine.py` | When a card shows and goes away: `Card` (~218), `StepRunner` (~468), `NotificationRunner` (~803), `Engine` (~850 to end) |
+| `engine.py` | `Engine`, the core (~175 to end): load, config changes, open/close/snooze, state changes, timers, saving |
+| `cards.py` | `Card`, `Overrides`, `StateWatch`, phases and card helpers |
+| `runner.py` | `StepRunner` (~151) and `NotificationRunner` (~486): triggers, conditions, listed trackers of a step |
+| `engine_queries.py` | `EngineQueries` mixin of `Engine`: own conditions, notification state, summary, snapshot, calendar events |
+| `engine_actions.py` | `EngineActions` mixin of `Engine`: trigger/select/close/snooze cards, buttons, button actions |
 | `schedule.py`, `scheduler.py` | When a scheduled step is due; running the schedule |
 | `channels.py` | Rules every channel follows before sending (modes, audience, timing) |
-| `devices.py` | Light (~447), Speaker (~816), Siren (~1105) channels, `DeviceManager` (~202), colours and chimes (top) |
+| `devices.py` | `DeviceManager` (lights, speakers, sirens; tests of a channel) |
+| `device_colors.py`, `device_base.py` | Colours, chimes and highlights; the `Device` base class |
+| `device_light.py`, `device_speaker.py`, `device_siren.py` | Light, Speaker and Siren channels |
 | `push.py` | Push channel (Companion app notify, priorities, buttons) |
 | `modes.py` | Current home mode |
 | `render.py` | Message and Info line text |
@@ -60,7 +67,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 cd frontend && npm ci && npm run lint && npm run typecheck && npm run build
 uv pip install -r requirements_test.txt
 ruff check . && ruff format --check . && mypy custom_components tests
-pytest tests/test_engine.py -k <name>   # run only the affected tests while fixing
+pytest tests/test_engine_actions.py -k <name>   # run only the affected tests while fixing
 python scripts/check_version.py         # all version numbers equal
 ```
 

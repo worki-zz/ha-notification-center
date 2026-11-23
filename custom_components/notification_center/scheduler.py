@@ -29,7 +29,7 @@ from .schedule import (
 )
 
 if TYPE_CHECKING:
-    from .engine import StepRunner
+    from .runner import StepRunner
 
 HISTORY_SCHEDULED: Final = "scheduled"
 # The occurrence of a calendar step that was done early, so it is skipped.

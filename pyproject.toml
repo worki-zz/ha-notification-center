@@ -51,6 +51,15 @@ implicit_reexport = true
 module = "custom_components.notification_center.websocket_api"
 disable_error_code = ["dict-item"]
 
+# These mixins hold methods of Engine and type ``self`` as Engine, which is
+# a subclass of the mixin: mypy reports that as "misc".
+[[tool.mypy.overrides]]
+module = [
+  "custom_components.notification_center.engine_queries",
+  "custom_components.notification_center.engine_actions",
+]
+disable_error_code = ["misc"]
+
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_decorators = false

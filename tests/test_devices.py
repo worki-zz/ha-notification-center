@@ -16,15 +16,19 @@ from pytest_homeassistant_custom_component.common import (
 )
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
-from custom_components.notification_center import devices as devices_module
-from custom_components.notification_center.devices import (
+from custom_components.notification_center import (
+    device_light,
+    device_siren,
+    device_speaker,
+)
+from custom_components.notification_center.device_colors import (
     chime_of,
     color_of,
     highlight_of,
     light_rgb,
     parse_color,
-    spoken_text,
 )
+from custom_components.notification_center.device_speaker import spoken_text
 
 from .common import Center, step
 
@@ -34,10 +38,10 @@ RED = [244, 67, 54]
 @pytest.fixture(autouse=True)
 def _fast_speakers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Do not wait for mocked speakers to play."""
-    monkeypatch.setattr(devices_module, "PLAY_START_TIMEOUT", 0)
-    monkeypatch.setattr(devices_module, "POLL", 0)
-    monkeypatch.setattr(devices_module, "TEST_SECONDS", 0)
-    monkeypatch.setattr(devices_module, "SIREN_TEST_SECONDS", 0)
+    monkeypatch.setattr(device_speaker, "PLAY_START_TIMEOUT", 0)
+    monkeypatch.setattr(device_speaker, "POLL", 0)
+    monkeypatch.setattr(device_light, "TEST_SECONDS", 0)
+    monkeypatch.setattr(device_siren, "SIREN_TEST_SECONDS", 0)
 
 
 def test_colors() -> None:
@@ -489,7 +493,7 @@ async def test_channel_test_light_several_times(
     center: Center, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Tests one after the other: the light goes back to how it was before the first."""
-    monkeypatch.setattr(devices_module, "TEST_SECONDS", 0.05)
+    monkeypatch.setattr(device_light, "TEST_SECONDS", 0.05)
     await center.set("light.strip", "off", supported_color_modes=["hs"])
     on = async_mock_service(hass, "light", "turn_on")
     off = async_mock_service(hass, "light", "turn_off")

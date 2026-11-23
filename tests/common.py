@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.notification_center.const import DOMAIN
 from custom_components.notification_center.engine import Engine
@@ -75,3 +81,17 @@ async def load(hass: HomeAssistant, entry: MockConfigEntry) -> Center:
 def step(message: str = "Do it", **extra: Any) -> dict[str, Any]:
     """Return a step with a message."""
     return {"message": message, **extra}
+
+
+def state_trigger(entity_id: str, to: str = "on") -> dict[str, Any]:
+    """Return a state trigger of an entity."""
+    return {"trigger": "state", "entity_id": entity_id, "to": to}
+
+
+async def tick(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, delta: timedelta
+) -> None:
+    """Move the time on and let the timers run."""
+    freezer.tick(delta)
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
