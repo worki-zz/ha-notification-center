@@ -49,9 +49,31 @@ async def test_missing_entity_issue(hass: HomeAssistant, center: Center) -> None
     assert issue.learn_more_url.startswith(
         "/notification-center/settings/notifications/"
     )
+    # Fixable: the fix flow gets the link to the editor.
+    assert issue.is_fixable
+    assert issue.data is not None
+    assert issue.data["link"] == issue.learn_more_url
 
     await center.set("binary_sensor.bell", "off")
     await center.set("lock.front", "locked")
+    center.engine.issues.refresh()
+    assert _issues(hass) == {}
+
+
+async def test_missing_device_issue(hass: HomeAssistant, center: Center) -> None:
+    """A light, speaker or siren without its entity is listed."""
+    item = await center.manager.async_create("lights", {"entity_id": "light.gone"})
+    center.engine.issues.refresh()
+    issues = _issues(hass)
+    issue = issues[f"missing_device_{item['id']}"]
+    assert issue.translation_placeholders == {
+        "kind": "Light",
+        "entity": "light.gone",
+    }
+    assert issue.is_fixable
+    assert issue.learn_more_url == "/notification-center/settings/general/light"
+
+    await center.set("light.gone", "off")
     center.engine.issues.refresh()
     assert _issues(hass) == {}
 
