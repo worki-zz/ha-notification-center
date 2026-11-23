@@ -79,7 +79,7 @@ categories:
       light:kitchen_strip: {modes: [away, sleep, guest, home]}
       speaker:kitchen_speaker:
         modes: [home]
-        repeat: {type: until_muted, every: {seconds: 30}}
+        repeat: {type: recurring, every: {seconds: 30}}
       siren:balcony_siren: {modes: [away, sleep, guest, home]}
       siren:co_detector: {modes: [away, sleep, guest, home]}
       push:

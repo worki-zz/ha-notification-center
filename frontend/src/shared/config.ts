@@ -1,6 +1,9 @@
 // The configuration as the backend sends it. Only the fields the frontend
 // uses so far are typed; the backend schema (model.py) is the reference.
 
+/** How a card stands out: Normal (none) or one of the card's highlights. */
+export type CardHighlight = "none" | "pulse" | "glow" | "alert";
+
 export interface Mode {
   id: string;
   name: string;
@@ -24,7 +27,6 @@ export interface CategoryButton {
   icon?: string | null;
   snooze?: string[] | null;
   show_in_push?: boolean;
-  push_tap?: boolean;
   open_on_tap?: string | null;
 }
 
@@ -64,8 +66,9 @@ export interface Category {
   icon?: string | null;
   // A system colour by name, or an own colour (the Colors list) by its id.
   color?: string | null;
-  // The lights blink (or show their effect) for its notifications.
-  highlight?: boolean;
+  // How its cards stand out (none: Normal); any highlight also makes the
+  // lights blink (or show their effect).
+  highlight?: CardHighlight;
   // What the speakers play.
   chime?: string | null;
   // The built-in buttons (always there) and the category's custom ones.
@@ -104,8 +107,6 @@ export interface Button {
   snooze?: string[] | null;
   // Shown in the push notification (takes effect with the push channel).
   show_in_push?: boolean;
-  /** Tap behavior: also when the push notification is tapped (default on). */
-  push_tap?: boolean;
   /** Tap behavior: the page a tap on the push opens (empty: the default). */
   open_on_tap?: string | null;
   confirm?: boolean;
@@ -157,7 +158,7 @@ export interface Notification {
   icon?: string | null;
   // Left out: the category's. A chime of "none" plays nothing.
   color?: string | null;
-  highlight?: boolean | null;
+  highlight?: CardHighlight | null;
   chime?: string | null;
   steps: Step[];
 }

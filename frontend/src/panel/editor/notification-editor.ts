@@ -349,6 +349,7 @@ export class NcNotificationEditor extends LitElement {
       icon,
       stateObj: icon || !entity ? undefined : hass.states[entity],
       color: cssColor(colorCss(this.config, draft.color ?? category?.color)),
+      highlight: draft.highlight ?? category?.highlight ?? "none",
       buttons,
     };
   }
@@ -627,7 +628,7 @@ export class NcNotificationEditor extends LitElement {
         })}
         ${highlightField(
           draft.highlight ?? undefined,
-          !!category?.highlight,
+          category?.highlight ?? "none",
           (value) => this._change({ highlight: value ?? null }),
         )}
         ${this.config!.speakers.length

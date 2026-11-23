@@ -30,7 +30,7 @@ import type { NotificationViewData } from "../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../shared/text";
 import type { HomeAssistant } from "../shared/types";
 import "./channel-tables";
-import { audienceCount, channelsOf, sleepersOf } from "./channel-tables";
+import { audienceCount, channelCount, channelsOf, sleepersOf } from "./channel-tables";
 import { confirmDialog } from "./confirm";
 import { chimeField, colorField, highlightField } from "./color-field";
 import { field } from "./fields";
@@ -156,7 +156,7 @@ export class NcCategoryEditor extends LitElement {
         name: "",
         icon: general?.icon ?? null,
         color: general?.color ?? null,
-        highlight: general?.highlight ?? false,
+        highlight: general?.highlight ?? "none",
         chime: general?.chime ?? null,
         buttons: categoryButtons(undefined),
         // And General's channels and audience.
@@ -235,6 +235,7 @@ export class NcCategoryEditor extends LitElement {
             : "") || "Message",
       icon: notification?.icon || draft.icon || "mdi:bell",
       color: cssColor(colorCss(this.config, notification?.color ?? draft.color)),
+      highlight: notification?.highlight ?? draft.highlight ?? "none",
       buttons: liveButtons(live).map((button) => ({
         key: button.key || button.button.type,
         label: button.label,
@@ -353,7 +354,7 @@ export class NcCategoryEditor extends LitElement {
         "channels",
         "mdi:broadcast",
         "Channels",
-        undefined,
+        channelCount(channelsOf(this.hass, this.config), draft.channels, undefined),
         () =>
           html`<nc-channel-table
             .hass=${this.hass}
@@ -374,7 +375,7 @@ export class NcCategoryEditor extends LitElement {
     `;
   }
 
-  private _audienceCount(draft: Draft): string | undefined {
+  private _audienceCount(draft: Draft): number | undefined {
     return audienceCount(
       this.hass,
       draft.audience,
@@ -423,7 +424,7 @@ export class NcCategoryEditor extends LitElement {
       </div>
       <div class="row three">
         ${colorField(this.hass, this.config, draft.color, (value) => this._change({ color: value }))}
-        ${highlightField(!!draft.highlight, undefined, (value) => this._change({ highlight: !!value }))}
+        ${highlightField(draft.highlight ?? "none", undefined, (value) => this._change({ highlight: value ?? "none" }))}
         ${this.config?.speakers.length
           ? chimeField(this.config, draft.chime, undefined, (value) => this._change({ chime: value }))
           : nothing}

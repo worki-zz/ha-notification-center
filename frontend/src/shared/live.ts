@@ -143,7 +143,6 @@ export function categoryButtons(category: Category | undefined): CategoryButton[
           : undefined,
       show_in_push:
         button.type === "tap" ? undefined : (button.show_in_push ?? true),
-      push_tap: button.type === "tap" ? (button.push_tap ?? true) : undefined,
     }),
   );
 }
@@ -178,10 +177,8 @@ export function effectiveButtons(
       category: true,
     };
     if (base.type === "snooze") merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze;
-    if (base.type === "tap") {
-      merged.push_tap = entry.push_tap ?? base.push_tap;
-      merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
-    } else merged.show_in_push = entry.show_in_push ?? base.show_in_push;
+    if (base.type === "tap") merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
+    else merged.show_in_push = entry.show_in_push ?? base.show_in_push;
     return merged;
   });
   for (const entry of own) {

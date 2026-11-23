@@ -127,14 +127,24 @@ export function audienceCount(
   category: Record<string, AudienceEntry> | undefined,
   own: Record<string, AudienceEntry> | undefined,
   sleepers: string[] = [],
-): string | undefined {
+): number | undefined {
   const people = haPeople(hass).map((person) => person.id);
   if (!people.length) return undefined;
   const effective = effectiveAudience(category, own, people);
   const on = people.filter((person) =>
     personStates(person, sleepers).some((state) => effective[person][state]),
   ).length;
-  return `${on}/${people.length}`;
+  return on;
+}
+
+/** How many channels send in at least one mode: the category's, then the step's. */
+export function channelCount(
+  channels: ChannelInfo[],
+  base: Record<string, ChannelSettings> | undefined,
+  own: Record<string, ChannelSettings> | undefined,
+): number {
+  return channels.filter((channel) => (effectiveChannel(base?.[channel.key], own?.[channel.key]).modes ?? []).length)
+    .length;
 }
 
 /** A channel's settings: the category's, then what the step changes. */
@@ -748,7 +758,7 @@ export class NcChannelTable extends LitElement {
               (value) =>
                 this._store(key, {
                   ...this._own(key),
-                  delay: value === "after" ? { minutes: 5 } : null,
+                  delay: value === "after" ? { hours: 1 } : null,
                 }),
               { helper: "After the notification becomes active." },
             )}
@@ -822,8 +832,9 @@ export class NcChannelTable extends LitElement {
     );
   }
 
-  // A speaker: whether the message is read out (with the name and the Info
-  // line). The chime is the notification's or its category's.
+  // A speaker: its volume, whether the chime plays and whether the message
+  // is read out (with the name and the Info line). The chime is the
+  // notification's or its category's.
   private _renderSpeaker(key: string, settings: ChannelSettings) {
     const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
     const reading = !!settings.read_the_message;
@@ -836,6 +847,14 @@ export class NcChannelTable extends LitElement {
         ${label}
       </label>`;
     return html`
+      ${this._renderVolume(key, settings)}
+      <div class="switch-row">
+        <div>Play chime</div>
+        <ha-switch
+          .checked=${settings.play_chime !== false}
+          @change=${(ev: Event) => set({ play_chime: (ev.target as HTMLInputElement).checked })}
+        ></ha-switch>
+      </div>
       <div class="switch-row">
         <div>Read the message</div>
         <ha-switch
@@ -856,11 +875,42 @@ export class NcChannelTable extends LitElement {
     `;
   }
 
-  // A speaker's repeat: Once, or Loop every so often until done or silenced.
+  // A speaker's volume for these notifications, with an X that empties it:
+  // the category's (in a notification) or the speaker's own.
+  private _renderVolume(key: string, settings: ChannelSettings) {
+    const volume = settings.volume as number | null | undefined;
+    const own = this._own(key).volume;
+    const clear = () => {
+      const copy = { ...this._own(key) };
+      delete copy.volume;
+      this._store(key, copy);
+    };
+    return html`<div class="clearable">
+      ${field(
+        this.hass,
+        { number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" } },
+        volume === undefined || volume === null ? undefined : Math.round(volume * 100),
+        "Volume",
+        (value) => {
+          if (value === undefined || value === null || value === "") clear();
+          else this._store(key, { ...this._own(key), volume: Number(value) / 100 });
+        },
+        { helper: "Empty: the speaker's own volume." },
+      )}
+      ${own !== undefined && own !== null
+        ? html`<ha-icon-button class="clear" .label=${"Clear"} @click=${clear}>
+            <ha-icon icon="mdi:close"></ha-icon>
+          </ha-icon-button>`
+        : nothing}
+    </div>`;
+  }
+
+  // A speaker's repeat until done or silenced: Once; Loop, again and again
+  // without a pause; or Recurring, every so often.
   private _renderRepeat(key: string, settings: ChannelSettings) {
     const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
     const repeat = (settings.repeat as { type: string; every?: Duration } | undefined) ?? { type: "once" };
-    const loop = repeat.type === "until_muted";
+    const every = repeat.every ?? { hours: 1 };
     return html`${field(
         this.hass,
         {
@@ -868,19 +918,25 @@ export class NcChannelTable extends LitElement {
             mode: "dropdown",
             options: [
               { value: "once", label: "Once" },
-              { value: "until_muted", label: "Loop" },
+              { value: "loop", label: "Loop" },
+              { value: "recurring", label: "Recurring" },
             ],
           },
         },
         repeat.type,
         "Repeat",
         (value) =>
-          set({ repeat: value === "until_muted" ? { type: "until_muted", every: { minutes: 1 } } : { type: "once" } }),
-        { helper: "Until done or silenced." },
+          set({
+            repeat:
+              value === "recurring"
+                ? { type: "recurring", every: { hours: 1 } }
+                : { type: value === "loop" ? "loop" : "once" },
+          }),
+        { helper: repeat.type === "once" ? "" : "Until done or silenced." },
       )}
-      ${loop
-        ? field(this.hass, { duration: {} }, repeat.every ?? { minutes: 1 }, "Every", (value) =>
-            set({ repeat: { type: "until_muted", every: (value as Duration | undefined) ?? { minutes: 1 } } }),
+      ${repeat.type === "recurring"
+        ? field(this.hass, { duration: {} }, every, "Every", (value) =>
+            set({ repeat: { type: "recurring", every: (value as Duration | undefined) ?? { hours: 1 } } }),
           )
         : nothing}`;
   }
@@ -969,6 +1025,15 @@ export class NcChannelTable extends LitElement {
         gap: 16px;
       }
 
+      .clearable {
+        position: relative;
+      }
+      .clearable .clear {
+        position: absolute;
+        top: 4px;
+        inset-inline-end: 40px;
+        color: var(--secondary-text-color);
+      }
       .check {
         display: flex;
         align-items: center;

@@ -60,6 +60,8 @@ def test_colors() -> None:
     assert chime_of({}, {}) == "nc_chime"
     assert highlight_of({"highlight": False}, {"highlight": True}) is False
     assert highlight_of({}, {"highlight": True}) is True
+    assert highlight_of({}, {"highlight": "glow"}) is True
+    assert highlight_of({"highlight": "none"}, {"highlight": "alert"}) is False
 
 
 def test_spoken_text() -> None:
@@ -254,7 +256,7 @@ async def test_speaker_plays_reads_and_repeats(
             key: {
                 "modes": ["home"],
                 "read_the_message": True,
-                "repeat": {"type": "until_muted", "every": {"seconds": 30}},
+                "repeat": {"type": "recurring", "every": {"seconds": 30}},
             },
         },
     )
@@ -286,6 +288,78 @@ async def test_speaker_plays_reads_and_repeats(
     attrs = center.attrs("sensor.nc_channel_speaker_kitchen")
     assert attrs["silenced"] == 1
     assert attrs["last_notification"] == "Doorbell"
+
+
+async def test_speaker_loop_plays_again_until_silenced(
+    center: Center, hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Loop plays again right after a play ends, until silenced."""
+    await center.set("media_player.kitchen", "idle", supported_features=0)
+    play = async_mock_service(hass, "media_player", "play_media")
+    item = await center.manager.async_create(
+        "speakers", {"entity_id": "media_player.kitchen"}
+    )
+    key = f"speaker:{item['id']}"
+    await _category(
+        center,
+        channels={key: {"modes": ["home"], "repeat": {"type": "loop"}}},
+    )
+    await center.add("Alarm", step())
+    await center.call("trigger", "sensor.nc_alarm")
+    await hass.async_block_till_done()
+    assert len(play) == 1
+
+    # The mock plays nothing, so the play ends at once and the loop waits a
+    # little before it plays again.
+    for count in (2, 3):
+        freezer.tick(timedelta(seconds=6))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        assert len(play) == count
+
+    engine = center.engine
+    engine.silence_cards(list(engine.cards.values()), "button")
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=6))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    assert len(play) == 3
+
+
+async def test_speaker_channel_volume_and_no_chime(
+    center: Center, hass: HomeAssistant
+) -> None:
+    """The channel's volume wins over the speaker's; Play chime off only reads."""
+    await center.set(
+        "media_player.cast", "idle", supported_features=0, volume_level=0.2
+    )
+    play = async_mock_service(hass, "media_player", "play_media")
+    speak = async_mock_service(hass, "tts", "speak")
+    volume = async_mock_service(hass, "media_player", "volume_set")
+    await center.manager.async_update_general(
+        {"read_the_message": {"tts_service": "tts.cloud"}}
+    )
+    item = await center.manager.async_create(
+        "speakers", {"entity_id": "media_player.cast", "volume": 0.6}
+    )
+    key = f"speaker:{item['id']}"
+    await _category(
+        center,
+        channels={
+            key: {
+                "modes": ["home"],
+                "volume": 0.9,
+                "play_chime": False,
+                "read_the_message": True,
+            }
+        },
+    )
+    await center.add("Bell", step("Hello"))
+    await center.call("trigger", "sensor.nc_bell")
+    await hass.async_block_till_done()
+    assert [call.data["volume_level"] for call in volume] == [0.9, 0.2]
+    assert play == []
+    assert speak[0].data["message"] == "Hello."
 
 
 async def test_speaker_announce_and_volume(center: Center, hass: HomeAssistant) -> None:

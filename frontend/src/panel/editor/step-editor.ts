@@ -37,7 +37,7 @@ import type {
   NotificationCenterConfig,
 } from "../../shared/config";
 import "../channel-tables";
-import { audienceCount, channelsOf } from "../channel-tables";
+import { audienceCount, channelCount, channelsOf } from "../channel-tables";
 import {
   categoryButtons,
   effectiveButtons,
@@ -315,7 +315,7 @@ export class NcStepEditor extends LitElement {
         "channels",
         "mdi:broadcast",
         "Channels",
-        undefined,
+        channelCount(channelsOf(this.hass, this.config), this.category?.channels, step.channels),
         this._renderChannels(step),
       )}
       ${this._help ? this._renderHelp(this._help) : nothing}
