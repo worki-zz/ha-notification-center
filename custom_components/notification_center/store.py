@@ -20,6 +20,7 @@ from homeassistant.util import dt as dt_util, yaml as yaml_util
 
 from .const import DOMAIN
 from .model import (
+    CHANNEL_PUSH,
     COLLECTIONS,
     DEVICE_PREFIXES,
     GENERAL_CATEGORY_ID,
@@ -39,7 +40,8 @@ from .model import (
 from .normalize import normalize_notification
 
 STORAGE_VERSION: Final = 1
-STORAGE_MINOR_VERSION: Final = 1
+# 2: the Push channel starts switched off (0.6.8).
+STORAGE_MINOR_VERSION: Final = 2
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -62,7 +64,29 @@ class _ConfigStore(Store[ConfigData]):
     ) -> ConfigData:
         # Version 1 is the first schema. Later schema changes are migrated
         # here, step by step, so that an update never loses settings.
+        if old_major_version == 1 and old_minor_version < 2:
+            switch_push_off(old_data)
         return old_data
+
+
+def switch_push_off(data: dict[str, Any]) -> None:
+    """Untick the Push channel everywhere: it starts off when it arrives.
+
+    Push settings of the earlier data model were never sent; ticking the
+    channel is the user's choice once the phones are set on the People page.
+    """
+    for category in data.get("categories") or []:
+        channels = category.get("channels") if isinstance(category, dict) else None
+        push = channels.get(CHANNEL_PUSH) if isinstance(channels, dict) else None
+        if isinstance(push, dict):
+            push["modes"] = []
+    for notification in data.get("notifications") or []:
+        steps = notification.get("steps") if isinstance(notification, dict) else None
+        for step in steps or []:
+            channels = step.get("channels") if isinstance(step, dict) else None
+            push = channels.get(CHANNEL_PUSH) if isinstance(channels, dict) else None
+            if isinstance(push, dict):
+                push.pop("modes", None)
 
 
 class ConfigManager:

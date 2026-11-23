@@ -433,3 +433,56 @@ async def test_no_phone_for_the_viewer(
     result = await client.receive_json()
     assert not result["success"]
     assert result["error"]["message"] == "Your user is not a person."
+
+
+async def test_push_starts_off_after_the_update(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """Push ticks of the earlier data model are taken away once, on load."""
+    from pytest_homeassistant_custom_component.common import (  # noqa: PLC0415
+        MockConfigEntry,
+    )
+
+    hass_storage[DOMAIN] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": DOMAIN,
+        "data": {
+            "modes": [{"id": "home", "name": "Home"}],
+            "categories": [
+                {
+                    "id": "general",
+                    "name": "General",
+                    "channels": {
+                        "dashboard": {"modes": ["home"]},
+                        "push": {"modes": ["home"], "delay": {"hours": 1}},
+                    },
+                }
+            ],
+            "notifications": [
+                {
+                    "id": "n1",
+                    "name": "Leak",
+                    "category": "general",
+                    "steps": [
+                        {
+                            "id": "s1",
+                            "message": "Water",
+                            "channels": {"push": {"modes": ["home"]}},
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    entry = MockConfigEntry(domain=DOMAIN, title="Notification Center")
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    config = entry.runtime_data.manager.config
+    category = next(c for c in config["categories"] if c["id"] == "general")
+    assert category["channels"]["push"]["modes"] == []
+    assert category["channels"]["push"]["delay"] == {"hours": 1}
+    assert category["channels"]["dashboard"]["modes"] == ["home"]
+    step_channels = config["notifications"][0]["steps"][0].get("channels", {})
+    assert "modes" not in step_channels.get("push", {})
