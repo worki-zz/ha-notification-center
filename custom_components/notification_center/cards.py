@@ -79,6 +79,8 @@ class Card:
     data: dict[str, Any] = field(default_factory=dict)
     message_override: str | None = None
     info_override: str | None = None
+    # A card made for a test goes only to these people (Dashboard and push).
+    only_people: list[str] | None = None
     message: str | None = None
     info: str | None = None
     # The step's custom data text (after the label), rendered.
@@ -129,6 +131,7 @@ class Card:
             "data": self.data,
             "message_override": self.message_override,
             "info_override": self.info_override,
+            "only_people": self.only_people,
             "message": self.message,
             "info": self.info,
             "data_text": self.data_text,
@@ -158,6 +161,7 @@ class Card:
             data=dict(data.get("data") or {}),
             message_override=data.get("message_override"),
             info_override=data.get("info_override"),
+            only_people=data.get("only_people"),
             message=data.get("message"),
             info=data.get("info"),
             data_text=data.get("data_text"),
@@ -184,6 +188,8 @@ class Overrides:
     message: str | None = None
     info: str | None = None
     data: dict[str, Any] | None = None
+    # A test: only these people get it, on the Dashboard and the phone.
+    only_people: list[str] | None = None
 
 
 @dataclass(slots=True)

@@ -248,7 +248,7 @@ export class NcStepEditor extends LitElement {
       ${this._panel(
         "done",
         "mdi:check-circle-outline",
-        "Done",
+        "Done when",
         doneCount,
         this._renderDone(step),
       )}

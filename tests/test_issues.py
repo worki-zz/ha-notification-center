@@ -45,7 +45,10 @@ async def test_missing_entity_issue(hass: HomeAssistant, center: Center) -> None
         "name": "Bell",
         "entities": "binary_sensor.bell, lock.front",
     }
-    assert issue.learn_more_url == "/notification-center"
+    assert issue.learn_more_url is not None
+    assert issue.learn_more_url.startswith(
+        "/notification-center/settings/notifications/"
+    )
 
     await center.set("binary_sensor.bell", "off")
     await center.set("lock.front", "locked")

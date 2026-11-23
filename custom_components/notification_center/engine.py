@@ -56,6 +56,9 @@ from .cards import (
 )
 from .channels import (
     CHANNEL_DASHBOARD,
+    PERSON_AWAY,
+    PERSON_HOME,
+    PERSON_SLEEP,
     REASON_AUDIENCE,
     REASON_DELAY,
     REASON_MODE,
@@ -88,6 +91,7 @@ from .engine_actions import EngineActions
 from .engine_queries import EngineQueries
 from .issues import IssueTracker
 from .model import (
+    CHANNEL_PUSH,
     GENERAL_CATEGORY_ID,
     TRIGGER_NOTIFICATION_STATE,
     ConfigData,
@@ -469,12 +473,24 @@ class Engine(EngineQueries, EngineActions):
         step = self._step_config(card.notification_id, card.step_id)
         category = self._category_of(notification)
         states = self._person_states
+        if card.only_people is not None and key not in (
+            CHANNEL_DASHBOARD,
+            CHANNEL_PUSH,
+        ):
+            # A test for one person: the devices are not used.
+            return ChannelView(reason=REASON_OFF)
+        audience = audience_of(category, step, sorted(states))
+        if card.only_people is not None:
+            audience = {
+                person: {PERSON_HOME: True, PERSON_SLEEP: True, PERSON_AWAY: True}
+                for person in card.only_people
+            }
         return channel_view(
             channel_settings(category, step, key),
             mode_id=self.modes.current["id"] if self.modes.current else None,
             active_since=card.active_since or card.state_since,
             now=dt_util.utcnow(),
-            audience=audience_of(category, step, sorted(states)),
+            audience=audience,
             states=states,
         )
 
@@ -773,6 +789,7 @@ class Engine(EngineQueries, EngineActions):
             card.trigger = trigger
         if overrides is None:
             return
+        card.only_people = overrides.only_people
         if overrides.message is not None:
             card.message_override = overrides.message
         if overrides.info is not None:

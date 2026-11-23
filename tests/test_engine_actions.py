@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import Context, HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 import pytest
@@ -456,3 +456,36 @@ async def test_button_actions_run_one_after_the_other(
     release.set()
     await task
     assert log == ["slow start", "slow end", "quick"]
+
+
+async def test_trigger_only_me(
+    hass: HomeAssistant, center: Center, hass_admin_user: Any
+) -> None:
+    """A test trigger goes to the user's person only, and not to the devices."""
+    hass.states.async_set("person.admin", "home", {"user_id": hass_admin_user.id})
+    hass.states.async_set("person.other", "home", {})
+    nid = await center.add("Plants", step())
+    await hass.services.async_call(
+        DOMAIN,
+        "trigger",
+        {"entity_id": "sensor.nc_plants", "only_me": True},
+        blocking=True,
+        context=Context(user_id=hass_admin_user.id),
+    )
+    await hass.async_block_till_done()
+    card = center.engine.cards_of(nid, None)[0]
+    assert card.only_people == ["person.admin"]
+    assert center.engine.channel_view(card).people == ["person.admin"]
+    assert center.engine.channel_view(card, "light").reason == "off"
+
+    # A normal trigger afterwards makes it a normal card again.
+    await center.call("trigger", "sensor.nc_plants")
+    assert center.engine.cards_of(nid, None)[0].only_people is None
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "trigger",
+            {"entity_id": "sensor.nc_plants", "only_me": True},
+            blocking=True,
+        )

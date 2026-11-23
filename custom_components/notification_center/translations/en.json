@@ -108,6 +108,10 @@
         "data": {
           "name": "Data",
           "description": "Any values, available in the texts as {{ data.name }}."
+        },
+        "only_me": {
+          "name": "Only me",
+          "description": "A test: only the person of the user who runs the action gets it, on the Dashboard and the phone; the lights, speakers and sirens stay quiet."
         }
       }
     },

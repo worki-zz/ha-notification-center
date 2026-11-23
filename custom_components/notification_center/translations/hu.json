@@ -108,6 +108,10 @@
         "data": {
           "name": "Adatok",
           "description": "Bármilyen érték, a szövegekben {{ data.name }} formában érhető el."
+        },
+        "only_me": {
+          "name": "Csak én",
+          "description": "Teszt: csak a művelet futtató felhasználó személye kapja meg, a Dashboardon és a telefonján; a lámpák, hangszórók és szirénák nem szólnak."
         }
       }
     },
