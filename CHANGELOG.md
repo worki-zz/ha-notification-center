@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.6
+
+### Changed
+
+- General › Colors: *System colors* as a palette (only the circles, the name on hover) and *Custom colors* in a list of its own. The page's text is shorter, and Colors comes before Snooze in General, with *1 custom* under it.
+- Color fields list the system colours first, then the custom ones.
+- A category always has a chime: *None* is gone from its Chime, and a category without one plays *Chime*. A category set to None plays *Chime* now. A notification can still choose None.
+- Highlight and Chime of a notification work as Color: choosing the category's value is no own value (no X); the category's value is marked *(default)*.
+- Sound: Speakers and Sirens in two lists.
+- Light dialog: Settings and Colors are tabs as in the entity group dialog; the Colors tab has a *System colors* and a *Custom colors* list; a line above Dim when dark.
+- A line above Condition in the home mode dialog; the line in the channel dialog is full width.
+
+### Fixed
+
+- A step tab shows {Device class} without its braces, as the other placeholders.
+
 ## 0.6.5
 
 ### Added

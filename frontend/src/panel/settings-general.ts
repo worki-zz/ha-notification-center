@@ -1,5 +1,5 @@
 // The General tab of the settings: a list of pages like Home Assistant's
-// System settings (Home modes, People, Light, Sound; Snooze, Colors and Import and export in a second block),
+// System settings (Home modes, People, Light, Sound; Colors, Snooze and Import and export in a second block),
 // and the version. Each page opens on its own (nc-general-page).
 
 import { LitElement, css, html, nothing } from "lit";
@@ -97,18 +97,18 @@ export class NcSettingsGeneral extends LitElement {
     ];
     const data: GeneralPage[] = [
       {
+        key: "colors",
+        name: "Colors",
+        description: config.colors?.length ? `${config.colors.length} custom` : "System colors",
+        icon: "mdi:palette-outline",
+        color: "#EC407A",
+      },
+      {
         key: "snooze",
         name: "Snooze",
         description: `At ${tomorrow.slice(0, 5)}`,
         icon: "mdi:alarm-snooze",
         color: "#26A69A",
-      },
-      {
-        key: "colors",
-        name: "Colors",
-        description: config.colors?.length ? count(config.colors.length, "own color", "own colors") : "System colors",
-        icon: "mdi:palette-outline",
-        color: "#EC407A",
       },
       {
         key: "import",

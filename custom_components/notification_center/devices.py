@@ -61,6 +61,7 @@ from .model import (
     CHANNEL_LIGHT_PREFIX,
     CHANNEL_SIREN_PREFIX,
     CHANNEL_SPEAKER_PREFIX,
+    CHIME_DEFAULT,
     CHIME_NONE,
     EFFECT_BLINK,
     SYSTEM_COLORS,
@@ -144,10 +145,11 @@ def chime_of(
     """Return what the speakers play for a notification (None: nothing).
 
     The notification's own chime wins over its category's; ``none`` is no
-    chime even when the category has one.
+    chime even when the category has one. A category without a chime plays
+    the default one.
     """
     own = (notification or {}).get("chime")
-    chime = own if own is not None else (category or {}).get("chime")
+    chime = own if own is not None else (category or {}).get("chime") or CHIME_DEFAULT
     return None if chime in (None, CHIME_NONE) else str(chime)
 
 

@@ -6,7 +6,7 @@
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 
-import { CHIME_NONE, type NotificationCenterConfig, SYSTEM_COLORS, orderedChimes } from "../shared/config";
+import { CHIME_DEFAULT, CHIME_NONE, type NotificationCenterConfig, SYSTEM_COLORS, orderedChimes } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
 import { field } from "./fields";
 
@@ -24,14 +24,30 @@ function hideClear(element: Element | undefined, hide: boolean): void {
   });
 }
 
-// Only the listed colours: Home Assistant's colour picker offers what is
-// typed in the search as a "Custom color", which is not a colour here (own
-// colours are made on the Colors page).
+// Only the listed colours, the system ones first: Home Assistant's colour
+// picker offers what is typed in the search as a "Custom color", which is
+// not a colour here (custom colours are made on the Colors page), and puts
+// the extra options above its own.
 function onlyListed(element: Element | undefined): void {
-  const picker = element as (HTMLElement & { _getAdditionalItems?: () => unknown[]; requestUpdate?: () => void }) | undefined;
-  if (!picker || (picker as { _ncListed?: boolean })._ncListed) return;
-  (picker as { _ncListed?: boolean })._ncListed = true;
+  const picker = element as
+    | (HTMLElement & {
+        _getAdditionalItems?: () => unknown[];
+        _getItems?: () => { id: string }[];
+        _ncListed?: boolean;
+        requestUpdate?: () => void;
+      })
+    | undefined;
+  if (!picker || picker._ncListed) return;
+  picker._ncListed = true;
   picker._getAdditionalItems = () => [];
+  const items = picker._getItems;
+  if (items) {
+    picker._getItems = () => {
+      const all = items();
+      const system = (item: { id: string }) => item.id in SYSTEM_COLORS;
+      return [...all.filter(system), ...all.filter((item) => !system(item))];
+    };
+  }
   picker.requestUpdate?.();
 }
 
@@ -75,8 +91,9 @@ export function colorField(
 }
 
 /**
- * Chime: what the speakers play. A category's None plays nothing; a
- * notification can also choose None over its category's chime.
+ * Chime: what the speakers play. A category always has one (the default
+ * Chime when it sets none); a notification shows its category's until it
+ * sets its own, which can also be None.
  */
 export function chimeField(
   config: NotificationCenterConfig | undefined,
@@ -85,33 +102,31 @@ export function chimeField(
   changed: (value: string | null) => void,
   options: { inherits?: boolean } = {},
 ) {
-  const own = value !== undefined && value !== null;
-  const shown = own ? value : (options.inherits ? inherited : value) ?? CHIME_NONE;
+  const fallback = options.inherits ? inherited || CHIME_DEFAULT : CHIME_DEFAULT;
+  const own = !!value && (options.inherits || value !== CHIME_DEFAULT);
   return field(
     undefined,
     {
       select: {
         mode: "dropdown",
         options: [
-          { value: CHIME_NONE, label: "None" },
+          ...(options.inherits ? [{ value: CHIME_NONE, label: "None" }] : []),
           ...orderedChimes(config).map((chime) => ({ value: chime.id, label: chime.name })),
-        ],
+        ].map((option) => (option.value === fallback ? { ...option, label: `${option.label} (default)` } : option)),
       },
     },
-    shown ?? CHIME_NONE,
+    value || fallback,
     "Chime",
-    (picked) => {
-      if (picked === undefined || picked === null) changed(null);
-      else if (options.inherits) changed(String(picked));
-      else changed(picked === CHIME_NONE ? null : String(picked));
-    },
+    // The default is no own value, as in the colour picker.
+    (picked) => changed(picked === undefined || picked === null || picked === fallback ? null : String(picked)),
     { clearable: !!options.inherits && own },
   );
 }
 
 /**
  * Highlight: Normal or Highlighted. A notification shows its category's
- * until it sets its own, which has an X that goes back to the category's.
+ * until it sets its own, which has an X that goes back to the category's;
+ * choosing the category's is no own value, as in the colour picker.
  */
 export function highlightField(
   value: boolean | undefined,
@@ -119,21 +134,27 @@ export function highlightField(
   changed: (value: boolean | undefined) => void,
 ) {
   const own = value !== undefined;
-  const shown = own ? value : !!inherited;
+  const fallback = !!inherited;
+  const shown = own ? value : fallback;
+  const label = (on: boolean, text: string) => (on === fallback ? `${text} (default)` : text);
   return field(
     undefined,
     {
       select: {
         mode: "dropdown",
         options: [
-          { value: "normal", label: "Normal" },
-          { value: "highlighted", label: "Highlighted" },
+          { value: "normal", label: label(false, "Normal") },
+          { value: "highlighted", label: label(true, "Highlighted") },
         ],
       },
     },
     shown ? "highlighted" : "normal",
     "Highlight",
-    (picked) => changed(picked === undefined ? undefined : picked === "highlighted"),
+    (picked) => {
+      if (picked === undefined || picked === null) changed(undefined);
+      else if (inherited === undefined) changed(picked === "highlighted");
+      else changed(picked === "highlighted" === fallback ? undefined : picked === "highlighted");
+    },
     { clearable: inherited !== undefined && own },
   );
 }

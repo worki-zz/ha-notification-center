@@ -56,6 +56,8 @@ def test_colors() -> None:
     assert chime_of({}, {"chime": "nc_chime"}) == "nc_chime"
     assert chime_of({"chime": "none"}, {"chime": "nc_chime"}) is None
     assert chime_of({"chime": "nc_alarm"}, {"chime": None}) == "nc_alarm"
+    # A category without a chime plays the default one.
+    assert chime_of({}, {}) == "nc_chime"
     assert highlight_of({"highlight": False}, {"highlight": True}) is False
     assert highlight_of({}, {"highlight": True}) is True
 

@@ -1,5 +1,5 @@
 // The Colors page of the General settings: Home Assistant's system colours
-// (fixed), and the own colours, which can be added, renamed, changed and
+// (fixed, as a palette), and the custom colours, which can be added, renamed, changed and
 // deleted. Every colour shows in the Color field of the categories and
 // notifications, and on each light's Colors tab.
 
@@ -32,38 +32,38 @@ export class NcSettingsColors extends LitElement {
     return html`
       <ha-card outlined>
         <div class="group-header">System colors</div>
-        <div class="rows">
+        <div class="palette">
           ${Object.entries(SYSTEM_COLORS).map(
-            ([name, rgb]) => html`<div class="color-row">
-              <span class="dot" style=${`background-color: var(--${name}-color, ${rgbToHex(rgb)})`}></span>
-              <div class="text">
-                <div>${colorName(name)}</div>
-                <div class="secondary">${rgb.join(", ")}</div>
-              </div>
-            </div>`,
+            ([name, rgb]) => html`<span
+              class="dot"
+              title=${colorName(name)}
+              style=${`background-color: var(--${name}-color, ${rgbToHex(rgb)})`}
+            ></span>`,
           )}
         </div>
-        ${own.length
-          ? html`<div class="group-header">Own colors</div>
-              <div class="rows">
-                ${own.map(
-                  (color) => html`<div
-                    class="row"
-                    role="button"
-                    tabindex="0"
-                    @click=${() => this._open(structuredClone(color))}
-                  >
-                    <span class="dot" style=${`background-color: ${rgbToHex(color.rgb)}`}></span>
-                    <div class="text">
-                      <div>${color.name}</div>
-                      <div class="secondary">${color.rgb.join(", ")}</div>
-                    </div>
-                    <ha-icon-next></ha-icon-next>
-                  </div>`,
-                )}
-              </div>`
-          : nothing}
       </ha-card>
+      ${own.length
+        ? html`<ha-card outlined>
+            <div class="group-header">Custom colors</div>
+            <div class="rows">
+              ${own.map(
+                (color) => html`<div
+                  class="row"
+                  role="button"
+                  tabindex="0"
+                  @click=${() => this._open(structuredClone(color))}
+                >
+                  <span class="dot" style=${`background-color: ${rgbToHex(color.rgb)}`}></span>
+                  <div class="text">
+                    <div>${color.name}</div>
+                    <div class="secondary">${color.rgb.join(", ")}</div>
+                  </div>
+                  <ha-icon-next></ha-icon-next>
+                </div>`,
+              )}
+            </div>
+          </ha-card>`
+        : nothing}
       <div>
         <ha-button appearance="filled" size="s" @click=${() => this._open({ name: "", rgb: [255, 255, 255] })}>
           <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -167,11 +167,16 @@ export class NcSettingsColors extends LitElement {
         border: 1px solid var(--divider-color);
         box-sizing: border-box;
       }
-      .rows + .group-header {
-        border-top: 1px solid var(--divider-color);
+      /* The system colors as a palette: only the circles, the name on hover. */
+      .palette {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 16px;
       }
-      .group-header + .rows {
-        border-top: 1px solid var(--divider-color);
+      .palette .dot {
+        width: 32px;
+        height: 32px;
       }
     `,
   ];

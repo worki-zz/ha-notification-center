@@ -123,16 +123,18 @@ export class NcSettingsSound extends LitElement {
     const chimes = orderedChimes(config);
     return html`
       ${speakers.length || sirens.length
-        ? html`<ha-card outlined>
-            ${speakers.length
-              ? html`<div class="group-header">Speakers</div>
-                  <div class="rows">${speakers.map((item) => this._deviceRow("speakers", item))}</div>`
+        ? html`${speakers.length
+              ? html`<ha-card outlined>
+                  <div class="group-header">Speakers</div>
+                  <div class="rows">${speakers.map((item) => this._deviceRow("speakers", item))}</div>
+                </ha-card>`
               : nothing}
             ${sirens.length
-              ? html`<div class="group-header">Sirens</div>
-                  <div class="rows">${sirens.map((item) => this._deviceRow("sirens", item))}</div>`
-              : nothing}
-          </ha-card>`
+              ? html`<ha-card outlined>
+                  <div class="group-header">Sirens</div>
+                  <div class="rows">${sirens.map((item) => this._deviceRow("sirens", item))}</div>
+                </ha-card>`
+              : nothing}`
         : html`<ha-alert alert-type="info">No speakers or sirens yet.</ha-alert>`}
       <div class="buttons">
         ${this._addButton("speakers", "Add speaker")} ${this._addButton("sirens", "Add siren")}

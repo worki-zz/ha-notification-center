@@ -198,6 +198,7 @@ export class NcSettingsModes extends LitElement {
             this._set({ icon: (value as string) || null }),
           )}
         </div>
+        <div class="separator"></div>
         <div class="title">Condition</div>
         <ha-button-toggle-group
           size="s"
@@ -441,6 +442,11 @@ export class NcSettingsModes extends LitElement {
     .title {
       font-weight: var(--ha-font-weight-medium, 500);
       margin-bottom: -8px;
+    }
+    /* Full width, as in the channel and button dialogs. */
+    .separator {
+      border-top: 1px solid var(--divider-color);
+      margin: 0 -24px;
     }
     ha-button-toggle-group {
       align-self: flex-start;

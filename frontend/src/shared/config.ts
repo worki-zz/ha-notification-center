@@ -188,6 +188,8 @@ export interface OwnColor {
 
 /** A notification's chime that plays nothing, even when its category has one. */
 export const CHIME_NONE = "none";
+/** What a category without a chime of its own plays. */
+export const CHIME_DEFAULT = "nc_chime";
 
 /**
  * The CSS colour of a category's or notification's colour: a system colour

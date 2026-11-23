@@ -44,7 +44,7 @@ const PAGES: Record<string, { title: string; intro: string[] }> = {
   colors: {
     title: "Colors",
     intro: [
-      "The colors of the categories and notifications: the system colors, and your own ones. Each light can show a color with its own RGB, on its Colors tab.",
+      "The colors of the categories and notifications. The system colors, and your custom ones.",
     ],
   },
 };

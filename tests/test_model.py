@@ -394,6 +394,7 @@ async def test_custom_colours_become_own_colours(hass: HomeAssistant) -> None:
     config["categories"][0].pop("color")
     config["categories"][0]["card_color"] = "red"
     config["categories"][0]["channels"]["speaker:x"] = {"chime": "nc_chime"}
+    config["categories"][0]["chime"] = "none"
     config["speakers"] = [{"id": "x", "entity_id": "media_player.x"}]
     config["categories"].append(
         {"id": "c2", "name": "Two", "card_color": "#102030", "light_color": [1, 2, 3]}
@@ -407,6 +408,7 @@ async def test_custom_colours_become_own_colours(hass: HomeAssistant) -> None:
     assert result["categories"][0]["color"] == "red"
     assert "card_color" not in result["categories"][0]
     assert "chime" not in result["categories"][0]["channels"]["speaker:x"]
+    assert "chime" not in result["categories"][0]
     assert [color["name"] for color in result["colors"]] == ["Custom 1", "Custom 2"]
     first, second = result["colors"]
     assert first["rgb"] == [16, 32, 48]

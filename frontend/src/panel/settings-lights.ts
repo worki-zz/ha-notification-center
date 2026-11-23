@@ -203,19 +203,22 @@ export class NcSettingsLights extends LitElement {
       <ha-icon-button slot="headerActionItems" .label=${"Delete"} @click=${() => void this._delete(edit)}>
         <ha-icon icon="mdi:delete"></ha-icon>
       </ha-icon-button>
+      ${can.rgb
+        ? html`<ha-tab-group
+            @wa-tab-show=${(ev: CustomEvent<{ name: string }>) => {
+              ev.stopPropagation();
+              this._tab = ev.detail.name === "colors" ? "colors" : "settings";
+            }}
+          >
+            ${tabs.map(
+              (tab) => html`<ha-tab-group-tab slot="nav" panel=${tab.value} .active=${this._tab === tab.value}>
+                ${tab.label}
+              </ha-tab-group-tab>`,
+            )}
+          </ha-tab-group>`
+        : nothing}
       <div class="form">
         ${this._dialogError ? html`<ha-alert alert-type="error">${this._dialogError}</ha-alert>` : nothing}
-        ${can.rgb
-          ? html`<ha-button-toggle-group
-              size="s"
-              .buttons=${tabs}
-              .active=${this._tab}
-              @value-changed=${(ev: CustomEvent<{ value: "settings" | "colors" }>) => {
-                ev.stopPropagation();
-                this._tab = ev.detail.value;
-              }}
-            ></ha-button-toggle-group>`
-          : nothing}
         ${can.rgb && this._tab === "colors" ? this._renderColors(edit) : this._renderSettings(edit, can)}
       </div>
       <ha-dialog-footer slot="footer">
@@ -283,8 +286,9 @@ export class NcSettingsLights extends LitElement {
       (value) => this._set({ illuminance_sensor: (value as string) || null }),
       { placeholder: "Illuminance sensor" },
     );
-    if (!edit.illuminance_sensor) return html`<div class="title">Dim when dark</div>${sensor}`;
-    return html`<div class="title">Dim when dark</div>
+    if (!edit.illuminance_sensor) return html`<div class="separator"></div><div class="title">Dim when dark</div>${sensor}`;
+    return html`<div class="separator"></div>
+      <div class="title">Dim when dark</div>
       <div class="row-fields top">
         ${sensor}
         ${field(
@@ -318,57 +322,71 @@ export class NcSettingsLights extends LitElement {
   // reset.
   private _renderColors(edit: Draft) {
     const own = edit.colors ?? {};
-    const all: [string, string, number[]][] = [
-      ...Object.entries(LIGHT_DEFAULTS).map(([name, rgb]): [string, string, number[]] => [name, colorName(name), rgb]),
-      ...(this.config?.colors ?? []).map((color): [string, string, number[]] => [color.id, color.name, color.rgb]),
-    ];
+    const system = Object.entries(LIGHT_DEFAULTS).map(([name, rgb]): [string, string, number[]] => [
+      name,
+      colorName(name),
+      rgb,
+    ]);
+    const custom = (this.config?.colors ?? []).map((color): [string, string, number[]] => [
+      color.id,
+      color.name,
+      color.rgb,
+    ]);
+    const row = ([name, label, rgb]: [string, string, number[]]) => {
+      const value = own[name] ?? rgb;
+      const changed = !!own[name];
+      return html`<div class="color-row">
+        <label class="swatch" style=${`background-color: ${rgbToHex(value)}`} title="Choose a color">
+          <input
+            type="color"
+            .value=${rgbToHex(value)}
+            @change=${(ev: Event) => {
+              const hex = (ev.target as HTMLInputElement).value;
+              const next = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16));
+              const colors = { ...own };
+              if (next.every((part, index) => part === rgb[index])) delete colors[name];
+              else colors[name] = next;
+              this._set({ colors });
+            }}
+          />
+        </label>
+        <div class="text">
+          <div>${label}</div>
+          <div class="secondary">${value.join(", ")}${changed ? "" : " (default)"}</div>
+        </div>
+        ${changed
+          ? html`<ha-icon-button
+              .label=${"Reset to the default"}
+              @click=${() => {
+                const colors = { ...own };
+                delete colors[name];
+                this._set({ colors });
+              }}
+            >
+              <ha-icon icon="mdi:restore"></ha-icon>
+            </ha-icon-button>`
+          : nothing}
+        <ha-icon-button
+          .label=${"Test"}
+          @click=${() => void this._test(edit, name)}
+        >
+          <ha-icon icon="mdi:play"></ha-icon>
+        </ha-icon-button>
+      </div>`;
+    };
     return html`<p class="hint">
         How this light shows each color. Lights show colors differently: set the ones that look wrong.
       </p>
       <ha-card outlined class="colors">
-        ${all.map(([name, label, rgb]) => {
-          const value = own[name] ?? rgb;
-          const changed = !!own[name];
-          return html`<div class="color-row">
-            <label class="swatch" style=${`background-color: ${rgbToHex(value)}`} title="Choose a color">
-              <input
-                type="color"
-                .value=${rgbToHex(value)}
-                @change=${(ev: Event) => {
-                  const hex = (ev.target as HTMLInputElement).value;
-                  const next = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16));
-                  const colors = { ...own };
-                  if (next.every((part, index) => part === rgb[index])) delete colors[name];
-                  else colors[name] = next;
-                  this._set({ colors });
-                }}
-              />
-            </label>
-            <div class="text">
-              <div>${label}</div>
-              <div class="secondary">${value.join(", ")}${changed ? "" : " (default)"}</div>
-            </div>
-            ${changed
-              ? html`<ha-icon-button
-                  .label=${"Reset to the default"}
-                  @click=${() => {
-                    const colors = { ...own };
-                    delete colors[name];
-                    this._set({ colors });
-                  }}
-                >
-                  <ha-icon icon="mdi:restore"></ha-icon>
-                </ha-icon-button>`
-              : nothing}
-            <ha-icon-button
-              .label=${"Test"}
-              @click=${() => void this._test(edit, name)}
-            >
-              <ha-icon icon="mdi:play"></ha-icon>
-            </ha-icon-button>
-          </div>`;
-        })}
-      </ha-card>`;
+        <div class="group-header">System colors</div>
+        <div class="rows">${system.map(row)}</div>
+      </ha-card>
+      ${custom.length
+        ? html`<ha-card outlined class="colors">
+            <div class="group-header">Custom colors</div>
+            <div class="rows">${custom.map(row)}</div>
+          </ha-card>`
+        : nothing}`;
   }
 
   private _data(edit: Draft): Record<string, unknown> {
@@ -505,6 +523,16 @@ export function DEVICE_PAGE_STYLES() {
     }
     ha-button-toggle-group {
       align-self: flex-start;
+    }
+    /* Tabs as in the editor's entity group dialog. */
+    ha-tab-group {
+      display: block;
+      margin: -8px -24px 16px;
+    }
+    /* Full width, as in the channel and button dialogs. */
+    .separator {
+      border-top: 1px solid var(--divider-color);
+      margin: 0 -24px;
     }
     /* A group of a list, as Home Assistant's list subheaders. */
     .group-header {

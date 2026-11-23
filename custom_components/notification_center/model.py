@@ -107,6 +107,8 @@ SYSTEM_COLORS: Final[dict[str, tuple[int, int, int]]] = {
 
 # A notification's chime that plays nothing, even when its category has one.
 CHIME_NONE: Final = "none"
+# What a category without a chime of its own plays.
+CHIME_DEFAULT: Final = "nc_chime"
 
 # The sounds that come with the integration, by chime id: their file and
 # name. A chime of the Chimes list can be any other media.
@@ -1397,6 +1399,8 @@ def upgrade_colors(data: dict[str, Any]) -> None:
       Colors, for that colour.
     - A speaker channel has no chime of its own any more: the category's or
       notification's plays.
+    - A category's chime cannot be None (0.6.6): such a category plays the
+      default chime.
     """
     colors = data.get("colors")
     if not isinstance(colors, list):
@@ -1451,6 +1455,8 @@ def upgrade_colors(data: dict[str, Any]) -> None:
     for category in data.get("categories") or []:
         if isinstance(category, dict):
             drop_chime(category.get("channels"))
+            if category.get("chime") == CHIME_NONE:
+                del category["chime"]
     for notification in data.get("notifications") or []:
         for step in (
             (notification.get("steps") or []) if isinstance(notification, dict) else []
