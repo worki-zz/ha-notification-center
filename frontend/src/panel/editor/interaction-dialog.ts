@@ -58,9 +58,9 @@ export const INTERACTION_DEFAULTS: Record<
 
 // The notification states, in the order of their choice.
 const STATES: { value: ButtonState["type"]; label: string; text: string }[] = [
-  { value: "done", label: "Done", text: "Marks the card done." },
-  { value: "dismiss", label: "Dismiss", text: "Dismisses the card." },
-  { value: "snooze", label: "Snooze", text: "Snoozes the card." },
+  { value: "done", label: "Done", text: "Marks the notification done." },
+  { value: "dismiss", label: "Dismiss", text: "Dismisses the notification." },
+  { value: "snooze", label: "Snooze", text: "Snoozes the notification." },
 ];
 
 // A built-in button's own notification state.

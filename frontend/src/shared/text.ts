@@ -119,7 +119,7 @@ export class TemplateTexts {
       entry.unsubscribe = hass.connection.subscribeMessage<RenderResult>(
         (message) => {
           if (message.error !== undefined) {
-            console.warn("Notification card template error:", message.error);
+            console.warn("Notification template error:", message.error);
             return;
           }
           entry.value = message.result === undefined ? "" : String(message.result);
@@ -133,7 +133,7 @@ export class TemplateTexts {
         },
       );
       entry.unsubscribe.catch((err: unknown) => {
-        console.warn("Notification card template error:", err);
+        console.warn("Notification template error:", err);
       });
       this._subs.set(text, entry);
     }

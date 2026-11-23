@@ -10,15 +10,15 @@ const EDITOR_TYPE = "notification-center-editor";
 
 const LABELS: Record<string, string> = {
   categories: "Categories",
-  max_cards: "Maximum cards",
+  max_cards: "Maximum notifications",
   ignore_audience: "Ignore audience",
   show_empty: "Show empty state",
 };
 
 const HELPERS: Record<string, string> = {
   categories: "Leave empty for every category.",
-  max_cards: "Leave empty to show every card. The rest opens the Notification Center.",
-  ignore_audience: "Also show the cards meant for other people.",
+  max_cards: "Leave empty to show every notification. The rest opens the Notification Center.",
+  ignore_audience: "Also show the notifications meant for other people.",
   show_empty: "While nothing is active, show the card with All done instead of hiding it.",
 };
 

@@ -332,7 +332,7 @@ export class NcSettings extends LitElement {
         if (
           await confirmDialog(this, {
             title: `Delete ${item.name}?`,
-            text: "The notification, its cards and its sensor are deleted.",
+            text: "The notification, its open notifications and its sensor are deleted.",
             confirm: "Delete",
             destructive: true,
           })

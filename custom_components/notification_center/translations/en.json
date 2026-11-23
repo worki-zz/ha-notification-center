@@ -24,7 +24,7 @@
         },
         "state_attributes": {
           "active_count": {
-            "name": "Active cards"
+            "name": "Active notifications"
           },
           "active_step": {
             "name": "Active step"
@@ -95,7 +95,7 @@
         },
         "entity": {
           "name": "Entity",
-          "description": "The entity of a Listed entities card. Without it, every card of the step."
+          "description": "The entity of a notification started by Notification entities. Without it, every notification of the step."
         },
         "message": {
           "name": "Message",
@@ -125,7 +125,7 @@
         },
         "entity": {
           "name": "Entity",
-          "description": "The entity of a Listed entities card. Without it, every card of the step."
+          "description": "The entity of a notification started by Notification entities. Without it, every notification of the step."
         }
       }
     },
@@ -139,7 +139,7 @@
         },
         "entity": {
           "name": "Entity",
-          "description": "The entity of a Listed entities card. Without it, every card of the step."
+          "description": "The entity of a notification started by Notification entities. Without it, every notification of the step."
         }
       }
     },
@@ -153,7 +153,7 @@
         },
         "entity": {
           "name": "Entity",
-          "description": "The entity of a Listed entities card. Without it, every card of the step."
+          "description": "The entity of a notification started by Notification entities. Without it, every notification of the step."
         },
         "duration": {
           "name": "Duration",
@@ -376,7 +376,7 @@
     },
     "template_error": {
       "title": "{name}: error in the message",
-      "description": "The message or the info line of step {step} of **{name}** has a template error, so the card shows the text without the template: {error}"
+      "description": "The message or the info line of step {step} of **{name}** has a template error, so the notification shows the text without the template: {error}"
     },
     "setup_error": {
       "title": "{name}: a trigger or condition does not work",

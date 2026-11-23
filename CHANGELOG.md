@@ -7,8 +7,10 @@
 - A step's *Done* block is called *Done when* in the editor, its help and the README.
 - A failed save names the step and the block of the error (*Step 2, Activation: …*), opens that block and scrolls to the message.
 - A Repairs issue's *Learn more* link opens the editor of its notification (the People page for a missing push device).
-- *Run now* in the editor and the step menu has *only me* and *everyone*. *Only me* is also the new `only_me` option of the Trigger action: only the person of the calling user gets the card, on the Dashboard and the phone; lights, speakers and sirens stay quiet.
-- The README has a *Concepts* section, and calls the two dashboard cards *dashboard cards* throughout. Its note on the home mode icon is corrected: it is edited in the home mode's dialog.
+- *Run now* in the editor and the step menu has *only me* and *everyone*. *Only me* is also the new `only_me` option of the Trigger action: only the person of the calling user gets the notification, on the Dashboard and the phone; lights, speakers and sirens stay quiet.
+- The README has a *Concepts* section. Its note on the home mode icon is corrected: it is edited in the home mode's dialog.
+- One word for what is shown: *notification* when it is true for the push and the dashboard alike, *dashboard notification* when it is true only on the Dashboard (the Overview and the dashboard cards), and *Overview* instead of *panel*. The two dashboard card types keep *card*, as Home Assistant calls them. This replaces the *dashboard card* wording of the previous entry across the editor, its help texts, the card editor, the sensor attribute *Active notifications*, the error messages and the README.
+- The Interactions help of a step describes the order of a button's Actions and the Tap behavior (*Action*, *Button action*). The *entity* field of the Trigger, Done, Clear and Snooze actions says it is the entity of a notification started by *Notification entities*. The README status line is current, and its Buttons part says what a tap on a dashboard notification and on the push does.
 
 ## 0.7.2
 
