@@ -477,3 +477,65 @@ async def test_example_config_runs(
     assert len(center.engine.runners) == len(
         [n for n in center.manager.config["notifications"] if n["enabled"]]
     )
+
+
+async def test_conditions_follow_notification_state(center: Center) -> None:
+    """Hide while follows a Notification state condition on another card."""
+    smoke = await center.add("Smoke", step())
+    await center.add(
+        "Watcher",
+        step(
+            activation={
+                "type": "triggers",
+                "triggers": [state_trigger("input_boolean.hot")],
+            },
+            conditions={
+                "activate_only_while_met": False,
+                "hide_while_not_met": True,
+                "conditions": [
+                    {
+                        "condition": "notification_center.notification_state",
+                        "notification": smoke,
+                        "state": "active",
+                    }
+                ],
+            },
+        ),
+    )
+    await center.set("input_boolean.hot", "on")
+    assert center.state("sensor.nc_watcher") == "hidden"
+
+    await center.call("trigger", "sensor.nc_smoke")
+    assert center.state("sensor.nc_watcher") == "active"
+
+    await center.call("clear", "sensor.nc_smoke")
+    assert center.state("sensor.nc_watcher") == "hidden"
+
+
+async def test_notification_state_trigger_dismissed_for(
+    hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
+) -> None:
+    """A dismissed card, gone at once, still fires a trigger with For."""
+    smoke = await center.add("Smoke", step())
+    await center.add(
+        "Follow up",
+        step(
+            "Check the smoke alarm",
+            activation={
+                "type": "triggers",
+                "triggers": [
+                    {
+                        "trigger": "notification_center.notification_state",
+                        "notification": smoke,
+                        "state": "dismissed",
+                        "for": {"minutes": 1},
+                    }
+                ],
+            },
+        ),
+    )
+    await center.call("trigger", "sensor.nc_smoke")
+    await center.call("clear", "sensor.nc_smoke")
+    assert center.state("sensor.nc_follow_up") == "idle"
+    await tick(hass, freezer, timedelta(seconds=61))
+    assert center.state("sensor.nc_follow_up") == "active"

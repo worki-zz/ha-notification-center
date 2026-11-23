@@ -183,6 +183,8 @@ class Engine(EngineQueries, EngineActions):
         # notification id -> step id -> state -> ISO time it was last reached
         self.history: dict[str, dict[str, dict[str, str]]] = {}
         self.runners: dict[str, NotificationRunner] = {}
+        self._own_refreshing = False
+        self._own_again = False
         self.modes = ModeTracker(hass, manager.config["modes"], self._mode_changed)
         self._store = Store[dict[str, Any]](hass, RUNTIME_VERSION, RUNTIME_KEY)
         self._listeners: list[ChangeListener] = []
@@ -957,6 +959,7 @@ class Engine(EngineQueries, EngineActions):
             self.contexts[card.notification_id] = cause
             self.summary_context = Context(parent_id=cause.id)
             self._state_reached(card, old, new)
+            self._refresh_own_conditions()
         self._save()
         try:
             self._notify()
@@ -1012,7 +1015,11 @@ class Engine(EngineQueries, EngineActions):
         @callback
         def fire(_now: datetime) -> None:
             watch.timers.pop(card.key, None)
-            if self.cards.get(card.key) is card and card.status == watch.state:
+            # A dismissed or expired card is gone at once: it still counts
+            # unless a newer card took its place.
+            if self.cards.get(card.key) in (None, card) and (
+                card.status == watch.state
+            ):
                 watch.action(variables, cause)
 
         return fire
@@ -1185,6 +1192,24 @@ class Engine(EngineQueries, EngineActions):
             for step in runner.steps.values():
                 if step.hide_timed:
                     step.refresh_hidden()
+
+    def _refresh_own_conditions(self) -> None:
+        """Check Conditions on notification states again: a card changed."""
+        if self._own_refreshing:
+            self._own_again = True
+            return
+        self._own_refreshing = True
+        try:
+            for _ in range(10):
+                self._own_again = False
+                for runner in list(self.runners.values()):
+                    for step in list(runner.steps.values()):
+                        if step.watches_own:
+                            step.refresh_hidden()
+                if not self._own_again:
+                    break
+        finally:
+            self._own_refreshing = False
 
     def _prune(self) -> None:
         """Forget the cards closed before today (except blocking ones)."""
