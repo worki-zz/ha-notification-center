@@ -30,6 +30,7 @@ from .const import (
     SOURCE_ACTION,
 )
 from .engine import Engine, async_get_engine
+from .push import person_of_user
 
 _STEP = vol.All(vol.Coerce(int), vol.Range(min=1))
 
@@ -44,6 +45,7 @@ TRIGGER_SCHEMA = cv.make_entity_service_schema(
         vol.Optional("message"): cv.string,
         vol.Optional("info"): cv.string,
         vol.Optional("data"): dict,
+        vol.Optional("only_me"): cv.boolean,
     }
 )
 CLOSE_SCHEMA = cv.make_entity_service_schema(_COMMON)
@@ -106,10 +108,17 @@ def async_setup_services(hass: HomeAssistant) -> None:
     """Register the actions."""
 
     async def trigger(call: ServiceCall) -> None:
+        only_people: list[str] | None = None
+        if call.data.get("only_me"):
+            person = person_of_user(hass, call.context.user_id)
+            if person is None:
+                raise ServiceValidationError("Your user is not a person.")
+            only_people = [person]
         overrides = Overrides(
             message=call.data.get("message"),
             info=call.data.get("info"),
             data=call.data.get("data"),
+            only_people=only_people,
         )
         for engine, notification_id, step_id in await _targets(hass, call):
             engine.trigger(

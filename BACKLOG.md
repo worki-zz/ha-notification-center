@@ -6,6 +6,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## High priority
 
+### Why a notification is (not) active: diagnostics and trace
+*Area: Insight.* Answers to "why did this fire, why did this not, why is nothing sent": a trace view like the one for automations (which trigger and conditions matched, which channels were sent or held back and why), the Activity log entries behind it, a "why is this notification not active" answer, and in the editor a live view of whether each condition is true right now, as in the automation editor. Any simple part may be built before 1.0; the logic and the views are discussed in a thread of their own. Replaces the earlier *Trace* idea. *(Kristóf, 2026-11-23; v0.7.2 review)*
+
 ### Button action on the card's entity
 *Area: Notification editor.* A button's Action (Home Assistant action) can target the card's own entity, so one button action fits every entity of the notification without entity actions. *(Kristóf, 2026-11-20; phase 4)*
 
@@ -19,6 +22,12 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Insight.* Simple statistics per notification, such as how often it fired and how long it took until it was done. Built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*
 
 ## Medium priority
+
+### First steps and a full guide in the panel
+*Area: Panel.* Guidance for a new installation: first steps on an empty Overview (add a person, a push device, a first notification), and a full description that can be opened from the panel, not only in the README. *(Kristóf, 2026-11-23; v0.7.2 review)*
+
+### README: Getting started
+*Area: Documentation.* A short Getting started chapter in the README, from installation to the first notification on the dashboard and on a phone. *(Kristóf, 2026-11-23; v0.7.2 review)*
 
 ### Alarm images and clips
 *Area: Notification content.* Attach a snapshot or a short clip to an alarm notification, shown on the card and in the push. No Frigate: the images come from an own automation that saves them at alarm time; the options for passing them to the notification still need a discussion. The earlier `show_attachment` button action was removed from the data model with the action list (0.7.1); it would come back as a Navigation choice. *(Scope cut, 2026-11-15; phase 3)*
@@ -39,6 +48,12 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Channels (Push).* A *Keep when done* switch of the push: when the notification ends, the push is not removed but silently replaced by a closing line, such as *Ended at 14:32*, *Done by Dóra at 14:32* or *Silenced by Kristóf*. Until then the push follows the card (Silence keeps it). *(Kristóf, 2026-11-23; phase 6.2)*
 
 ## Low priority
+
+### Hungarian frontend
+*Area: Panel.* The panel and the dashboard cards are English only; the backend strings already have a Hungarian translation. A translated frontend, following the user's Home Assistant language. *(Kristóf, 2026-11-23; v0.7.2 review)*
+
+### Configuration readable by non-administrators
+*Area: Panel.* Every user can open the panel, but the configuration (categories, people, modes) is read through administrator commands. A read-only view for the other users. *(Kristóf, 2026-11-23; v0.7.2 review)*
 
 ### Send to
 *Area: Channels (Push).* A *Send to* setting of the push channel: only people who are in the selected state (Home, Sleep, Away) get the push, apart from the Audience. For now Home modes cover the cases (push only in a "nobody home" mode, speaker off in a "someone asleep" mode). *(Kristóf, 2026-11-23; phase 6.2)*
@@ -72,9 +87,6 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ### History
 *Area: Insight.* A history of each notification: when it became active, which step it was on, who marked it done, dismissed or snoozed it, and when. Can be built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*
-
-### Trace
-*Area: Insight.* A trace view like the one for automations: why a notification became active or closed, which trigger and conditions matched, which channels were sent. Needs its own storage and its own view. *(Phase 4, 2026-11-19)*
 
 ### Chime per speaker
 *Area: Channels.* Let a speaker channel play another chime than the notification's (for example a softer one in the bedroom). 0.6.5 moved the chime to the category and the notification only. *(Kristóf, 2026-11-22; phase 6.1)*

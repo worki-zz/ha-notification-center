@@ -35,6 +35,7 @@ ISSUE_MISSING_PUSH: Final = "missing_push_service"
 
 _CHECK_INTERVAL: Final = timedelta(minutes=15)
 _LINK: Final = f"/{PANEL_URL_PATH}"
+_PEOPLE_LINK: Final = f"{_LINK}/settings/general/people"
 
 type Issue = tuple[str, dict[str, str]]
 
@@ -47,6 +48,7 @@ class IssueTracker:
         self._engine = engine
         self._hass = engine.hass
         self._active: dict[str, Issue] = {}
+        self._links: dict[str, str] = {}
         self._started = False
         self._unsubs: list[CALLBACK_TYPE] = []
 
@@ -120,7 +122,7 @@ class IssueTracker:
                 severity=ir.IssueSeverity.WARNING,
                 translation_key=key,
                 translation_placeholders=placeholders,
-                learn_more_url=_LINK,
+                learn_more_url=self._links.get(issue_id, _LINK),
             )
             self._active[issue_id] = issue
 
@@ -133,13 +135,16 @@ class IssueTracker:
     def _problems(self) -> dict[str, Issue]:
         engine = self._engine
         problems: dict[str, Issue] = {}
+        links: dict[str, str] = {}
         for runner in engine.runners.values():
             name = runner.name
+            editor = f"{_LINK}/settings/notifications/{runner.id}"
             used: set[str] = set(runner.entities.explicit)
             for number, step in enumerate(runner.steps.values(), start=1):
                 used |= step.referenced
                 step_text = str(engine.step_number(runner.id, step.step_id) or number)
                 if step.errors:
+                    links[f"{ISSUE_SETUP_ERROR}_{runner.id}_{step.step_id}"] = editor
                     problems[f"{ISSUE_SETUP_ERROR}_{runner.id}_{step.step_id}"] = (
                         ISSUE_SETUP_ERROR,
                         {
@@ -156,6 +161,9 @@ class IssueTracker:
                     if self._exists(every) and not is_valid_every(
                         self._hass, step.schedule.config
                     ):
+                        links[f"{ISSUE_INVALID_EVERY}_{runner.id}_{step.step_id}"] = (
+                            editor
+                        )
                         problems[
                             f"{ISSUE_INVALID_EVERY}_{runner.id}_{step.step_id}"
                         ] = (
@@ -164,6 +172,7 @@ class IssueTracker:
                         )
             missing = sorted(entity for entity in used if not self._exists(entity))
             if missing:
+                links[f"{ISSUE_MISSING_ENTITY}_{runner.id}"] = editor
                 problems[f"{ISSUE_MISSING_ENTITY}_{runner.id}"] = (
                     ISSUE_MISSING_ENTITY,
                     {"name": name, "entities": ", ".join(missing)},
@@ -172,6 +181,9 @@ class IssueTracker:
             owner = engine.runners.get(notification_id)
             if owner is None:
                 continue
+            links[f"{ISSUE_TEMPLATE_ERROR}_{notification_id}_{step_id}"] = (
+                f"{_LINK}/settings/notifications/{notification_id}"
+            )
             problems[f"{ISSUE_TEMPLATE_ERROR}_{notification_id}_{step_id}"] = (
                 ISSUE_TEMPLATE_ERROR,
                 {
@@ -192,10 +204,12 @@ class IssueTracker:
             state = self._hass.states.get(person["person"])
             if state is None:
                 continue
+            links[f"{ISSUE_MISSING_PUSH}_{person['person']}"] = _PEOPLE_LINK
             problems[f"{ISSUE_MISSING_PUSH}_{person['person']}"] = (
                 ISSUE_MISSING_PUSH,
                 {"name": state.name, "service": str(service)},
             )
+        self._links = links
         return problems
 
 

@@ -26,10 +26,23 @@ A Home Assistant integration that manages every notification of your home in one
 
 The release zip contains the built frontend. The repository itself does not, so copying the source folder without building it gives an empty panel.
 
+## Concepts
+
+A few words are used the same way everywhere, in the panel and in this document:
+
+- **Notification:** what you set up in the editor: a message with its steps, buttons and channels. It belongs to a **category**, which gives it its defaults (buttons, audience, channels, colour).
+- **Step:** one stage of a notification. It says when it starts, when it is done, what it shows and who gets it. Several steps make a sequence, for example a reminder that gets louder.
+- **Card:** the live result of a step, one for each time it is active (a step started by its entities has one for each entity). A card is active, snoozed or closed (done, dismissed or expired).
+- **Dashboard card:** a Home Assistant dashboard card of this integration, *Notification Center* or *Notification*, that shows cards on a dashboard. A card and a dashboard card are not the same: the dashboard card is where the cards are shown.
+- **Home mode:** the house's current situation (Home, Away, a night mode, ...), set in the settings. It decides which channels send.
+- **Audience:** the people a notification is meant for, each in the states (Home, Sleep, Away) in which they get it.
+- **Channel:** a way a card reaches people: the Dashboard, Push or a light, speaker or siren. A channel sends in the home modes ticked for it.
+- **Show when / Hide while** (*Conditions*) and **Done when** decide whether a card is shown and when it closes.
+
 ## What you get
 
 - **Sidebar panel:** *Notification Center*. Every user can open it. See [The panel](#the-panel).
-- **Dashboard cards**, in the card picker: *Notification Center* (`custom:notification-center`), every active card, and *Notification* (`custom:notification-center-card`), one notification. The integration loads them on every dashboard, so you do not add a resource by hand. See [The Notification Center card](#the-notification-center-card) and [The Notification card](#the-notification-card).
+- **Dashboard cards**, in the dashboard's card picker: *Notification Center* (`custom:notification-center`), every active card, and *Notification* (`custom:notification-center-card`), one notification. The integration loads them on every dashboard, so you do not add a resource by hand. See [The Notification Center dashboard card](#the-notification-center-dashboard-card) and [The Notification dashboard card](#the-notification-dashboard-card).
 
 - **A sensor per notification:** `sensor.nc_<name>`, for example `sensor.nc_dishwasher`. Its state is the most important state of its cards: `active`, `hidden`, `snoozed`, `upcoming`, `done` (today), `idle` or `disabled`. The attributes tell the number of active cards, the active step, the entities of a step started by its entities, the message, the snooze end and the last done time. The entity id stays when the notification is renamed.
 - **`sensor.notification_center`:** the number of active cards, with the current mode, the counts per category and the top notification as attributes.
@@ -77,7 +90,7 @@ A notification uses its category's buttons live: in its Interactions they are in
 
 A home mode tells which channels deliver a notification (the Channels table of the categories). Only one home mode is active at a time: the first in the list whose condition is true. Its condition is an entity state or a template (a `toggle` condition in YAML still works). **Home** without a condition is always true: it is shown on top but checked last, so it applies when no other home mode does. Home with a condition is a normal row that can be dragged like the others. When no home mode is active, the page says *No active home mode* and only the channels ticked in at least one home mode send. The active home mode has an *Active* chip. (In YAML and in the code they are still `modes`.)
 
-*Add home mode* has two steps: the home mode is saved first with the same channels as Home, then the next dialog lists the channels to switch on for it in every category (it starts with Home's and cannot be skipped). The icon of a home mode is kept in YAML.
+*Add home mode* has two steps: the home mode is saved first with the same channels as Home, then the next dialog lists the channels to switch on for it in every category (it starts with Home's and cannot be skipped). The dialog of a home mode has its name, its icon and its condition, also for Home.
 
 ### Light
 
@@ -128,17 +141,17 @@ The diagnostic sensor `sensor.nc_channel_push` counts the cards on the phones, w
 
 ### The notification editor
 
-Laid out like the automation editor: the name and status in the header, Undo and Redo (Ctrl+Z, Ctrl+Y), the Enabled switch (saved at once) and the menu: *Information* (the sensor's dialog, where its entity id can be changed), *Run now* (the selected step, like the Trigger action), *Clear notifications*, *Duplicate* (a disabled copy), *Edit in YAML* (the whole notification in Home Assistant's YAML editor, as it is saved; *Edit in visual editor* goes back, and Undo and Redo work in both), *Disable* and *Delete*. Under the header a preview of the selected step's card, with the templates rendered for the first listed entity. Save appears when something changed; leaving asks first.
+Laid out like the automation editor: the name and status in the header, Undo and Redo (Ctrl+Z, Ctrl+Y), the Enabled switch (saved at once) and the menu: *Information* (the sensor's dialog, where its entity id can be changed), *Run now, only me* (the selected step, like the Trigger action with *Only me*: only your own person gets it, on the Dashboard and on the phone, the lights, speakers and sirens stay quiet) and *Run now, everyone*, *Clear notifications*, *Duplicate* (a disabled copy), *Edit in YAML* (the whole notification in Home Assistant's YAML editor, as it is saved; *Edit in visual editor* goes back, and Undo and Redo work in both), *Disable* and *Delete*. Under the header a preview of the selected step's card, with the templates rendered for the first listed entity. Save appears when something changed; leaving asks first.
 
 - **Settings:** name, category and icon on the first row; **Color**, **Highlight** (*Normal*, *Pulse*, *Glow* or *Alert*) and **Chime** (when there is a speaker; *None* plays nothing) on the second. Left empty, they come from the category (shown in the fields, marked *(default)* in the lists); choosing the category's value, or X on an own one, goes back to the category's.
 - **Entities:** single entities and entity groups (a domain with an optional device class, floors, areas and labels). Entities are named as in Home Assistant's pickers, with their area and device; the pencil edits or deletes. Each group is its own list, always open, and each of its entities can be switched off on its own, and opens its dialog where each entity action shows the group's until it is changed for that entity (`member_actions`, it replaces the group's; *Reset* beside the button brings the group's back); *Add new matching entities* off keeps the entities that matched when it was saved. A category that matches nothing yet is fine.
 Back (the browser's or the phone's) closes an open dialog first.
 
-- **Steps**, as tabs, with Add step and a menu (Run this step, Duplicate, Move left or right, Disable, Delete). Each step has (in this order: Message and Interactions, then Activation, Conditions and Done, then Audience and Channels):
+- **Steps**, as tabs, with Add step and a menu (Run this step, Duplicate, Move left or right, Disable, Delete). Each step has (in this order: Message and Interactions, then Activation, Conditions and Done when, then Audience and Channels):
   - **Message:** the message, the Info line, the entity parameters `{Floor}`, `{Area}`, `{Device}`, `{Device class}` (by its Home Assistant name, such as Moisture), `{Entity}`, `{State}`, and the *Data* after the label: empty for nothing, *Notification* (active since, last done), *Entity state* (the active entity unless another is chosen; the state (default), an attribute, last changed or last updated) or *Custom* (a text, templates work). `{Floor}` shows only when there are floors.
   - **Activation** (`activation` in YAML; its title shows the number of triggers, or *Schedule* or *Repeat*): *Triggers*: at the top *Notification entities*, shown when the notification lists entities: *State* (is or is not some states) or *Numeric state* (above or below a number or an entity's value, or a template), of the state or an attribute, with For. Every entity gets its own card when it starts to match. Left empty it is not used; a new notification whose entities are all on or off starts with *Is on*. It is the first trigger in YAML. Below it Home Assistant's trigger editor (none means only the Trigger action activates it); the Notification entities triggers and conditions there take any notification and show the same compact form. *Schedule* (the calendar) or *Repeat* (after last done). Both show when they come next; Repeat's next time can be set with the pencil (it is stored as the last done time). A card can expire after a duration or on the same or a later day at a time.
   - **Conditions** (`conditions` in YAML): one set of conditions (Home Assistant's condition editor) with two switches: *Activate only while conditions are met* (`activate_only_while_met`: the step is activated only when they are true; a scheduled card waits for them, hidden, until it expires) and *Hide active notification while conditions are not met* (`hide_while_not_met`: an active card shows only while they are true).
-  - **Done:** Home Assistant's trigger editor, and above it, when Notification entities is set at the top of Activation or the Conditions are used at the activation, *Done when activation conditions no longer true* (`activation_conditions_no_longer_true`: an entity's card closes when that entity stops matching; a card closes when the Conditions are no longer met).
+  - **Done when:** Home Assistant's trigger editor, and above it, when Notification entities is set at the top of Activation or the Conditions are used at the activation, *Done when activation conditions no longer true* (`activation_conditions_no_longer_true`: an entity's card closes when that entity stops matching; a card closes when the Conditions are no longer met).
   - **Interactions:** *Tap behavior* on its own (a tap on the push always opens the app and runs it too), then *Buttons*: the built-in buttons (*Done*, *Dismiss*, *Snooze*), the category's custom buttons and the notification's own custom buttons (*Add button*). A row opens the button's dialog; its switch turns it on or off. See [Buttons](#buttons) and [Categories](#categories).
   - **Audience** and **Channels:** the category's tables, as the step changes them. A step stores only what differs: a changed person row or channel row has a reset icon. A channel row's icon resets its mode ticks (after a confirmation); in the channel's dialog *Reset* resets Modes or Settings on their own. The Audience title shows how many people get the step (2/3).
 
@@ -164,9 +177,9 @@ They run one after the other: Silence first (so the sound stops at once), then t
 
 The card itself reacts to a tap when its Tap button is switched on. The buttons are always in the order: Snooze, own buttons, Done, Dismiss. A step's Audience and the Dashboard channel decide who sees the card: each user sees the cards meant for their person in their current state; a user without a person sees what at least one person of the audience gets. Held back cards show under *Upcoming* on the Overview, with what they wait for: *Shows 7:41* (the delay), *Waiting for Home or Away home mode*, *Waiting to arrive home, wake up or go away* (a user without a person: *Waiting for someone to …*). The Activity log names the user who changed a notification's state.
 
-## The Notification Center card
+## The Notification Center dashboard card
 
-Every active card of the Notification Center on a dashboard, in list order, with working buttons. It hides itself while nothing is active and leaves no gap (unless `show_empty` is on); in the dashboard editor it shows a *Notification Center* placeholder instead.
+The dashboard card that shows every active card of the Notification Center on a dashboard, in list order, with working buttons. It hides itself while nothing is active and leaves no gap (unless `show_empty` is on); in the dashboard editor it shows a *Notification Center* placeholder instead.
 
 | Option | Description |
 | --- | --- |
@@ -181,9 +194,9 @@ categories: [emergency, chores]
 max_cards: 3
 ```
 
-## The Notification card
+## The Notification dashboard card
 
-One notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour is used for the border, the icon, the label and the buttons; the background is the normal card background.
+The dashboard card that shows one notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour is used for the border, the icon, the label and the buttons; the background is the normal card background.
 
 **With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active card of the notification shows (a notification started by its entities can have several), with all its buttons and its tap (see [Buttons](#buttons)). A Snooze with more than one time offers them on the card. The card hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
 
@@ -192,7 +205,7 @@ type: custom:notification-center-card
 entity: sensor.nc_washing_machine
 ```
 
-**On its own:** with any other entity (or none), the card shows what its options say; when it shows is up to the card's Visibility tab. All options are in the card editor:
+**On its own:** with any other entity (or none), the dashboard card shows what its options say; when it shows is up to its Visibility tab. All options are in the dashboard card editor:
 
 | Option | Description |
 | --- | --- |

@@ -26,6 +26,10 @@ trigger:
       example: '{"visitor": "Postman"}'
       selector:
         object:
+    only_me:
+      default: false
+      selector:
+        boolean:
 
 done:
   target:

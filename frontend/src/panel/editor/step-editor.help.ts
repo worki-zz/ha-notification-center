@@ -47,7 +47,7 @@ export const HELP: Record<
     ],
   },
   done: {
-    title: "Done",
+    title: "Done when",
     text: [
       "The card closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
       "Done when activation conditions no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a card closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",

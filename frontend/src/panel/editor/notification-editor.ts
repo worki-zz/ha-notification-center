@@ -10,6 +10,7 @@ import { keyed } from "lit/directives/keyed.js";
 
 import { DOMAIN, type CardState, type Notification, type NotificationCenterConfig, type StateMessage, colorCss } from "../../shared/config";
 import { cssColor } from "../../shared/format";
+import { errorTarget, errorWithPlace } from "./error-target";
 import { cardData, categoryOf, errorText, liveButtons, navigate } from "../../shared/live";
 import "../../shared/notification-view";
 import type { NotificationViewData } from "../../shared/notification-view";
@@ -411,9 +412,13 @@ export class NcNotificationEditor extends LitElement {
         <ha-icon slot="icon" icon="mdi:information-outline"></ha-icon>
         Information
       </ha-dropdown-item>
-      <ha-dropdown-item value="run" .disabled=${!runnable}>
+      <ha-dropdown-item value="run_me" .disabled=${!runnable}>
         <ha-icon slot="icon" icon="mdi:play"></ha-icon>
-        Run now${draft.steps.length > 1 ? ` (step ${this._step + 1})` : ""}
+        Run now, only me${draft.steps.length > 1 ? ` (step ${this._step + 1})` : ""}
+      </ha-dropdown-item>
+      <ha-dropdown-item value="run" .disabled=${!runnable}>
+        <ha-icon slot="icon" icon="mdi:play-box-multiple-outline"></ha-icon>
+        Run now, everyone${draft.steps.length > 1 ? ` (step ${this._step + 1})` : ""}
       </ha-dropdown-item>
       <ha-dropdown-item value="clear" .disabled=${!saved}>
         <ha-icon slot="icon" icon="mdi:notification-clear-all"></ha-icon>
@@ -693,7 +698,11 @@ export class NcNotificationEditor extends LitElement {
           </ha-icon-button>
           <ha-dropdown-item value="run" .disabled=${this._isNew || this._dirty || !draft.enabled || !step.enabled}>
             <ha-icon slot="icon" icon="mdi:play"></ha-icon>
-            Run this step
+            Run this step, everyone
+          </ha-dropdown-item>
+          <ha-dropdown-item value="run_me" .disabled=${this._isNew || this._dirty || !draft.enabled || !step.enabled}>
+            <ha-icon slot="icon" icon="mdi:play"></ha-icon>
+            Run this step, only me
           </ha-dropdown-item>
           <ha-dropdown-item value="duplicate">
             <ha-icon slot="icon" icon="mdi:content-duplicate"></ha-icon>
@@ -775,6 +784,9 @@ export class NcNotificationEditor extends LitElement {
     switch (action) {
       case "run":
         await this._run(() => this._call("trigger", { step: index + 1 }));
+        return;
+      case "run_me":
+        await this._run(() => this._call("trigger", { step: index + 1, only_me: true }));
         return;
       case "duplicate": {
         const copy = JSON.parse(JSON.stringify(step)) as EditorStep;
@@ -878,6 +890,9 @@ export class NcNotificationEditor extends LitElement {
       case "run":
         await this._run(() => this._call("trigger", { step: this._step + 1 }));
         return;
+      case "run_me":
+        await this._run(() => this._call("trigger", { step: this._step + 1, only_me: true }));
+        return;
       case "clear":
         await this._run(async () => {
           for (let number = 1; number <= draft.steps.length; number++) {
@@ -968,7 +983,18 @@ export class NcNotificationEditor extends LitElement {
         window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: true } }));
       }
     } catch (err) {
-      this._error = errorText(err);
+      const text = errorText(err);
+      const target = errorTarget(text);
+      this._error = errorWithPlace(text, target);
+      if (target.step !== undefined && target.step < draft.steps.length) {
+        this._step = target.step;
+        if (target.block) this._toggle(`step:${target.block}`, true);
+      }
+      void this.updateComplete.then(() =>
+        this.renderRoot
+          .querySelector("ha-alert[alert-type='error']")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      );
     } finally {
       this._saving = false;
     }

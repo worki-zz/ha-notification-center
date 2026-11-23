@@ -569,7 +569,7 @@ class PushDevice(Device):
                     "Nobody of the audience has a push device."
                 )
         else:
-            person = _person_of_user(self.hass, data.get("user_id"))
+            person = person_of_user(self.hass, data.get("user_id"))
             if person is None:
                 raise ServiceValidationError("Your user is not a person.")
             if person not in phones:
@@ -600,7 +600,7 @@ class PushDevice(Device):
             )
 
 
-def _person_of_user(hass: HomeAssistant, user_id: str | None) -> str | None:
+def person_of_user(hass: HomeAssistant, user_id: str | None) -> str | None:
     if not user_id:
         return None
     for state in hass.states.async_all("person"):

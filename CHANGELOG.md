@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- A step's *Done* block is called *Done when* in the editor, its help and the README.
+- A failed save names the step and the block of the error (*Step 2, Activation: …*), opens that block and scrolls to the message.
+- A Repairs issue's *Learn more* link opens the editor of its notification (the People page for a missing push device).
+- *Run now* in the editor and the step menu has *only me* and *everyone*. *Only me* is also the new `only_me` option of the Trigger action: only the person of the calling user gets the card, on the Dashboard and the phone; lights, speakers and sirens stay quiet.
+- The README has a *Concepts* section, and calls the two dashboard cards *dashboard cards* throughout. Its note on the home mode icon is corrected: it is edited in the home mode's dialog.
+
 ## 0.7.2
 
 Code review fixes, button dialog order, Tap behavior as one block, export in the Companion app.
