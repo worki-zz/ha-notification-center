@@ -112,7 +112,7 @@ export function chimeField(
         options: [
           ...(options.inherits ? [{ value: CHIME_NONE, label: "None" }] : []),
           ...orderedChimes(config).map((chime) => ({ value: chime.id, label: chime.name })),
-        ].map((option) => (option.value === fallback ? { ...option, label: `${option.label} (Default)` } : option)),
+        ].map((option) => (option.value === fallback ? { ...option, label: `${option.label} (default)` } : option)),
       },
     },
     value || fallback,
@@ -136,7 +136,7 @@ export function highlightField(
   const own = value !== undefined;
   const fallback = !!inherited;
   const shown = own ? value : fallback;
-  const label = (on: boolean, text: string) => (on === fallback ? `${text} (Default)` : text);
+  const label = (on: boolean, text: string) => (on === fallback ? `${text} (default)` : text);
   return field(
     undefined,
     {
