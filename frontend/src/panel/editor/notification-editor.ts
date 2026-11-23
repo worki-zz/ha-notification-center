@@ -3,19 +3,12 @@
 // switch and the menu; a preview of the selected step's card; the blocks
 // Settings, Entities and the steps; Save when something changed.
 
-import { LitElement, css, html, nothing, unsafeCSS, type PropertyValues } from "lit";
-import { sleepersOf } from "../channel-tables";
+import { LitElement, html, nothing, type PropertyValues } from "lit";
+import { sleepersOf } from "../channel-helpers";
 import { customElement, property, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 
-import {
-  DOMAIN,
-  type CardState,
-  type Notification,
-  type NotificationCenterConfig,
-  type StateMessage,
-  colorCss,
-} from "../../shared/config";
+import { DOMAIN, type CardState, type Notification, type NotificationCenterConfig, type StateMessage, colorCss } from "../../shared/config";
 import { cssColor } from "../../shared/format";
 import { cardData, categoryOf, errorText, liveButtons, navigate } from "../../shared/live";
 import "../../shared/notification-view";
@@ -24,33 +17,15 @@ import { isTemplate, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import { chimeField, colorField, highlightField } from "../color-field";
 import { confirmDialog } from "../confirm";
-import { addEntityButton } from "../devices";
 import { type FieldOptions, field, iconSelect } from "../fields";
-import { STATUS_STYLES, renderStatus, statusOf } from "../status";
-import { domainName, groupName, newGroup } from "./group-dialog";
-import { BLOCK_STYLES, block } from "./block";
+import { renderStatus, statusOf } from "../status";
+import { block } from "./block";
 import "./group-dialog";
-import { ACTION_SLOT_STYLES, renderActionSlots, renderMemberSlots } from "./action-slots";
-import {
-  type EditorNotification,
-  type EditorStep,
-  type EntityGroup,
-  type Obj,
-  applyCategoryDefaults,
-  buttonsWithEntityActions,
-  detachCategoryButtons,
-  entityActionSlots,
-  entityDisplay,
-  newId,
-  groupMatches,
-  listedEntities,
-  newNotification,
-  newStep,
-  prefillPinned,
-  toEditor,
-  toSaved,
-} from "./model";
+import { ACTION_SLOT_STYLES } from "./action-slots";
+import { type EditorNotification, type EditorStep, applyCategoryDefaults, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, toEditor, toSaved } from "./model";
+import "./entities-block";
 import "./step-editor";
+import { NOTIFICATION_EDITOR_STYLES } from "./notification-editor.styles";
 import { setEntitiesResolver } from "./entities-form";
 
 const MAX_UNDO = 50;
@@ -94,15 +69,6 @@ export class NcNotificationEditor extends LitElement {
   @state() private _redo: string[] = [];
 
   @state() private _preview: PreviewText[] = [];
-
-  @state() private _group?: { index: number; group: EntityGroup };
-
-  // Add entity shows the picker in place of the button, open.
-
-  @state() private _entity?: { index: number; entityId: string; actions: Obj };
-
-  // A member of an entity group whose custom actions are being edited.
-  @state() private _member?: { groupIndex: number; entityId: string; custom: Obj };
 
   // The draft as it was loaded or saved, to tell whether it changed.
   private _original = "";
@@ -384,18 +350,6 @@ export class NcNotificationEditor extends LitElement {
             </ha-button>`
           : nothing}
       </hass-subpage>
-      ${this._group
-        ? html`<nc-group-dialog
-            .hass=${this.hass}
-            .group=${this._group.group}
-            .isNew=${this._group.index < 0}
-            .narrow=${this.narrow}
-            .slots=${entityActionSlots(this._draft!, this._category())}
-            @group-closed=${this._groupClosed}
-          ></nc-group-dialog>`
-        : nothing}
-      ${this._entity ? this._renderEntityDialog() : nothing}
-      ${this._member ? this._renderMemberDialog() : nothing}
     `;
   }
 
@@ -519,7 +473,13 @@ export class NcNotificationEditor extends LitElement {
     return html`
       ${preview}
       ${this._panel("settings", "mdi:cog-outline", "Settings", undefined, () => this._renderSettings(draft))}
-      ${this._panel("entities", "mdi:format-list-checks", "Entities", count, () => this._renderEntities(draft))}
+      ${this._panel("entities", "mdi:format-list-checks", "Entities", count, () => html`<nc-entities-block
+          .hass=${this.hass}
+          .narrow=${this.narrow}
+          .draft=${draft}
+          .category=${this._category()}
+          @entities-changed=${(ev: CustomEvent<Partial<EditorNotification>>) => this._change(ev.detail)}
+        ></nc-entities-block>`)}
       ${this._renderSteps(draft)}
     `;
   }
@@ -665,266 +625,6 @@ export class NcNotificationEditor extends LitElement {
     options: FieldOptions = {},
   ) {
     return field(this.hass, selector, value, label, changed, options);
-  }
-
-  // -- Entities block ------------------------------------------------------
-
-  private _renderEntityText(entityId: string) {
-    const { primary, secondary } = entityDisplay(this.hass!, entityId);
-    return html`<div class="item-text">
-      <div>${primary}</div>
-      ${secondary ? html`<div class="secondary">${secondary}</div>` : nothing}
-    </div>`;
-  }
-
-  private _renderEntities(draft: EditorNotification) {
-    const hass = this.hass!;
-    return html`<div class="block">
-      ${draft.entities.length
-        ? html`<ha-card outlined class="list">
-            ${draft.entities.map(
-              (item, index) => {
-                const edit = () =>
-                  (this._entity = { index, entityId: item.entity_id, actions: { ...(item.actions ?? {}) } });
-                return html`<div class="item clickable" role="button" tabindex="0" @click=${edit}
-                  @keydown=${(ev: KeyboardEvent) => ev.key === "Enter" && ev.target === ev.currentTarget && edit()}>
-                <ha-switch
-                  .checked=${item.enabled}
-                  @click=${(ev: Event) => ev.stopPropagation()}
-                  @change=${(ev: Event) => {
-                    const entities = [...draft.entities];
-                    entities[index] = { ...item, enabled: (ev.target as HTMLInputElement).checked };
-                    this._change({ entities });
-                  }}
-                ></ha-switch>
-                <ha-state-icon .hass=${hass} .stateObj=${hass.states[item.entity_id]}></ha-state-icon>
-                ${this._renderEntityText(item.entity_id)}
-                <ha-icon-button .label=${"Edit"}>
-                  <ha-icon icon="mdi:pencil"></ha-icon>
-                </ha-icon-button>
-              </div>`;
-              },
-            )}
-          </ha-card>`
-        : nothing}
-      ${draft.entity_groups.map((group, index) => this._renderGroup(draft, group, index))}
-      <div class="buttons">
-        ${addEntityButton({
-          hass,
-          label: "Add entity",
-          exclude: draft.entities.map((item) => item.entity_id),
-          picked: (entityId) =>
-            this._change({
-              entities: [...draft.entities, { entity_id: entityId, enabled: true, actions: {} }],
-            }),
-        })}
-        <ha-button
-          appearance="filled"
-          size="s"
-          @click=${() => (this._group = { index: -1, group: newGroup() })}
-        >
-          <ha-icon slot="start" icon="mdi:shape-plus-outline"></ha-icon>
-          Add entity group
-        </ha-button>
-      </div>
-    </div>`;
-  }
-
-  private _renderGroup(draft: EditorNotification, group: EntityGroup, index: number) {
-    const hass = this.hass!;
-    const members = groupMatches(hass, group);
-    const active = members.filter((id) => !group.excluded.includes(id)).length;
-    const setGroup = (changes: Partial<EntityGroup>) => {
-      const groups = [...draft.entity_groups];
-      groups[index] = { ...group, ...changes };
-      this._change({ entity_groups: groups });
-    };
-    const edit = () => (this._group = { index, group });
-    return html`<ha-card outlined class="list">
-      <div
-        class="item group clickable"
-        role="button"
-        tabindex="0"
-        @click=${edit}
-        @keydown=${(ev: KeyboardEvent) => ev.key === "Enter" && ev.target === ev.currentTarget && edit()}
-      >
-        <ha-switch
-          .checked=${group.enabled}
-          @click=${(ev: Event) => ev.stopPropagation()}
-          @change=${(ev: Event) => setGroup({ enabled: (ev.target as HTMLInputElement).checked })}
-        ></ha-switch>
-        <ha-icon icon="mdi:shape-outline"></ha-icon>
-        <div class="item-text">
-          <div>${groupName(hass, group)}</div>
-          ${group.add_new ? nothing : html`<div class="secondary">Fixed list</div>`}
-        </div>
-        <span class="count">${active}</span>
-        <ha-icon-button .label=${"Edit"}>
-          <ha-icon icon="mdi:pencil"></ha-icon>
-        </ha-icon-button>
-      </div>
-      ${members.length
-        ? members.map(
-            (entityId) => html`<div
-              class="item member clickable"
-              role="button"
-              tabindex="0"
-              @click=${() => this._openMember(group, index, entityId)}
-              @keydown=${(ev: KeyboardEvent) =>
-                ev.key === "Enter" && ev.target === ev.currentTarget && this._openMember(group, index, entityId)}
-            >
-              <ha-switch
-                .checked=${!group.excluded.includes(entityId)}
-                @click=${(ev: Event) => ev.stopPropagation()}
-                @change=${(ev: Event) => {
-                  const on = (ev.target as HTMLInputElement).checked;
-                  setGroup({
-                    excluded: on
-                      ? group.excluded.filter((id) => id !== entityId)
-                      : [...group.excluded, entityId],
-                  });
-                }}
-              ></ha-switch>
-              <ha-state-icon .hass=${hass} .stateObj=${hass.states[entityId]}></ha-state-icon>
-              ${this._renderEntityText(entityId)}
-              <ha-icon-button .label=${"Edit"}>
-                <ha-icon icon="mdi:pencil"></ha-icon>
-              </ha-icon-button>
-            </div>`,
-          )
-        : html`<div class="item member secondary">
-            No ${domainName(group.domain).toLowerCase()} entities match yet.
-          </div>`}
-    </ha-card>`;
-  }
-
-  private _openMember(group: EntityGroup, groupIndex: number, entityId: string): void {
-    this._member = {
-      groupIndex,
-      entityId,
-      custom: structuredClone(group.member_actions?.[entityId] ?? {}),
-    };
-  }
-
-  // A member of an entity group: its entity actions, each the group's or
-  // its own (Custom action).
-  private _renderMemberDialog() {
-    const edit = this._member!;
-    const draft = this._draft!;
-    const group = draft.entity_groups[edit.groupIndex];
-    const close = () => (this._member = undefined);
-    if (!group) return nothing;
-    const display = this.hass
-      ? entityDisplay(this.hass, edit.entityId)
-      : { primary: edit.entityId, secondary: "" };
-    // Room ▸ device above the name, as in Home Assistant's more info dialog.
-    return html`<ha-dialog
-      open
-      width="medium"
-      header-title=${display.primary}
-      header-subtitle=${display.secondary}
-      header-subtitle-position="above"
-      @closed=${(ev: Event) => {
-        ev.stopPropagation();
-        close();
-      }}
-    >
-      <div class="dialog-slots">
-        ${renderMemberSlots(this.hass, this.narrow, entityActionSlots(draft, this._category()), group.actions, edit.custom, (custom) => {
-          this._member = { ...this._member!, custom };
-        })}
-      </div>
-      <ha-dialog-footer slot="footer">
-        <ha-button slot="secondaryAction" appearance="plain" @click=${close}>Cancel</ha-button>
-        <ha-button
-          slot="primaryAction"
-          @click=${() => {
-            const groups = [...draft.entity_groups];
-            const memberActions = { ...(group.member_actions ?? {}) };
-            if (Object.keys(edit.custom).length) memberActions[edit.entityId] = edit.custom;
-            else delete memberActions[edit.entityId];
-            groups[edit.groupIndex] = { ...group, member_actions: memberActions };
-            this._change({ entity_groups: groups });
-            close();
-          }}
-        >
-          Save
-        </ha-button>
-      </ha-dialog-footer>
-    </ha-dialog>`;
-  }
-
-  private _renderEntityDialog() {
-    const edit = this._entity!;
-    const draft = this._draft!;
-    const close = () => (this._entity = undefined);
-    const display = this.hass
-      ? entityDisplay(this.hass, edit.entityId)
-      : { primary: edit.entityId, secondary: "" };
-    // Room ▸ device above the name, as in Home Assistant's more info dialog.
-    return html`<ha-dialog
-      open
-      width="medium"
-      header-title=${display.primary}
-      header-subtitle=${display.secondary}
-      header-subtitle-position="above"
-      @closed=${(ev: Event) => {
-        ev.stopPropagation();
-        close();
-      }}
-    >
-      <ha-icon-button
-        slot="headerActionItems"
-        .label=${"Delete"}
-        @click=${() => {
-          this._change({ entities: draft.entities.filter((_item, i) => i !== edit.index) });
-          close();
-        }}
-      >
-        <ha-icon icon="mdi:delete"></ha-icon>
-      </ha-icon-button>
-      <div class="dialog-slots">
-        ${renderActionSlots(this.hass, this.narrow, entityActionSlots(draft, this._category()), edit.actions, (actions) => {
-          this._entity = { ...this._entity!, actions };
-        })}
-      </div>
-      <ha-dialog-footer slot="footer">
-        <ha-button slot="secondaryAction" appearance="plain" @click=${close}>Cancel</ha-button>
-        <ha-button
-          slot="primaryAction"
-          @click=${() => {
-            const entities = [...draft.entities];
-            entities[edit.index] = { ...entities[edit.index], actions: edit.actions };
-            this._change({ entities });
-            close();
-          }}
-        >
-          Save
-        </ha-button>
-      </ha-dialog-footer>
-    </ha-dialog>`;
-  }
-
-  private _groupClosed(ev: CustomEvent<{ result?: EntityGroup | "delete" }>): void {
-    const edit = this._group;
-    this._group = undefined;
-    const result = ev.detail.result;
-    if (!edit || !result || !this._draft) return;
-    const groups = [...this._draft.entity_groups];
-    if (result === "delete") {
-      groups.splice(edit.index, 1);
-    } else if (edit.index < 0) {
-      groups.push(result);
-    } else {
-      // A new filter: the fixed list is made again when it is saved.
-      const filterChanged = ["domain", "device_class", "areas", "floors", "labels"].some(
-        (key) =>
-          JSON.stringify(result[key as keyof EntityGroup]) !==
-          JSON.stringify(edit.group[key as keyof EntityGroup]),
-      );
-      groups[edit.index] = filterChanged || result.add_new ? { ...result, members: null } : result;
-    }
-    this._change({ entity_groups: groups });
   }
 
   // -- Steps -----------------------------------------------------------------
@@ -1299,207 +999,7 @@ export class NcNotificationEditor extends LitElement {
     }
   }
 
-  static override styles = [
-    ACTION_SLOT_STYLES,
-    css`
-    :host {
-      display: block;
-      height: 100%;
-    }
-    ha-card.yaml {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 8px 0;
-      overflow: hidden;
-    }
-    ha-card.yaml ha-alert {
-      padding: 0 16px;
-    }
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .toolbar .status {
-      margin-inline-end: 8px;
-    }
-    ha-switch {
-      flex: none;
-    }
-    .toolbar ha-switch {
-      margin: 0 8px;
-    }
-    .content {
-      max-width: 1040px;
-      margin: 0 auto;
-      /* As much room under the header as on the overview. */
-      padding: 24px 16px 96px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      box-sizing: border-box;
-    }
-    .preview {
-      max-width: 520px;
-      width: 100%;
-      margin: 0 auto 8px;
-      pointer-events: none;
-    }
-    .block {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .row {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-    .row > * {
-      flex: 1 1 240px;
-      min-width: 0;
-    }
-    /* Icon, Color and Highlight stay on one row down to a narrow screen. */
-    .row.three > * {
-      flex-basis: 160px;
-    }
-    .list {
-      overflow: hidden;
-    }
-    .item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 4px 4px 4px 16px;
-      min-height: 56px;
-      box-sizing: border-box;
-      border-top: 1px solid var(--divider-color);
-    }
-    .item:first-child {
-      border-top: none;
-    }
-    .item > ha-icon,
-    .item > ha-state-icon {
-      color: var(--state-icon-color, var(--secondary-text-color));
-      flex: none;
-      width: 24px;
-    }
-    .item.group {
-      background-color: rgb(from var(--primary-text-color) r g b / 0.03);
-      font-weight: var(--ha-font-weight-medium, 500);
-    }
-    .item.member {
-      font-weight: normal;
-    }
-    .item.clickable {
-      cursor: pointer;
-    }
-    .item.clickable:hover,
-    .item.clickable:focus-visible {
-      background-color: var(--secondary-background-color);
-      outline: none;
-    }
-    .count {
-      color: var(--secondary-text-color);
-      padding: 0 8px;
-    }
-    .item-text {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-    }
-    .item-text > div {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .item-text .secondary {
-      font-weight: normal;
-    }
-    .secondary {
-      color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s, 12px);
-    }
-    .buttons {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    .spacer {
-      flex: 1;
-    }
-    .tabs > ha-button {
-      flex: none;
-      white-space: nowrap;
-    }
-    .icon-select {
-      display: block;
-    }
-    .icon-select ha-picker-field {
-      display: block;
-      width: 100%;
-    }
-    .step-number {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 20px;
-      height: 20px;
-      border-radius: 10px;
-      margin-inline-end: 8px;
-      font-size: var(--ha-font-size-s, 12px);
-      color: var(--text-primary-color, #fff);
-      background-color: var(--secondary-text-color);
-    }
-    ha-tab-group-tab[active] .step-number {
-      background-color: var(--primary-color);
-    }
-    /* A step with an active card, like the Active status chip. */
-    ha-tab-group-tab.live .step-number {
-      background-color: var(--green-color, #4caf50);
-    }
-    .steps {
-      display: block;
-    }
-    .tabs {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding-inline-end: 4px;
-      border-bottom: 1px solid var(--divider-color);
-    }
-    .tabs ha-tab-group {
-      flex: 0 1 auto;
-      min-width: 0;
-    }
-    ha-tab-group-tab.off {
-      opacity: 0.5;
-    }
-    .step {
-      padding: 16px 0 0;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .fab {
-      position: fixed;
-      right: calc(16px + var(--safe-area-inset-right, 0px));
-      bottom: calc(-80px - var(--safe-area-inset-bottom, 0px));
-      transition: bottom 0.3s;
-      --ha-button-box-shadow: var(--ha-box-shadow-l);
-    }
-    .fab.dirty {
-      bottom: calc(16px + var(--safe-area-inset-bottom, 0px));
-    }
-    ${unsafeCSS(STATUS_STYLES)}
-    ${BLOCK_STYLES}
-      .dialog-slots {
-      margin-top: 0;
-    }
-  `,
-  ];
+  static override styles = [ACTION_SLOT_STYLES, NOTIFICATION_EDITOR_STYLES];
 }
 
 declare global {

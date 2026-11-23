@@ -1,0 +1,56 @@
+// The help texts of the step editor.
+
+export type StartKind = "triggers" | "schedule" | "repeat";
+
+export const HELP: Record<
+  StartKind | "show" | "done" | "interactions",
+  { title: string; text: string[] }
+> = {
+  triggers: {
+    title: "Triggers",
+    text: [
+      "The step is activated when one of its triggers fires, like an automation.",
+      "Notification entities, at the top, watches the entities of the Entities block: every entity gets its own card when it starts to match, for example when a leak sensor turns on. State tests the state or an attribute; Numeric state tests a number against a limit. Left empty, it is not used.",
+      "The Notification entities triggers in the list do the same with the entities of any notification, and Notification state activates the step when this or another notification (or one of its steps) reaches a state, for example when step 1 is snoozed.",
+      "Without triggers, only the Trigger action (or Run now) activates the step.",
+    ],
+  },
+  schedule: {
+    title: "Schedule",
+    text: [
+      "The step comes on the calendar: every N days, weeks on the chosen days, months on a day, or years, at a time.",
+      "Expires closes a card nobody did, after a while or on a day at a time.",
+    ],
+  },
+  repeat: {
+    title: "Repeat after done",
+    text: [
+      "The step comes again N days, weeks, months or years after it was last done, at a time if one is set. Watering plants or changing a filter are typical.",
+      "A new step counts from when it was made. The pencil sets the next time: it is stored as when the step was last done.",
+      "Every can be a number or the value of an entity, such as an input number.",
+    ],
+  },
+  show: {
+    title: "Conditions",
+    text: [
+      "One set of conditions, used as switched on above them.",
+      "Activate only while conditions are met: the step is activated only when they are all true at that moment, for example the door card only while the alarm is armed. A scheduled card waits for them, hidden, until it expires.",
+      "Hide active notification while conditions are not met: an active card is hidden while any of them is false, and shows again when they are all true, for example the window card only while the heating is on. Push and light come again when it shows.",
+    ],
+  },
+  interactions: {
+    title: "Interactions",
+    text: [
+      "The buttons of the card and what a tap on it does. Done marks the card done, Dismiss dismisses it and Snooze snoozes it, for one of its times; the tap and the own buttons leave the card as it is.",
+      "Every one can also run an action: the entity action set for the card's entity in the Entities block, More info, a Home Assistant action or Navigate.",
+      "Show in push puts the button on the push notification too (with the push channel). Android shows at most 3.",
+    ],
+  },
+  done: {
+    title: "Done",
+    text: [
+      "The card closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
+      "Done when activation conditions no longer true: an entity's card closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a card closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
+    ],
+  },
+};

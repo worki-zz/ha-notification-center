@@ -16,7 +16,7 @@ import {
 } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
-import { STATE_NAMES } from "./channel-tables";
+import { STATE_NAMES } from "./channel-helpers";
 import { field } from "./fields";
 import { conditionWords } from "./settings-modes";
 import { STATUS_STYLES, type Status, renderStatus } from "./status";
