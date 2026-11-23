@@ -2,7 +2,7 @@
 // by itself. A row shows when the person is asleep, written like a mode's
 // condition, and the phone the pushes go to; the pencil opens the person's
 // dialog: the Sleep condition (None, State or Template) and the Push device
-// with its type. Asleep counts only at home: a person away is Away.
+// with its type. Asleep counts only at home: a person not at home is Not home.
 
 import { LitElement, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";

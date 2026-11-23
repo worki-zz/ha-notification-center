@@ -24,7 +24,7 @@ import {
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
 import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
-import { block } from "./block";
+import { BLOCK_INTROS, block } from "./block";
 import "./schedule-editor";
 import type {
   AudienceEntry,
@@ -189,6 +189,7 @@ export class NcStepEditor extends LitElement {
       icon,
       header,
       count,
+      intro: BLOCK_INTROS[key],
       expanded: this.expanded.has(key),
       toggled: (expanded) =>
         this.dispatchEvent(
@@ -254,6 +255,13 @@ export class NcStepEditor extends LitElement {
       )}
       <div class="group-gap"></div>
       ${this._panel(
+        "channels",
+        "mdi:broadcast",
+        "Channels",
+        channelCount(channelsOf(this.hass, this.config), this.category?.channels, step.channels),
+        this._renderChannels(step),
+      )}
+      ${this._panel(
         "audience",
         "mdi:account-multiple",
         "Audience",
@@ -264,13 +272,6 @@ export class NcStepEditor extends LitElement {
           this.sleepers,
         ),
         this._renderAudience(step),
-      )}
-      ${this._panel(
-        "channels",
-        "mdi:broadcast",
-        "Channels",
-        channelCount(channelsOf(this.hass, this.config), this.category?.channels, step.channels),
-        this._renderChannels(step),
       )}
       ${this._help ? this._renderHelp(this._help) : nothing}
       ${this._interaction ? this._renderInteractionDialog(step) : nothing}
@@ -719,7 +720,7 @@ export class NcStepEditor extends LitElement {
         <ha-card outlined class="own-row">
           <ha-icon class="builtin" icon="mdi:eye-off-outline"></ha-icon>
           <div class="own-text">
-            Hide active notification while conditions are not met
+            Hide while conditions are not met
           </div>
           <ha-switch
             .checked=${show.hide_while_not_met}
@@ -742,7 +743,7 @@ export class NcStepEditor extends LitElement {
     </div>`;
   }
 
-  // Done when activation conditions no longer true has something to watch:
+  // When the activation is no longer true has something to watch:
   // Notification entities, or Conditions used at the activation of a
   // triggered step.
   private _startCanEnd(step: EditorStep): boolean {
@@ -762,7 +763,7 @@ export class NcStepEditor extends LitElement {
         ? html`<ha-card outlined class="own-row">
             <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
             <div class="own-text">
-              Done when activation conditions no longer true
+              When the activation is no longer true
             </div>
             <ha-switch
               .checked=${step.done_when.activation_conditions_no_longer_true}

@@ -35,7 +35,7 @@ export const HELP: Record<
     text: [
       "One set of conditions, used as switched on above them.",
       "Activate only while conditions are met: the step is activated only when they are all true at that moment, for example the door notification only while the alarm is armed. A scheduled notification waits for them, hidden, until it expires.",
-      "Hide active notification while conditions are not met: an active notification is hidden while any of them is false, and shows again when they are all true, for example the window notification only while the heating is on. Push and light come again when it shows.",
+      "Hide while conditions are not met: an active notification is hidden while any of them is false, and shows again when they are all true, for example the window notification only while the heating is on. Push and light come again when it shows.",
     ],
   },
   interactions: {
@@ -50,7 +50,7 @@ export const HELP: Record<
     title: "Done when",
     text: [
       "The notification closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
-      "Done when activation conditions no longer true: an entity's notification closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a notification closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
+      "When the activation is no longer true: an entity's notification closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a notification closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
     ],
   },
 };

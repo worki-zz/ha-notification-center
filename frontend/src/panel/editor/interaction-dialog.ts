@@ -57,10 +57,10 @@ export const INTERACTION_DEFAULTS: Record<
 };
 
 // The notification states, in the order of their choice.
-const STATES: { value: ButtonState["type"]; label: string; text: string }[] = [
-  { value: "done", label: "Done", text: "Marks the notification done." },
-  { value: "dismiss", label: "Dismiss", text: "Dismisses the notification." },
-  { value: "snooze", label: "Snooze", text: "Snoozes the notification." },
+const STATES: { value: ButtonState["type"]; label: string }[] = [
+  { value: "done", label: "Done" },
+  { value: "dismiss", label: "Dismiss" },
+  { value: "snooze", label: "Snooze" },
 ];
 
 // A built-in button's own notification state.
@@ -519,7 +519,7 @@ export class NcInteractionDialog extends LitElement {
         "Notification state",
         own === "snooze"
           ? this._renderSnooze(button)
-          : html`<div class="secondary">${state.text}</div>`,
+          : html`<div class="secondary">${state.label}</div>`,
       );
     }
     const state = actions.notification_state ?? { type: "done" };

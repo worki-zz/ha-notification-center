@@ -173,7 +173,6 @@ export class NcAudienceTable extends LitElement {
           })}
         </div>
       </ha-card>
-      <p class="hint secondary">The columns are the person's state.</p>
       ${nobody
         ? html`<ha-alert alert-type="warning"
             >No condition ticked: nothing is sent.</ha-alert

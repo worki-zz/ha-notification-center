@@ -7,10 +7,12 @@ A channel of an active card sends when three things are true:
   tick at all is off).
 - **Delay:** the card has been active for the channel's delay.
 - **Audience:** a person gets it while they are in a state ticked for them
-  (Home: at home and awake, Sleep: at home and asleep, Away). A channel tied
-  to a person (the Dashboard, as each viewer is a person, and Push) asks each
-  person; a channel tied to the house (a light, a speaker) sends when at
-  least one person of the audience is in a ticked state.
+  (At home: at home and awake, Asleep: at home and asleep, Not home). The
+  home mode and the audience must both allow it; neither overrides the
+  other. A channel tied to a person (the Dashboard, as each viewer is a
+  person, and Push) asks each person; a channel tied to the house (a light,
+  a speaker) sends when at least one person of the audience is in a ticked
+  state.
 
 When a rule becomes true later (the mode changes, the delay ends, someone
 arrives home or wakes up) the channel sends then, as long as the card is

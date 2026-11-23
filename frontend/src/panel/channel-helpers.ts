@@ -9,9 +9,9 @@ export type { ChannelInfo } from "./devices";
 export { channelsOf } from "./devices";
 
 export const STATE_NAMES: Record<AudienceState, string> = {
-  home: "Home",
-  sleep: "Sleep",
-  away: "Away",
+  home: "At home",
+  sleep: "Asleep",
+  away: "Not home",
 };
 
 

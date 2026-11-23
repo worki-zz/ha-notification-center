@@ -11,6 +11,11 @@
 - The README has a *Concepts* section. Its note on the home mode icon is corrected: it is edited in the home mode's dialog.
 - One word for what is shown: *notification* when it is true for the push and the dashboard alike, *dashboard notification* when it is true only on the Dashboard (the Overview and the dashboard cards), and *Overview* instead of *panel*. The two dashboard card types keep *card*, as Home Assistant calls them. This replaces the *dashboard card* wording of the previous entry across the editor, its help texts, the card editor, the sensor attribute *Active notifications*, the error messages and the README.
 - The Interactions help of a step describes the order of a button's Actions and the Tap behavior (*Action*, *Button action*). The *entity* field of the Trigger, Done, Clear and Snooze actions says it is the entity of a notification started by *Notification entities*. The README status line is current, and its Buttons part says what a tap on a dashboard notification and on the push does.
+- A person's states read *At home*, *Asleep* and *Not home* (not *Home*, *Sleep* and *Away*), so they do not clash with the home modes; the stored keys stay `home`, `sleep` and `away`.
+- Channels come before Audience in the category and step editors: the home mode is checked first, then the audience, and both have to allow a channel.
+- Every editor block starts with a line on what it is about (*How the notification is delivered in each home mode*, *Who gets the notification in each state*, ...); the home mode dialog's channel list uses the Channels line. These replace the *The columns are ...* hints.
+- The Upcoming lines on the Overview start with *Shows*: *Shows in Night or Away home mode*, *Shows when you arrive home*, and for a user without a person the names (*Shows when Anna or Béla arrives home*), or *someone* with more than three people. *Go away* is now *leave home*.
+- Switch texts: *Hide while conditions are not met*, and in Done when *When the activation is no longer true*. The built-in Done, Dismiss and Snooze rows of the button dialog show only their name.
 
 ## 0.7.2
 

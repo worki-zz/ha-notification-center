@@ -88,3 +88,23 @@ suite instead of running everything locally.
 - HA frontend gotcha: define custom elements after
   `customElements.whenDefined('home-assistant')` (see `shared/define.ts`).
 - Test data in the repo is anonymized (the repo is public).
+
+## Terminology (UI, help texts, README, CHANGELOG)
+
+- **notification**: what is shown, when true for the push and the dashboard alike;
+  **dashboard notification** when true only on the Dashboard (Overview and dashboard
+  cards). The two dashboard card types keep *card*. Say **Overview**, never *panel*.
+- **home mode**: the house's situation (Home, Away, Night, ...). Always "home mode" in
+  full, lowercase mid-sentence; never just "mode" or "Home".
+- **person state**: *At home*, *Asleep*, *Not home* (keys `home`, `sleep`, `away`).
+  Never "Away" for a person. Changes: arrive home, wake up, go to sleep, leave home.
+- **Channels**: how the notification is delivered in each home mode. **Audience**: who
+  gets it in each state. Both must allow a channel (AND, home mode checked first), so
+  Channels comes first in the editors.
+- Step blocks: Message, Interactions, Activation, Conditions (*Activate only while
+  conditions are met*, *Hide while conditions are not met*), Done when, Channels,
+  Audience. Each block opens with a one-line intro (`BLOCK_INTROS` in `editor/block.ts`).
+- **done** is an outcome (the Done button and status), not a block name. Built-in
+  buttons: Done, Dismiss, Snooze; plus Tap behavior.
+- Statuses: active, upcoming, snoozed, done, dismissed, expired. Upcoming lines start
+  with *Shows ...*; people by name, *someone* above three.
