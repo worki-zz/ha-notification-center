@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.1
+
+Button action list.
 
 ### Changed
 
