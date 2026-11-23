@@ -28,7 +28,7 @@ async def test_listed_entities(center: Center) -> None:
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
             done_when={"activation_conditions_no_longer_true": True},
@@ -61,7 +61,7 @@ async def test_listed_entities_dismiss_waits(center: Center) -> None:
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
         ),
@@ -92,7 +92,7 @@ async def test_listed_entities_for(
                 "type": "triggers",
                 "triggers": [
                     {
-                        "trigger": "notification_center.listed_entities",
+                        "trigger": "notification_center.entities_state",
                         "to": "on",
                         "for": {"minutes": 5},
                     }
@@ -200,7 +200,7 @@ async def test_done_when_closes_only_its_entity(center: Center) -> None:
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
             done_when={
@@ -233,7 +233,7 @@ async def test_listed_card_closes_after_restart(
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
             done_when={"activation_conditions_no_longer_true": True},
@@ -257,7 +257,7 @@ async def test_listed_done_stays_done_today(center: Center) -> None:
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
         ),

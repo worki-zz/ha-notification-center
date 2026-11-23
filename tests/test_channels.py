@@ -19,10 +19,6 @@ from custom_components.notification_center.channels import (
     channel_settings,
     channel_view,
 )
-from custom_components.notification_center.migrations import upgrade_channels
-from custom_components.notification_center.model import (
-    async_validate_config,
-)
 
 from .common import Center, step
 
@@ -113,84 +109,6 @@ def test_audience_inheritance() -> None:
         "person.c": HOME_ONLY,
     }
     assert audience_of({}, {}, ["person.a"]) == {"person.a": EVERY}
-
-
-def test_upgrade_channels() -> None:
-    """0.5 data: renamed channel, delay, category audience, step audience."""
-    data: dict[str, Any] = {
-        "modes": [{"id": "home"}, {"id": "away"}],
-        "people": [{"person": "person.a", "sleep_entity": "input_boolean.a_sleeps"}],
-        "categories": [
-            {
-                "id": "general",
-                "channels": {
-                    "notification_center": {
-                        "modes": ["home"],
-                        "when": {"type": "immediately"},
-                    },
-                    "push": {
-                        "modes": ["home"],
-                        "when": {"type": "after", "delay": {"minutes": 5}},
-                    },
-                },
-            },
-            {"id": "other", "channels": {}},
-        ],
-        "notifications": [
-            {
-                "steps": [
-                    {
-                        "audience": ["person.a"],
-                        "channels": {"push": {"when": {"type": "on_arrival"}}},
-                    },
-                    {"audience": []},
-                ]
-            }
-        ],
-    }
-    upgrade_channels(data, ["person.a", "person.b"])
-    general, other = data["categories"]
-    assert general["channels"] == {
-        "dashboard": {"modes": ["home"]},
-        "push": {"modes": ["home"], "delay": {"minutes": 5}},
-    }
-    assert general["audience"] == {}
-    assert other["channels"] == {"dashboard": {"modes": ["home", "away"]}}
-    first, second = data["notifications"][0]["steps"]
-    assert first["audience"] == {"person.b": NONE}
-    assert first["channels"] == {"push": {"delay": None}}
-    assert second["audience"] == {}
-    assert data["people"][0] == {
-        "person": "person.a",
-        "sleep": {
-            "type": "state",
-            "entity_id": "input_boolean.a_sleeps",
-            "state": "on",
-        },
-    }
-    # Once only: a category whose Dashboard row was removed stays without it.
-    data["categories"][1]["channels"] = {}
-    upgrade_channels(data, ["person.a", "person.b"])
-    assert data["categories"][1]["channels"] == {}
-
-
-async def test_upgraded_config_validates(hass: HomeAssistant) -> None:
-    """The upgrade runs as part of the validation."""
-    config = await async_validate_config(
-        hass,
-        {
-            "modes": [{"id": "home", "name": "Home"}],
-            "categories": [
-                {
-                    "id": "general",
-                    "name": "General",
-                    "channels": {"notification_center": {"modes": ["home"]}},
-                }
-            ],
-        },
-    )
-    assert config["categories"][0]["channels"] == {"dashboard": {"modes": ["home"]}}
-    assert config["categories"][0]["audience"] == {}
 
 
 async def _set_category(center: Center, **changes: Any) -> None:

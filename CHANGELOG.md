@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Removed
+
+- The code that upgraded configurations of 0.6.8 and earlier. Update to 0.7.0 first (it saves the upgraded configuration when loading), then to this version. A configuration still in an earlier form is refused.
+
 ## 0.7.0
 
 First round of phase 7 (moving a real setup into the panel).

@@ -91,9 +91,13 @@ async def test_start_conditions(center: Center) -> None:
     await center.add(
         "Bell",
         step(
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [state_trigger("input_boolean.bell")],
+            },
+            conditions={
+                "activate_only_while_met": True,
+                "hide_while_not_met": False,
                 "conditions": [
                     {
                         "condition": "state",
@@ -101,7 +105,7 @@ async def test_start_conditions(center: Center) -> None:
                         "state": "off",
                     }
                 ],
-            }
+            },
         ),
     )
     await center.set("input_boolean.bell", "on")
@@ -123,13 +127,17 @@ async def test_hide_while(center: Center) -> None:
                 "type": "triggers",
                 "triggers": [state_trigger("input_boolean.hot")],
             },
-            hide_while=[
-                {
-                    "condition": "state",
-                    "entity_id": "input_boolean.raining",
-                    "state": "on",
-                }
-            ],
+            conditions={
+                "activate_only_while_met": False,
+                "hide_while_not_met": True,
+                "conditions": [
+                    {
+                        "condition": "state",
+                        "entity_id": "input_boolean.raining",
+                        "state": "off",
+                    }
+                ],
+            },
         ),
     )
     await center.set("input_boolean.hot", "on")
@@ -303,9 +311,13 @@ async def test_notification_state_trigger_and_condition(center: Center) -> None:
         ),
         step(
             "Done within a day",
-            start={
+            activation={
                 "type": "triggers",
                 "triggers": [{"trigger": "event", "event_type": "check"}],
+            },
+            conditions={
+                "activate_only_while_met": True,
+                "hide_while_not_met": False,
                 "conditions": [
                     {
                         "condition": "notification_center.notification_state",

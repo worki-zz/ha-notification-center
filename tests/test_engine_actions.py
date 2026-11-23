@@ -277,7 +277,7 @@ async def test_group_member_custom_action(center: Center) -> None:
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
             buttons=[

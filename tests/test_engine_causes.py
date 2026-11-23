@@ -21,7 +21,7 @@ async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) 
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
         ),
@@ -81,7 +81,7 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
             done_when={"activation_conditions_no_longer_true": True},
@@ -139,7 +139,7 @@ async def test_entity_already_matching_has_no_cause(
             activation={
                 "type": "triggers",
                 "triggers": [
-                    {"trigger": "notification_center.listed_entities", "to": "on"}
+                    {"trigger": "notification_center.entities_state", "to": "on"}
                 ],
             },
         ),

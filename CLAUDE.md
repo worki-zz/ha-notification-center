@@ -22,7 +22,6 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 | `__init__.py` | Setup and unload; wires store, engine, platforms, panel |
 | `const.py` | Constants and keys |
 | `model.py` | Config schema (voluptuous): sections at the `# ---` markers; buttons and category buttons (~520-920); `default_config` (~1106); reference checks (~1143); `async_validate_config` (~1449) |
-| `migrations.py` | 0.x `upgrade_*` migrations, called from `async_validate_config` and `normalize.py`; removed at 1.0 |
 | `normalize.py` | Editor form to stored form |
 | `store.py` | Storage of config and runtime state |
 | `engine.py` | `Engine`, the core (~175 to end): load, config changes, open/close/snooze, state changes, timers, saving |
