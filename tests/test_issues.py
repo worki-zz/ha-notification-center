@@ -41,7 +41,9 @@ async def test_missing_entity_issue(hass: HomeAssistant, center: Center) -> None
     assert len(issues) == 1
     issue = next(iter(issues.values()))
     assert issue.translation_key == "missing_entity"
-    assert issue.translation_placeholders == {
+    placeholders = dict(issue.translation_placeholders or {})
+    link = placeholders.pop("link")
+    assert placeholders == {
         "name": "Bell",
         "entities": "binary_sensor.bell, lock.front",
     }
@@ -49,10 +51,9 @@ async def test_missing_entity_issue(hass: HomeAssistant, center: Center) -> None
     assert issue.learn_more_url.startswith(
         "/notification-center/settings/notifications/"
     )
-    # Fixable: the fix flow gets the link to the editor.
-    assert issue.is_fixable
-    assert issue.data is not None
-    assert issue.data["link"] == issue.learn_more_url
+    # The description ends with the link to the editor.
+    assert not issue.is_fixable
+    assert link == issue.learn_more_url
 
     await center.set("binary_sensor.bell", "off")
     await center.set("lock.front", "locked")
@@ -69,8 +70,8 @@ async def test_missing_device_issue(hass: HomeAssistant, center: Center) -> None
     assert issue.translation_placeholders == {
         "kind": "Light",
         "entity": "light.gone",
+        "link": "/notification-center/settings/general/light",
     }
-    assert issue.is_fixable
     assert issue.learn_more_url == "/notification-center/settings/general/light"
 
     await center.set("light.gone", "off")

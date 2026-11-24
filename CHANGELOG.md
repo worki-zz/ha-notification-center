@@ -13,6 +13,7 @@
 
 ### Changed
 
+- A Repairs issue is no longer fixable (Home Assistant's *Submit* button did not work here). Its description ends with the link to the notification's editor (or the settings page of the light, speaker or siren) on a line of its own.
 - **Silence is now Mute** everywhere: the button action, its *Add mute* button, the Status dialog (*Muted*), the help texts and the README. The stored keys change too (a button's `silence` action is `mute`, an open notification's `silenced` is `muted`, the device sensors' `silenced` attribute is `muted`, the `card/action` websocket command takes `mute`); saved settings, open notifications and older YAML exports are upgraded when loaded (export version 5).
 - The ... menu is the same in the Notifications list and the editor's header: *More info*, *Status*, *Run now for me*, *Run now for everyone*, *Dismiss notifications* (was *Clear notifications*), *Duplicate*, (the editor's *Edit in YAML*), then *Disable* and *Delete*. The list gains *Status*, *Run now for me* and *Dismiss notifications*. In the step menu *Run this step for me* comes before *Run this step for everyone*.
 - The lights' own highlight effect is called **Notification Pulse** (stored as `notification_pulse`, upgraded from `blink`), so a light's own effect named *blink* (Hue) can be chosen. A dimmable light (RGB too) now pulses between its brightness and half of it instead of turning off; a switch still turns on and off.

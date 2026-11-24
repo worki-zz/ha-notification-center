@@ -11,9 +11,8 @@ itself as soon as the problem does:
 - the notify action of a person's push device does not exist;
 - the entity of a light, speaker or siren channel does not exist.
 
-Every issue is fixable: its fix flow shows a link to the place that fixes it
-(the editor of the notification, or the settings page of the device). The
-issue goes when the problem does.
+The description ends with a link to the place that fixes it (the editor of
+the notification, or the settings page of the device).
 """
 
 from __future__ import annotations
@@ -129,12 +128,14 @@ class IssueTracker:
                 self._hass,
                 DOMAIN,
                 issue_id,
-                is_fixable=True,
-                data={"link": self._links.get(issue_id, _LINK), **placeholders},
+                is_fixable=False,
                 is_persistent=False,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key=key,
-                translation_placeholders=placeholders,
+                translation_placeholders={
+                    **placeholders,
+                    "link": self._links.get(issue_id, _LINK),
+                },
                 learn_more_url=self._links.get(issue_id, _LINK),
             )
             self._active[issue_id] = issue

@@ -368,87 +368,27 @@
   "issues": {
     "missing_entity": {
       "title": "{name}: hiányzó entitások",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "{name}: hiányzó entitások",
-            "description": "A(z) **{name}** értesítés nem létező entitásokat használ: {entities}. Az ezeket használó triggerek és feltételek nem működnek. Javítsd az értesítést a Notification Centerben, vagy állítsd vissza az entitásokat.\n\n[Megnyitás a Notification Centerben]({link}). A hiba magától megszűnik, ha a probléma megoldódik."
-          }
-        },
-        "abort": {
-          "fix_it_there": "A hiba magától megszűnik, ha a probléma megoldódik."
-        }
-      }
+      "description": "A(z) **{name}** értesítés nem létező entitásokat használ: {entities}. Az ezeket használó triggerek és feltételek nem működnek. Javítsd az értesítést a Notification Centerben, vagy állítsd vissza az entitásokat.\n\n[Megnyitás a Notification Centerben]({link})"
     },
     "invalid_every": {
       "title": "{name}: az ütemezés áll",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "{name}: az ütemezés áll",
-            "description": "A(z) **{name}** {step}. lépése a(z) {entity} entitásból veszi az ismétlés gyakoriságát, de annak állapota nem szám, ezért az ütemezés áll, mint 0-nál. Amint szám lesz, újra indul.\n\n[Megnyitás a Notification Centerben]({link}). A hiba magától megszűnik, ha a probléma megoldódik."
-          }
-        },
-        "abort": {
-          "fix_it_there": "A hiba magától megszűnik, ha a probléma megoldódik."
-        }
-      }
+      "description": "A(z) **{name}** {step}. lépése a(z) {entity} entitásból veszi az ismétlés gyakoriságát, de annak állapota nem szám, ezért az ütemezés áll, mint 0-nál. Amint szám lesz, újra indul.\n\n[Megnyitás a Notification Centerben]({link})"
     },
     "template_error": {
       "title": "{name}: hiba az üzenetben",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "{name}: hiba az üzenetben",
-            "description": "A(z) **{name}** {step}. lépésének üzenetében vagy info sorában template hiba van, ezért az értesítés a template nélkül mutatja a szöveget: {error}\n\n[Megnyitás a Notification Centerben]({link}). A hiba magától megszűnik, ha a probléma megoldódik."
-          }
-        },
-        "abort": {
-          "fix_it_there": "A hiba magától megszűnik, ha a probléma megoldódik."
-        }
-      }
+      "description": "A(z) **{name}** {step}. lépésének üzenetében vagy info sorában template hiba van, ezért az értesítés a template nélkül mutatja a szöveget: {error}\n\n[Megnyitás a Notification Centerben]({link})"
     },
     "setup_error": {
       "title": "{name}: egy trigger vagy feltétel nem működik",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "{name}: egy trigger vagy feltétel nem működik",
-            "description": "A(z) **{name}** {step}. lépését nem sikerült elindítani: {error}\n\n[Megnyitás a Notification Centerben]({link}). A hiba magától megszűnik, ha a probléma megoldódik."
-          }
-        },
-        "abort": {
-          "fix_it_there": "A hiba magától megszűnik, ha a probléma megoldódik."
-        }
-      }
+      "description": "A(z) **{name}** {step}. lépését nem sikerült elindítani: {error}\n\n[Megnyitás a Notification Centerben]({link})"
     },
     "missing_push_service": {
       "title": "{name}: hiányzik a push eszköz",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "{name}: hiányzik a push eszköz",
-            "description": "**{name}** push értesítései a(z) {service} actionre mennének, de ilyen nincs. Válaszd ki újra a telefont a Notification Center People oldalán, vagy hozd vissza az actiont.\n\n[Megnyitás a Notification Centerben]({link}). A hiba magától megszűnik, ha a probléma megoldódik."
-          }
-        },
-        "abort": {
-          "fix_it_there": "A hiba magától megszűnik, ha a probléma megoldódik."
-        }
-      }
+      "description": "**{name}** push értesítései a(z) {service} actionre mennének, de ilyen nincs. Válaszd ki újra a telefont a Notification Center People oldalán, vagy hozd vissza az actiont.\n\n[Megnyitás a Notification Centerben]({link})"
     },
     "missing_device": {
       "title": "{kind}: hiányzik a(z) {entity}",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "{kind}: hiányzik a(z) {entity}",
-            "description": "A(z) {kind} csatorna a(z) {entity} entitást használja, de ilyen entitás nincs, ezért a csatorna nem csinál semmit. Válaszd ki újra az entitást a Notification Centerben, vagy hozd vissza.\n\n[Megnyitás a Notification Centerben]({link}). A hiba magától megszűnik, ha a probléma megoldódik."
-          }
-        },
-        "abort": {
-          "fix_it_there": "A hiba magától megszűnik, ha a probléma megoldódik."
-        }
-      }
+      "description": "A(z) {kind} csatorna a(z) {entity} entitást használja, de ilyen entitás nincs, ezért a csatorna nem csinál semmit. Válaszd ki újra az entitást a Notification Centerben, vagy hozd vissza.\n\n[Megnyitás a Notification Centerben]({link})"
     }
   }
 }
