@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.7
+
+### Fixed
+
+- *Add notification* (and every new button) showed an empty page when Home Assistant was opened over plain HTTP (not HTTPS or localhost): the browser offers its random id helper only on secure pages.
+
 ## 0.7.6
 
 ### Added
