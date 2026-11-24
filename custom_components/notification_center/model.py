@@ -127,12 +127,18 @@ BUILTIN_CHIMES: Final = {
 # (Notification Pulse), or one of the light's effects (by name).
 EFFECT_PULSE: Final = "notification_pulse"
 
-BUILTIN_BUTTONS: Final = ("tap", "done", "snooze", "dismiss")
+BUILTIN_BUTTONS: Final = ("tap", "done", "snooze", "dismiss", "mute")
 BUTTON_TYPES: Final = (*BUILTIN_BUTTONS, "custom")
 # The order of the buttons in the editors.
-INTERACTION_ORDER: Final = ("tap", "done", "dismiss", "snooze", "custom")
+INTERACTION_ORDER: Final = ("tap", "done", "dismiss", "snooze", "mute", "custom")
 # What a built-in button does to the card; the others only run their action.
-BUTTON_EFFECTS: Final = {"done": "done", "dismiss": "dismiss", "snooze": "snooze"}
+# Mute keeps the card and stops its lights, speakers and sirens.
+BUTTON_EFFECTS: Final = {
+    "done": "done",
+    "dismiss": "dismiss",
+    "snooze": "snooze",
+    "mute": "mute",
+}
 # The notification state an own button or the Tap can set.
 BUTTON_STATES: Final = ("done", "dismiss", "snooze")
 # The snooze times a Snooze button can offer, in this order. The minutes and
@@ -638,6 +644,10 @@ DONE_WHEN_SCHEMA = vol.Schema(
     }
 )
 
+# Dismiss when: triggers that close a card as dismissed. Shown in the
+# editor only when the step has it (the step menu's Dismiss when).
+DISMISS_WHEN_SCHEMA = vol.Schema({vol.Optional("triggers", default=list): TRIGGERS})
+
 # Where a button takes the user, on the device it was pressed on: the
 # entity's more info dialog (empty: the card's entity) or a page.
 NAVIGATION_SCHEMA = vol.Any(
@@ -678,8 +688,8 @@ BUTTON_ACTIONS_SCHEMA = vol.Schema(
 def _clean_actions(kind: str, actions: dict[str, Any]) -> dict[str, Any]:
     """Leave out what a button's actions do not use.
 
-    A built-in Done, Dismiss or Snooze button has its own notification
-    state, so it stores none.
+    A built-in Done, Dismiss, Snooze or Mute button has its own notification
+    state (or Mute), so it stores none.
     """
     result: dict[str, Any] = {}
     if actions.get("entity_action"):
@@ -691,7 +701,7 @@ def _clean_actions(kind: str, actions: dict[str, Any]) -> dict[str, Any]:
             result["notification_state"]["snooze"] = (
                 state.get("snooze") or DEFAULT_STATE_SNOOZE
             )
-    if actions.get("mute"):
+    if actions.get("mute") and kind != "mute":
         result["mute"] = True
     if actions.get("ha_actions"):
         result["ha_actions"] = list(actions["ha_actions"])
@@ -704,7 +714,7 @@ def _clean_actions(kind: str, actions: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-# A button of a step. The buttons of the step's category (the four built-in
+# A button of a step. The buttons of the step's category (the five built-in
 # ones and the category's custom buttons) are inherited: the step stores
 # their action and only what it changes. A custom button of the category is
 # linked by its id; a custom button with an id of its own is the step's.
@@ -763,6 +773,7 @@ CATEGORY_BUTTON_DEFAULTS: Final[dict[str, bool]] = {
     "done": True,
     "dismiss": False,
     "snooze": False,
+    "mute": False,
 }
 # The action of a built-in button a step has not stored yet.
 BUILTIN_ACTION_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
@@ -770,6 +781,7 @@ BUILTIN_ACTION_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
     "done": {},
     "dismiss": {},
     "snooze": {},
+    "mute": {},
 }
 
 
@@ -792,7 +804,7 @@ def _sorted_snooze(choices: Iterable[str]) -> list[str]:
 def _buttons(value: Any) -> list[dict[str, Any]]:
     """Validate the buttons of a step.
 
-    Every built-in button (tap, done, snooze, dismiss) is listed, so that it
+    Every built-in button (tap, done, snooze, dismiss, mute) is listed, so that it
     has an id an entity action can point to. What is left out of a button
     comes from the category.
     """
@@ -1104,6 +1116,7 @@ STEP_SCHEMA = _with_id(
         vol.Optional("activation", default={"type": "triggers"}): ACTIVATION_SCHEMA,
         vol.Optional("conditions", default=dict): STEP_CONDITIONS_SCHEMA,
         vol.Optional("done_when", default=dict): DONE_WHEN_SCHEMA,
+        vol.Optional("dismiss_when"): DISMISS_WHEN_SCHEMA,
         vol.Optional("buttons", default=list): _buttons,
         # The people whose states differ from the category's audience.
         vol.Optional("audience", default=dict): _audience,
@@ -1442,6 +1455,8 @@ OWN_CONDITION_SCHEMAS: Final[dict[str, vol.Schema]] = {
 
 def _trigger_lists(step: dict[str, Any]) -> list[list[dict[str, Any]]]:
     lists = [step["done_when"]["triggers"]]
+    if "dismiss_when" in step:
+        lists.append(step["dismiss_when"]["triggers"])
     if step["activation"]["type"] == "triggers":
         lists.append(step["activation"]["triggers"])
     return lists
@@ -1515,6 +1530,10 @@ async def _validate_step_automation(
     await _validate_triggers(
         hass, step["done_when"]["triggers"], _path(where, "done when")
     )
+    if "dismiss_when" in step:
+        await _validate_triggers(
+            hass, step["dismiss_when"]["triggers"], _path(where, "dismiss when")
+        )
     for button in step["buttons"]:
         if button.get("actions", {}).get("ha_actions"):
             _validate_actions(

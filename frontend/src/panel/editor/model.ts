@@ -72,6 +72,8 @@ export interface EditorStep {
   activation: Start;
   conditions: StepConditions;
   done_when: { triggers: Obj[]; activation_conditions_no_longer_true: boolean };
+  // Shown only when the step has it (the step menu's Dismiss when).
+  dismiss_when?: { triggers: Obj[] };
   buttons: Button[];
   // The people whose states differ from the category's audience.
   audience?: Record<string, AudienceEntry>;
@@ -154,6 +156,7 @@ export function newStep(category?: Category): EditorStep {
       builtin("done", enabled("done")),
       builtin("dismiss", enabled("dismiss")),
       builtin("snooze", enabled("snooze")),
+      builtin("mute", enabled("mute")),
     ],
     audience: {},
     channels: {},
@@ -356,6 +359,7 @@ export function toEditor(
       triggers: triggers(step.done_when?.triggers),
       activation_conditions_no_longer_true: step.done_when?.activation_conditions_no_longer_true ?? false,
     };
+    if (step.dismiss_when) step.dismiss_when = { triggers: triggers(step.dismiss_when.triggers) };
     // Every button has an id, so an entity action can point to it.
     for (const button of step.buttons) button.id ||= newId();
   }

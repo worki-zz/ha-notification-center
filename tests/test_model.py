@@ -67,7 +67,10 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
         "done",
         "dismiss",
         "snooze",
+        "mute",
     ]
+    mute = next(button for button in buttons if button["type"] == "mute")
+    assert mute["enabled"] is False
     done = next(button for button in buttons if button["type"] == "done")
     assert done["enabled"] is True
     assert done["show_in_push"] is True

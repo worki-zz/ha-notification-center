@@ -737,6 +737,10 @@ export class NcNotificationEditor extends LitElement {
               </ha-dropdown-item>`
             : nothing}
           <wa-divider></wa-divider>
+          <ha-dropdown-item type="checkbox" value="dismiss_when" .checked=${!!step.dismiss_when}>
+            Dismiss when
+          </ha-dropdown-item>
+          <wa-divider></wa-divider>
           <ha-dropdown-item value="toggle">
             <ha-icon
               slot="icon"
@@ -810,6 +814,15 @@ export class NcNotificationEditor extends LitElement {
       case "info":
         this._info = { stepId: step.id };
         return;
+      case "dismiss_when": {
+        // Shows or removes the Dismiss when block (with its triggers).
+        const changed = { ...step };
+        if (changed.dismiss_when) delete changed.dismiss_when;
+        else changed.dismiss_when = { triggers: [] };
+        steps[index] = changed;
+        this._change({ steps });
+        return;
+      }
       case "duplicate": {
         const copy = JSON.parse(JSON.stringify(step)) as EditorStep;
         delete copy.id;

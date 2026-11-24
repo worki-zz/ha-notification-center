@@ -564,6 +564,24 @@ async def test_mute_button(center: Center, hass: HomeAssistant) -> None:
     assert center.state("sensor.nc_smoke") == "active"
 
 
+async def test_builtin_mute_button(center: Center, hass: HomeAssistant) -> None:
+    """The built-in Mute button keeps the card and stops the siren."""
+    await center.set("switch.siren", "off")
+    async_mock_service(hass, "switch", "turn_on")
+    off = async_mock_service(hass, "switch", "turn_off")
+    item = await center.manager.async_create("sirens", {"entity_id": "switch.siren"})
+    await center.manager.async_set_channel_modes(f"siren:{item['id']}", ["home"])
+    await center.add("Smoke", step(buttons=[{"type": "mute", "enabled": True}]))
+    await center.call("trigger", "sensor.nc_smoke")
+    card = next(iter(center.engine.cards.values()))
+    mute = next(b for b in center.engine.buttons_of(card) if b["type"] == "mute")
+    await center.engine.async_press(card, mute["id"], None)
+    await hass.async_block_till_done()
+    assert off
+    assert card.muted
+    assert center.state("sensor.nc_smoke") == "active"
+
+
 async def test_set_channel_modes(center: Center) -> None:
     """A new device gets the same modes in every category."""
     item = await center.manager.async_create("lights", {"entity_id": "light.strip"})

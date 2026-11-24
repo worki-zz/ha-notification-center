@@ -106,19 +106,21 @@ const DEFAULTS: Record<string, { label: string; icon: string }> = {
   done: { label: "Done", icon: "mdi:check" },
   snooze: { label: "Snooze", icon: "mdi:alarm-snooze" },
   dismiss: { label: "Dismiss", icon: "mdi:close" },
+  mute: { label: "Mute", icon: "mdi:volume-off" },
   custom: { label: "", icon: "mdi:gesture-tap-button" },
 };
 
-// Always in this order: Snooze, the own buttons, Done, Dismiss.
-const ORDER = ["snooze", "custom", "done", "dismiss"];
+// Always in this order: Snooze, Mute, the own buttons, Done, Dismiss.
+const ORDER = ["snooze", "mute", "custom", "done", "dismiss"];
 
 // The built-in buttons of a category, in the order of the editor.
-export const BUILTIN_ORDER: Button["type"][] = ["tap", "done", "dismiss", "snooze"];
+export const BUILTIN_ORDER: Button["type"][] = ["tap", "done", "dismiss", "snooze", "mute"];
 const CATEGORY_ENABLED: Record<string, boolean> = {
   tap: false,
   done: true,
   dismiss: false,
   snooze: false,
+  mute: false,
 };
 
 /** A category's buttons with every setting filled in. */
@@ -418,10 +420,10 @@ export async function pressButton(
     button = runButtonOf(effectiveButtons(live.category, live.step), button) ?? button;
   }
   const actions = button.actions ?? {};
-  // Done, Dismiss and Snooze change the card in Home Assistant, where the
-  // other actions but the navigation run too.
+  // Done, Dismiss, Snooze and Mute change the card in Home Assistant,
+  // where the other actions but the navigation run too.
   const backend =
-    ["done", "dismiss", "snooze"].includes(button.type) ||
+    ["done", "dismiss", "snooze", "mute"].includes(button.type) ||
     hasActions({ ...actions, navigation: undefined });
   let failed: unknown;
   if (backend) {

@@ -211,7 +211,7 @@ class EngineActions:
             raise ServiceValidationError("The button is not there")
         actions: Mapping[str, Any] = button.get("actions") or {}
         variables = self.variables(card)
-        if actions.get("mute"):
+        if actions.get("mute") or button["type"] == "mute":
             self.mute_cards([card], SOURCE_BUTTON, context)
         if actions.get("entity_action"):
             entity_actions = self.entity_actions(card, button["id"])

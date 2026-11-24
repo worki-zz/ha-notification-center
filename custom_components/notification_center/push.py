@@ -90,7 +90,12 @@ TEST_TAG: Final = "nc-test"
 TEST_TITLE: Final = "Test notification"
 TEST_MESSAGE: Final = "This is a test of the push notification."
 
-DEFAULT_LABELS: Final = {"done": "Done", "dismiss": "Dismiss", "snooze": "Snooze"}
+DEFAULT_LABELS: Final = {
+    "done": "Done",
+    "dismiss": "Dismiss",
+    "snooze": "Snooze",
+    "mute": "Mute",
+}
 
 
 def color_hex(color: str, colors: Sequence[Mapping[str, Any]] | None) -> str:

@@ -162,11 +162,12 @@ def normalize_notification(
             conditions["conditions"] = _items(
                 hass, config, notification, conditions["conditions"], "condition"
             )
-        done_when = step.get("done_when")
-        if isinstance(done_when, dict) and "triggers" in done_when:
-            done_when["triggers"] = _items(
-                hass, config, notification, done_when["triggers"], "trigger"
-            )
+        for key in ("done_when", "dismiss_when"):
+            block = step.get(key)
+            if isinstance(block, dict) and "triggers" in block:
+                block["triggers"] = _items(
+                    hass, config, notification, block["triggers"], "trigger"
+                )
     old_groups = {
         group.get("id"): group for group in (old or {}).get("entity_groups", [])
     }

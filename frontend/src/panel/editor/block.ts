@@ -56,6 +56,7 @@ export const BLOCK_INTROS: Record<string, string> = {
   start: "When the notification becomes active",
   show: "When the notification can become active, or when it is shown",
   done: "When the notification is done by itself, without a button",
+  dismiss: "When the notification is dismissed by itself, without a button",
   audience: "Who gets the notification in each state",
   channels: "How the notification is delivered in each home mode",
   entities: "Which entities the notification is about",
