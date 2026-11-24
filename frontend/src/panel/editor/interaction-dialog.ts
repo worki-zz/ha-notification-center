@@ -316,15 +316,19 @@ export class NcInteractionDialog extends LitElement {
   }
 
   // Changed from the category's (or the built-in) default.
+  // A Snooze's own times count too: they are in its Actions.
   private _actionsChanged(button: Button): boolean {
-    if (!this.inherited || button.actions === undefined) return false;
-    return Object.keys(button.actions).length > 0;
+    if (!this.inherited) return false;
+    if (button.snooze?.length) return true;
+    return button.actions !== undefined && Object.keys(button.actions).length > 0;
   }
 
   private _resetActions(): void {
     const copy = { ...this._button! } as Partial<Button>;
     delete copy.actions;
     delete copy.run_button;
+    // A Snooze's times are the category's again.
+    if (this.inherited && copy.type === "snooze") copy.snooze = null;
     this._button = copy as Button;
   }
 

@@ -130,6 +130,25 @@ export const ENTITIES_STATE = "notification_center.entities_state";
 export const ENTITIES_NUMERIC = "notification_center.entities_numeric_state";
 export const ENTITIES_KINDS = [ENTITIES_STATE, ENTITIES_NUMERIC];
 
+const OWN_KINDS = [NOTIFICATION_STATE, ...ENTITIES_KINDS];
+
+/**
+ * A Notification state or Notification entities trigger (or condition) just
+ * added to a list starts with this notification's sensor. Only when the
+ * list grew, so a cleared field stays cleared.
+ */
+export function withOwnSensor(before: Obj[], after: Obj[], sensor: string | undefined): Obj[] {
+  if (!sensor || after.length <= before.length) return after;
+  return after.map((item) => {
+    if (before.includes(item)) return item;
+    const kind = (item.trigger ?? item.condition) as string | undefined;
+    if (!kind || !OWN_KINDS.includes(kind)) return item;
+    const options = (item.options as Obj | undefined) ?? {};
+    if (options.notification) return item;
+    return { ...item, options: { ...options, notification: sensor } };
+  });
+}
+
 /** A new notification: one step that only the trigger action starts. */
 export function newNotification(category?: Category): EditorNotification {
   return {

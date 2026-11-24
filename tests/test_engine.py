@@ -456,6 +456,42 @@ async def test_done_card_until_midnight(
     assert center.state("sensor.nc_plants") == "idle"
 
 
+async def test_done_condition_checked_again_at_midnight(
+    hass: HomeAssistant, config_entry: MockConfigEntry, freezer: FrozenDateTimeFactory
+) -> None:
+    """A Notification state condition on Done is checked again on the new day."""
+    await hass.config.async_set_time_zone("Europe/Budapest")
+    freezer.move_to("2026-11-16 20:00:00+01:00")
+    center = await load(hass, config_entry)
+    waste = await center.add("Waste", step("Take out the waste"))
+    await center.add(
+        "Waste check",
+        step(
+            "Bin is out",
+            conditions={
+                "activate_only_while_met": False,
+                "hide_while_not_met": True,
+                "conditions": [
+                    {
+                        "condition": "notification_center.notification_state",
+                        "notification": waste,
+                        "state": "done",
+                    }
+                ],
+            },
+        ),
+    )
+    await center.call("trigger", "sensor.nc_waste")
+    await center.call("done", "sensor.nc_waste")
+    await center.call("trigger", "sensor.nc_waste_check")
+    assert center.state("sensor.nc_waste_check") == "active"
+
+    freezer.move_to("2026-11-17 00:00:00+01:00")
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_waste_check") == "hidden"
+
+
 async def test_disable_and_delete(hass: HomeAssistant, center: Center) -> None:
     """A disabled notification is ``disabled``; a deleted one loses its sensor."""
     nid = await center.add("Plants", step())

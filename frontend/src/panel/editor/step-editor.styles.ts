@@ -101,14 +101,16 @@ export const STEP_EDITOR_STYLES = css`
       padding: 16px;
     }
     ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {
-      margin-inline-end: 12px;
+      margin-inline-end: 16px;
     }
     .pinned-state {
       color: var(--secondary-text-color);
       font-weight: normal;
     }
+    /* Not bold, as the other built-in rows (When the activation is no longer true). */
     .pinned-title {
       flex: 1;
+      font-weight: var(--ha-font-weight-normal, 400);
     }
     /* The built-in rows, which are not Home Assistant's triggers. */
     ha-icon.builtin {
