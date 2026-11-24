@@ -216,11 +216,11 @@ class Engine(EngineQueries, EngineActions):
         self._listeners: list[ChangeListener] = []
         self._late_listeners: list[ChangeListener] = []
         self._event_listeners: list[EventListener] = []
-        # For the Activity log the causes chain up: the entity that started
-        # the change, the notification's sensor, then the summary sensor.
-        # ``contexts`` is what the notification's sensor writes in;
-        # ``summary_context`` (a child of it) is what the summary sensor
-        # writes in during that change.
+        # For the Activity log every sensor that changes is written in the
+        # context of the cause (the entity that started the change, or the
+        # action). ``contexts`` is what the notification's sensor writes in;
+        # ``summary_context`` is what the other sensors write in during that
+        # change.
         self.contexts: dict[str, Context] = {}
         self.summary_context: Context | None = None
         self._watches = hass.data.setdefault(DATA_WATCHES, [])
@@ -522,15 +522,15 @@ class Engine(EngineQueries, EngineActions):
         """Return what a channel sends now: its diagnostic sensor.
 
         Shown: the active cards the channel sends (the Dashboard: for at
-        least one person); a device leaves out the silenced cards and
-        counts them as ``silenced``.
+        least one person); a device leaves out the muted cards and
+        counts them as ``muted``.
         ``upcoming``: the active cards it holds back (shown under Upcoming),
         then the same by what they wait for: each mode they are ticked in
         (a card ticked in two modes counts in both), the delay, the
         audience. ``off``: cards with no mode ticked, never shown.
         """
         modes = [mode["id"] for mode in self._config.get("modes", [])]
-        shown = upcoming = off = delay = audience = silenced = 0
+        shown = upcoming = off = delay = audience = muted = 0
         by_mode = dict.fromkeys(modes, 0)
         for notification in self._config["notifications"]:
             if not notification.get("enabled", True):
@@ -540,8 +540,8 @@ class Engine(EngineQueries, EngineActions):
                     continue
                 view = self.channel_view(card, key)
                 if view.sends:
-                    if key != CHANNEL_DASHBOARD and card.silenced:
-                        silenced += 1
+                    if key != CHANNEL_DASHBOARD and card.muted:
+                        muted += 1
                     else:
                         shown += 1
                     continue
@@ -568,7 +568,7 @@ class Engine(EngineQueries, EngineActions):
             "upcoming_waiting_for_delay": delay,
             "upcoming_waiting_for_audience": audience,
             "off": off,
-            **({} if key == CHANNEL_DASHBOARD else {"silenced": silenced}),
+            **({} if key == CHANNEL_DASHBOARD else {"muted": muted}),
         }
 
     def _channel_keys(self, card: Card) -> set[str]:
@@ -986,9 +986,9 @@ class Engine(EngineQueries, EngineActions):
             setattr(card, name, value)
         if opened:
             card.active_since = dt_util.utcnow()
-            # Silence lasts until the card goes away (Snooze ends, a new card).
-            if "silenced" not in changes:
-                card.silenced = False
+            # Mute lasts until the card goes away (Snooze ends, a new card).
+            if "muted" not in changes:
+                card.muted = False
         new = card.status
         changed = new != old
         previous = self.summary_context
@@ -998,19 +998,16 @@ class Engine(EngineQueries, EngineActions):
             self._record(card.notification_id, card.step_id, new, now)
             if new == CLOSED_DONE:
                 self._done_recorded(card.notification_id, card.step_id)
-            # The notification's sensor is caused by the context behind the
-            # change; a time driven change (a schedule, an expiry, the end of
-            # a snooze) has none, the sensor just changes by itself. Either
-            # way the summary sensor and the event are caused by the sensor,
-            # so they are written after it.
-            # The user stays on it, so the Activity log names who did it.
-            cause = (
-                Context(user_id=context.user_id, parent_id=context.id)
-                if context
-                else Context()
-            )
+            # The notification's sensor is written in the context behind the
+            # change (the entity's state change, the action call), so that
+            # the Activity log's "What happened" finds that cause: the log
+            # looks a cause up by the context's id, not by its parent. A
+            # time driven change (a schedule, an expiry, the end of a
+            # snooze) has none, the sensor just changes by itself. The
+            # summary sensor and the event follow in the same context.
+            cause = context or Context()
             self.contexts[card.notification_id] = cause
-            self.summary_context = Context(parent_id=cause.id)
+            self.summary_context = cause
             self._state_reached(card, old, new)
             self._refresh_own_conditions()
         self._save()

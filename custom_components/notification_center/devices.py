@@ -1,7 +1,7 @@
 """The lights, speakers, sirens and Push: the channels that drive devices.
 
 Each device follows the engine. After every change it works out which
-active cards it sends now (the channel rules of ``channels.py``; a silenced
+active cards it sends now (the channel rules of ``channels.py``; a muted
 card is left out) and acts:
 
 - **A light** shows the first of those cards in the order of the
@@ -170,7 +170,7 @@ class DeviceManager:
             for index, item in enumerate(engine.manager.config["notifications"])
         }
         for card in engine.cards.values():
-            if card.status != "active" or card.silenced:
+            if card.status != "active" or card.muted:
                 continue
             if card.notification_id not in order:
                 continue

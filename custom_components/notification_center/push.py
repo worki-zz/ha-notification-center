@@ -13,7 +13,7 @@ who arrives home, wakes up or comes into a ticked mode later gets it then.
 A push follows its card: it goes away from every phone when the card does
 (Done, Dismiss, the end, Snooze, Hide while) and comes again when the card
 comes back. A change of the mode or of where people are leaves a sent push as
-it is, and so does Silence (it only stops new pushes).
+it is, and so does Mute (it only stops new pushes).
 
 Every push of a notification (one per listed entity) has the same tag on a
 phone, so the push of a later step replaces the earlier one. iOS cannot

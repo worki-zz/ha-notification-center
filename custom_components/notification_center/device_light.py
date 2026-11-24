@@ -28,7 +28,7 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .model import (
-    EFFECT_BLINK,
+    EFFECT_PULSE,
 )
 
 if TYPE_CHECKING:
@@ -44,7 +44,8 @@ _LOGGER = logging.getLogger(__name__)
 _RGB_MODES: Final = {"hs", "xy", "rgb", "rgbw", "rgbww"}
 _DIM_MODES: Final = _RGB_MODES | {"color_temp", "brightness", "white"}
 
-# Own blinking: on and off, a second each.
+# Notification Pulse (own effect): a second at the brightness, a second at
+# half of it (a switch: on and off).
 BLINK_INTERVAL: Final = timedelta(seconds=1)
 # A state change this soon after a command is the light following it.
 OWN_CHANGE_WINDOW: Final = timedelta(seconds=5)
@@ -225,15 +226,15 @@ class LightDevice(Device):
             data["color_temp_kelvin"] = int(self.settings["color_temp_kelvin"])
         if not modes or modes & _DIM_MODES:
             data["brightness_pct"] = self._brightness()
-        effect = self.settings.get("effect") or EFFECT_BLINK
-        if look.highlight and effect != EFFECT_BLINK and effect in self._effects():
+        effect = self.settings.get("effect") or EFFECT_PULSE
+        if look.highlight and effect != EFFECT_PULSE and effect in self._effects():
             data["effect"] = effect
         return data
 
     def _own_blink(self, look: Look) -> bool:
-        effect = self.settings.get("effect") or EFFECT_BLINK
+        effect = self.settings.get("effect") or EFFECT_PULSE
         return look.highlight and (
-            self.is_switch or effect == EFFECT_BLINK or effect not in self._effects()
+            self.is_switch or effect == EFFECT_PULSE or effect not in self._effects()
         )
 
     def _apply(self, look: Look) -> None:
@@ -259,12 +260,21 @@ class LightDevice(Device):
             self._stop_blink()
             return
         self._blink_on = not self._blink_on
-        if self._blink_on and (look := self.look) is not None:
-            self.hass.async_create_task(
-                self._async_on(self._on_data(look)), eager_start=True
-            )
+        look = self.look
+        if look is not None and (self._blink_on or self._dimmable()):
+            data = self._on_data(look)
+            if not self._blink_on:
+                data["brightness_pct"] = max(1, data["brightness_pct"] // 2)
+            self.hass.async_create_task(self._async_on(data), eager_start=True)
         else:
             self.hass.async_create_task(self._async_off(), eager_start=True)
+
+    def _dimmable(self) -> bool:
+        """Whether the pulse dims the light instead of turning it off."""
+        if self.is_switch:
+            return False
+        modes = self._modes()
+        return not modes or bool(modes & _DIM_MODES)
 
     def _stop_blink(self) -> None:
         if self._blink is not None:

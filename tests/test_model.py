@@ -15,7 +15,10 @@ from custom_components.notification_center.model import (
     default_config,
     effective_buttons,
 )
-from custom_components.notification_center.store import upgrade_tap_behavior
+from custom_components.notification_center.store import (
+    rename_mute_and_pulse,
+    upgrade_tap_behavior,
+)
 
 
 def _effective(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -297,7 +300,7 @@ def _with_category_tap(tap: dict[str, Any], **step: Any) -> dict[str, Any]:
 
 async def test_tap_behavior_follows_the_category(hass: HomeAssistant) -> None:
     """A step's Tap without its own Tap behavior has the category's."""
-    actions = {"silence": True, "navigation": {"type": "navigate", "path": "/x"}}
+    actions = {"mute": True, "navigation": {"type": "navigate", "path": "/x"}}
     config = await async_validate_config(hass, _with_category_tap({"actions": actions}))
     tap = next(b for b in _effective(config) if b["type"] == "tap")
     assert tap["actions"] == actions
@@ -329,7 +332,7 @@ async def test_tap_behavior_of_a_step_is_one_block(hass: HomeAssistant) -> None:
     config = await async_validate_config(
         hass,
         _with_category_tap(
-            {"actions": {"silence": True}},
+            {"actions": {"mute": True}},
             buttons=[{"type": "tap", "run_button": "dismiss", "actions": own}],
         ),
     )
@@ -347,7 +350,7 @@ async def test_tap_behavior_of_a_step_is_one_block(hass: HomeAssistant) -> None:
 def test_upgrade_tap_behavior() -> None:
     """Stored Taps that showed the category's behavior follow it again."""
     more_info = {"navigation": {"type": "more_info"}}
-    own = {"silence": True}
+    own = {"mute": True}
 
     def data(category_tap: dict[str, Any], *taps: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -382,3 +385,21 @@ def test_upgrade_tap_behavior() -> None:
     value = data({"run_button": "done"}, {"actions": own})
     upgrade_tap_behavior(value)
     assert taps(value) == [{"type": "tap"}]
+
+
+def test_rename_mute_and_pulse() -> None:
+    """Silence becomes Mute, the own blink becomes Notification Pulse."""
+    value: dict[str, Any] = {
+        "categories": [{"buttons": [{"type": "tap", "actions": {"silence": True}}]}],
+        "notifications": [
+            {"steps": [{"buttons": [{"id": "q", "actions": {"silence": False}}]}]}
+        ],
+        "lights": [{"effect": "blink"}, {"effect": "rainbow"}],
+    }
+    rename_mute_and_pulse(value)
+    assert value["categories"][0]["buttons"][0]["actions"] == {"mute": True}
+    assert value["notifications"][0]["steps"][0]["buttons"][0]["actions"] == {}
+    assert [light["effect"] for light in value["lights"]] == [
+        "notification_pulse",
+        "rainbow",
+    ]

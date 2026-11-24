@@ -21,6 +21,21 @@ from custom_components.notification_center.const import DOMAIN
 from .common import DOOR_GROUP, Center, step
 
 
+async def test_icon_color_follows_the_state(center: Center) -> None:
+    """Active: the notification's colour; Snoozed orange; Idle grey."""
+    colors = [{"id": "mint", "name": "Mint", "rgb": [16, 32, 48]}]
+    await center.manager.async_create("colors", colors[0])
+    await center.add("Plants", step(), color="red")
+    await center.add("Mint", step(), color="mint")
+    assert center.attrs("sensor.nc_plants")["icon_color"] == "grey"
+    await center.call("trigger", "sensor.nc_plants")
+    await center.call("trigger", "sensor.nc_mint")
+    assert center.attrs("sensor.nc_plants")["icon_color"] == "red"
+    assert center.attrs("sensor.nc_mint")["icon_color"] == "#102030"
+    await center.call("snooze", "sensor.nc_plants", duration={"minutes": 5})
+    assert center.attrs("sensor.nc_plants")["icon_color"] == "orange"
+
+
 async def test_clear_and_done_actions(center: Center) -> None:
     """Clear dismisses without last done; Done records it even when closed."""
     await center.add("Plants", step())
@@ -92,7 +107,7 @@ async def test_websocket_state_and_card_actions(
     assert entry["entity_id"] == "sensor.nc_plants"
     card = entry["cards"][0]
     assert card["message"] == "Do it"
-    assert card["silenced"] is False
+    assert card["muted"] is False
 
     await ws.send_json_auto_id(
         {
@@ -100,15 +115,15 @@ async def test_websocket_state_and_card_actions(
             "notification_id": nid,
             "step_id": card["step_id"],
             "entity_id": None,
-            "action": "silence",
+            "action": "mute",
         }
     )
     while True:
         message = await ws.receive_json()
         if message.get("type") == "event":
-            silenced = message["event"]["notifications"][nid]["cards"][0]
-            assert silenced["silenced"] is True
-            assert silenced["status"] == "active"
+            muted = message["event"]["notifications"][nid]["cards"][0]
+            assert muted["muted"] is True
+            assert muted["status"] == "active"
         if message.get("type") == "result":
             assert message["success"], message
             break
@@ -247,7 +262,7 @@ async def test_button_action_list(hass: HomeAssistant, center: Center) -> None:
                         # Nothing to run: no entity has an action.
                         "entity_action": True,
                         "notification_state": {"type": "snooze", "snooze": "2h"},
-                        "silence": True,
+                        "mute": True,
                         "ha_actions": [{"action": "test.ring"}],
                         "navigation": {"type": "navigate", "path": "/lovelace/0"},
                     },
@@ -278,7 +293,7 @@ async def test_button_action_list(hass: HomeAssistant, center: Center) -> None:
     await center.engine.async_press(card, "later", None)
     await hass.async_block_till_done()
     assert center.state("sensor.nc_plants") == "snoozed"
-    assert card.silenced
+    assert card.muted
     assert len(calls) == 1
     until = card.snoozed_until
     assert until is not None

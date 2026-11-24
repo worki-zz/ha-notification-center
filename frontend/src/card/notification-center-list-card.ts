@@ -1,5 +1,6 @@
 // The Notification Center card: every active card of the Notification
-// Center on a dashboard, in list order, hidden while nothing is active.
+// Center on a dashboard, in list order, and what Show adds (Upcoming as on
+// the Overview, the empty state); hidden while it has nothing to show.
 
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
@@ -10,6 +11,7 @@ import { cardKey, liveCards, navigate, personOf, type LiveCard } from "../shared
 import "../shared/live-card";
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
+import { doneEarlyOf, renderUpcoming, upcomingToday, type UpcomingEntry } from "../shared/upcoming";
 import type { HomeAssistant } from "../shared/types";
 import { loadDashboardElements } from "./elements";
 
@@ -26,8 +28,24 @@ export interface NotificationCenterCardConfig {
   max_cards?: number;
   // Also the cards meant for other people.
   ignore_audience?: boolean;
-  // Stay on the dashboard while nothing is active, saying All done.
+  // What the card shows: the active notifications, Upcoming (as on the
+  // Overview) and the empty state (All done instead of hiding). Default:
+  // active only.
+  show?: ShowPart[];
+  // Before 0.7.4: the empty state on (now ``show: [active, empty]``).
   show_empty?: boolean;
+}
+
+export type ShowPart = "active" | "upcoming" | "empty";
+export const SHOW_PARTS: ShowPart[] = ["active", "upcoming", "empty"];
+
+/** The card's Show, with the older ``show_empty`` turned into it. */
+export function upgradeListConfig(config: NotificationCenterCardConfig): NotificationCenterCardConfig {
+  if (config.show_empty === undefined) return config;
+  const { show_empty: empty, ...rest } = config;
+  if (!empty) return rest;
+  const show = rest.show ?? ["active"];
+  return { ...rest, show: show.includes("empty") ? show : [...show, "empty"] };
 }
 
 // How often relative times are written again.
@@ -71,7 +89,14 @@ export class NotificationCenterListCard extends LitElement {
     ) {
       throw new Error("max_cards must be a whole number, 1 or more");
     }
-    this._config = config;
+    if (config.show !== undefined && !Array.isArray(config.show)) {
+      throw new Error("show must be a list");
+    }
+    this._config = upgradeListConfig(config);
+  }
+
+  private _show(part: ShowPart): boolean {
+    return (this._config?.show ?? ["active"]).includes(part);
   }
 
   public getCardSize(): number {
@@ -130,6 +155,7 @@ export class NotificationCenterListCard extends LitElement {
   private _cards(): LiveCard[] | undefined {
     const { config, state } = this._store;
     if (!config || !state || !this.hass || !this._config) return undefined;
+    if (!this._show("active")) return [];
     return liveCards(config, state, {
       statuses: ["active"],
       categories: this._config.categories,
@@ -138,12 +164,20 @@ export class NotificationCenterListCard extends LitElement {
     });
   }
 
+  private _upcoming(): UpcomingEntry[] {
+    if (!this.hass || !this._config || !this._show("upcoming")) return [];
+    return upcomingToday(this.hass, this._store, this._now, {
+      categories: this._config.categories,
+      ignoreAudience: this._config.ignore_audience,
+    });
+  }
+
   private _shouldHide(): boolean {
-    if (this.preview || this._config?.show_empty) return false;
+    if (this.preview || this._show("empty")) return false;
     const cards = this._cards();
     // Until the data is there, stay as it is.
     if (!cards) return this.hidden;
-    return cards.length === 0;
+    return cards.length === 0 && this._upcoming().length === 0;
   }
 
   protected override render() {
@@ -152,8 +186,9 @@ export class NotificationCenterListCard extends LitElement {
       return html`<ha-card class="warning">${this._store.error}</ha-card>`;
     }
     const cards = this._cards();
-    if (!cards?.length) {
-      if (!this.preview && !this._config.show_empty) return nothing;
+    const upcoming = cards ? this._upcoming() : [];
+    if (!cards?.length && !upcoming.length) {
+      if (!this.preview && !this._show("empty")) return nothing;
       return html`<notification-center-view
                 .hass=${this.hass}
         .view=${{
@@ -165,9 +200,10 @@ export class NotificationCenterListCard extends LitElement {
         }}
       ></notification-center-view>`;
     }
+    const list = cards ?? [];
     const max = this._config.max_cards;
-    const shown = max ? cards.slice(0, max) : cards;
-    const more = cards.length - shown.length;
+    const shown = max ? list.slice(0, max) : list;
+    const more = list.length - shown.length;
     return html`
       <div class="stack">
         ${repeat(
@@ -187,6 +223,12 @@ export class NotificationCenterListCard extends LitElement {
                 ${more} more
               </ha-button>
             </div>`
+          : nothing}
+        ${upcoming.length
+          ? html`<div class="title">Upcoming</div>
+              ${renderUpcoming(this.hass, this._store, upcoming, this._now, (item) => {
+                void doneEarlyOf(this.hass!, item).catch(() => undefined);
+              })}`
           : nothing}
       </div>
     `;
@@ -215,6 +257,12 @@ export class NotificationCenterListCard extends LitElement {
       display: flex;
       justify-content: center;
     }
+    .title {
+      margin: 8px 4px 0;
+      font-size: var(--ha-font-size-l, 16px);
+      font-weight: var(--ha-font-weight-medium, 500);
+      color: var(--primary-text-color);
+    }
   `;
 }
 
@@ -226,7 +274,7 @@ if (!window.customCards.some((card) => card.type === LIST_CARD_TYPE)) {
     type: LIST_CARD_TYPE,
     name: "Notification Center",
     description:
-      "Every active notification of the Notification Center, with its buttons. Hidden while nothing is active, unless Show empty state is on.",
+      "Every active notification of the Notification Center, with its buttons, and Upcoming if asked. Hidden while it has nothing to show, unless Show has Empty state.",
     preview: true,
     documentationURL: "https://github.com/worki-zz/ha-notification-center",
   });

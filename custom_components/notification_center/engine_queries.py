@@ -25,6 +25,7 @@ from .const import (
     STATE_SNOOZED,
     STATE_UPCOMING,
 )
+from .device_colors import color_of
 from .listed import ListedMatcher, matching_entities
 from .model import (
     CHANNEL_DASHBOARD,
@@ -41,6 +42,13 @@ if TYPE_CHECKING:
 
 
 _LOGGER = logging.getLogger(__name__)
+
+# The colour of a notification sensor's icon by state (Active: the
+# notification's colour); the status chips of the Overview use the same.
+STATE_COLORS: dict[str, str] = {
+    STATE_SNOOZED: "orange",
+    STATE_DONE: "green",
+}
 
 
 class EngineQueries:
@@ -185,14 +193,15 @@ class EngineQueries:
             if card.phase == PHASE_SNOOZED and card.snoozed_until
         ]
         notification = self.notification_config(notification_id) or {}
-        category = next(
+        category_item = next(
             (
-                item["name"]
+                item
                 for item in self._config["categories"]
                 if item["id"] == notification.get("category")
             ),
             None,
         )
+        category = category_item["name"] if category_item else None
         last_done = self.last_reached(notification_id, None, CLOSED_DONE)
         return {
             "active_count": sum(card.status == STATE_ACTIVE for card in cards),
@@ -212,7 +221,32 @@ class EngineQueries:
             "next_due": to_iso(self.next_due(notification_id)),
             "last_done": last_done.isoformat() if last_done else None,
             "category": category,
+            "icon_color": self.icon_color(notification_id, notification, category_item),
         }
+
+    def icon_color(
+        self: Engine,
+        notification_id: str,
+        notification: Mapping[str, Any],
+        category: Mapping[str, Any] | None,
+    ) -> str:
+        """Return the colour of the sensor's icon for its state.
+
+        Active: the notification's colour (a system colour's name, an own
+        colour as ``#rrggbb``); Snoozed orange, Done green, the rest grey.
+        Home Assistant does not read it; cards and templates can.
+        """
+        state = self.notification_state(notification_id)
+        if state == STATE_ACTIVE:
+            color = color_of(notification, category)
+            own = next(
+                (item for item in self._config["colors"] if item["id"] == color), None
+            )
+            if own is None:
+                return color
+            red, green, blue = (int(value) for value in own["rgb"])
+            return f"#{red:02x}{green:02x}{blue:02x}"
+        return STATE_COLORS.get(state, "grey")
 
     def summary(self: Engine) -> dict[str, Any]:
         """Return the state and attributes of the summary sensor."""
