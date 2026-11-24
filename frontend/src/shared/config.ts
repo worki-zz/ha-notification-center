@@ -395,7 +395,7 @@ export interface CardState {
   notification_id: string;
   step_id: string;
   entity_id: string | null;
-  status: "active" | "hidden" | "snoozed" | "done" | "dismissed" | "expired";
+  status: "active" | "hidden" | "snoozed" | "done" | "dismissed";
   muted?: boolean;
   since: string;
   state_since: string;

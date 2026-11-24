@@ -6,7 +6,7 @@ Listed entities trigger, one card per entity. A card is:
 - **open**: it shows (state ``active``), or it is hidden while the step's
   Conditions are not met (state ``hidden``);
 - **snoozed** until a time;
-- **closed**: done, dismissed or expired. A done card stays until the end of
+- **closed**: done or dismissed. A done card stays until the end of
   the day, so it can be shown as done today.
 
 The cards and the time each step last reached each state (the last done
@@ -72,15 +72,13 @@ from .channels import (
 from .const import (
     CLOSED_DISMISSED,
     CLOSED_DONE,
-    CLOSED_EXPIRED,
     DOMAIN,
     EVENT_ACTIVE,
     EVENT_DISMISSED,
     EVENT_DONE,
-    EVENT_EXPIRED,
     EVENT_SNOOZED,
     SOURCE_ENTITY,
-    SOURCE_SCHEDULE,
+    SOURCE_EXPIRES,
     SOURCE_SNOOZE_END,
     SOURCE_TRIGGER,
     STATE_ACTIVE,
@@ -99,6 +97,7 @@ from .model import (
 from .modes import ConditionTracker, ModeTracker
 from .render import TextTracker, render_text
 from .runner import NotificationRunner, StepRunner
+from .schedule import step_expiry
 from .store import RUNTIME_KEY, ConfigManager
 
 if TYPE_CHECKING:
@@ -720,17 +719,21 @@ class Engine(EngineQueries, EngineActions):
         context: Context | None = None,
         *,
         since: datetime | None = None,
-        expires_at: datetime | None = None,
     ) -> Card | None:
-        """Open a card of a step, or refresh it if it is already open."""
+        """Open a card of a step, or refresh it if it is already open.
+
+        ``since`` is when it became active (a scheduled card: when it was
+        due); the Expires rows of the step count from it. A refreshed card
+        keeps its expiry, unless ``since`` is given again.
+        """
         now = dt_util.utcnow()
         key = (step.notification.id, step.step_id, entity_id or "")
         card = self.cards.get(key)
         trigger_data = _jsonable(trigger) if trigger else None
         if card is not None and card.is_open:
             self._refresh(card, trigger_data, overrides)
-            if expires_at is not None:
-                card.expires_at = expires_at
+            if since is not None:
+                self._set_expiry(card, step, since)
                 self._schedule_expiry(card)
             if card.phase == PHASE_SNOOZED:
                 self._cancel_unsnooze(card)
@@ -762,8 +765,8 @@ class Engine(EngineQueries, EngineActions):
             source=source,
             closed_reason=CLOSED_DISMISSED,
             trigger=trigger_data,
-            expires_at=expires_at,
         )
+        self._set_expiry(card, step, card.since)
         self._refresh(card, trigger_data, overrides)
         self.cards[card.key] = card
         self._render(card)
@@ -778,6 +781,12 @@ class Engine(EngineQueries, EngineActions):
         self._start_text(card)
         self._schedule_expiry(card)
         return card
+
+    @staticmethod
+    def _set_expiry(card: Card, step: StepRunner, since: datetime) -> None:
+        expiry = step_expiry(step.step, since)
+        card.expires_at = expiry[0] if expiry else None
+        card.expires_as = expiry[1] if expiry else CLOSED_DISMISSED
 
     def _refresh(
         self,
@@ -807,7 +816,7 @@ class Engine(EngineQueries, EngineActions):
         *,
         transient: bool = False,
     ) -> None:
-        """Close a card: done, dismissed or expired.
+        """Close a card: done or dismissed.
 
         A transient card goes at once instead of staying as done today.
         """
@@ -1065,7 +1074,7 @@ class Engine(EngineQueries, EngineActions):
         @callback
         def fire(_now: datetime) -> None:
             watch.timers.pop(card.key, None)
-            # A dismissed or expired card is gone at once: it still counts
+            # A dismissed card is gone at once: it still counts
             # unless a newer card took its place.
             if self.cards.get(card.key) in (None, card) and (
                 card.status == watch.state
@@ -1082,7 +1091,6 @@ class Engine(EngineQueries, EngineActions):
             STATE_SNOOZED: EVENT_SNOOZED,
             CLOSED_DONE: EVENT_DONE,
             CLOSED_DISMISSED: EVENT_DISMISSED,
-            CLOSED_EXPIRED: EVENT_EXPIRED,
         }.get(state)
         if event_type is None:
             return
@@ -1221,7 +1229,7 @@ class Engine(EngineQueries, EngineActions):
         def expire(_now: datetime) -> None:
             self._expiry_timers.pop(card.key, None)
             if self.cards.get(card.key) is card and card.is_open:
-                self.close(card, CLOSED_EXPIRED, SOURCE_SCHEDULE)
+                self.close(card, card.expires_as, SOURCE_EXPIRES)
 
         self._expiry_timers[card.key] = async_track_point_in_utc_time(
             self.hass, expire, card.expires_at

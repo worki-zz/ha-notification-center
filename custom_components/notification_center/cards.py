@@ -85,8 +85,10 @@ class Card:
     info: str | None = None
     # The step's custom data text (after the label), rendered.
     data_text: str | None = None
-    # A scheduled card closes as expired at this time.
+    # The card closes by itself at this time (the Expires row of Done when
+    # or Dismiss when), as done or dismissed.
     expires_at: datetime | None = None
+    expires_as: str = CLOSED_DISMISSED
     # When the card last opened (or came back from a snooze): the channels
     # count their delay from here.
     active_since: datetime | None = None
@@ -136,6 +138,7 @@ class Card:
             "info": self.info,
             "data_text": self.data_text,
             "expires_at": to_iso(self.expires_at),
+            "expires_as": self.expires_as,
             "active_since": to_iso(self.active_since),
         }
 
@@ -167,6 +170,8 @@ class Card:
             info=data.get("info"),
             data_text=data.get("data_text"),
             expires_at=parse_iso(data.get("expires_at")),
+            # Before 0.7.4 only a schedule expired, and it dismissed the card.
+            expires_as=data.get("expires_as") or CLOSED_DISMISSED,
             active_since=parse_iso(data.get("active_since")),
         )
 

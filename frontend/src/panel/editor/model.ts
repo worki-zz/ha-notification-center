@@ -20,6 +20,9 @@ export type Unit = "days" | "weeks" | "months" | "years";
 
 export type ExpiresOnDay = { day: number; at: string };
 
+/** The Expires row of Done when and Dismiss when. */
+export type Expires = Duration | ExpiresOnDay;
+
 export interface Schedule {
   type: "calendar" | "after_last_done";
   every: number | string;
@@ -29,7 +32,6 @@ export interface Schedule {
   month?: number;
   at?: string | null;
   starting?: string;
-  expires?: Duration | ExpiresOnDay | null;
 }
 
 export type DataType =
@@ -71,8 +73,12 @@ export interface EditorStep {
   data?: StepData | null;
   activation: Start;
   conditions: StepConditions;
-  done_when: { triggers: Obj[]; activation_conditions_no_longer_true: boolean };
-  dismiss_when: { triggers: Obj[] };
+  done_when: {
+    triggers: Obj[];
+    activation_conditions_no_longer_true: boolean;
+    expires?: Expires | null;
+  };
+  dismiss_when: { triggers: Obj[]; expires?: Expires | null };
   buttons: Button[];
   // The people whose states differ from the category's audience.
   audience?: Record<string, AudienceEntry>;
@@ -333,7 +339,7 @@ export function toEditor(
   const conditions = (items: Obj[] | undefined) =>
     (items ?? []).map((item) => toEditorItem(item, "condition", draft.id, numbers, state));
   const selfSensor = sensorOf(state, draft.id);
-  for (const step of draft.steps) {
+  draft.steps.forEach((step, index) => {
     if (step.activation.type === "triggers") {
       step.activation.triggers = triggers(step.activation.triggers);
       // The first trigger on this notification's own entities is the one
@@ -349,20 +355,28 @@ export function toEditor(
         delete options.notification;
         first[PINNED] = true;
       }
+      // Steps 2 and later: a Notification state trigger on this
+      // notification, first after the one above, is the row at the top.
+      if (index > 0) markState(step.activation.triggers, first?.[PINNED] ? 1 : 0, "trigger");
     }
     step.conditions = {
       activate_only_while_met: step.conditions?.activate_only_while_met ?? true,
       hide_while_not_met: step.conditions?.hide_while_not_met ?? true,
       conditions: conditions(step.conditions?.conditions),
     };
+    if (index > 0) markState(step.conditions.conditions, 0, "condition");
     step.done_when = {
       triggers: triggers(step.done_when?.triggers),
       activation_conditions_no_longer_true: step.done_when?.activation_conditions_no_longer_true ?? false,
+      expires: step.done_when?.expires ?? null,
     };
-    step.dismiss_when = { triggers: triggers(step.dismiss_when?.triggers) };
+    step.dismiss_when = {
+      triggers: triggers(step.dismiss_when?.triggers),
+      expires: step.dismiss_when?.expires ?? null,
+    };
     // Every button has an id, so an entity action can point to it.
     for (const button of step.buttons) button.id ||= newId();
-  }
+  });
   for (const group of draft.entity_groups) {
     group.areas ??= [];
     group.floors ??= [];
@@ -380,7 +394,7 @@ export function toSaved(draft: EditorNotification): EditorNotification {
     const start = step.activation;
     // The trigger at the top of Start is saved only when it tests something.
     const pinned = pinnedEntities(step);
-    const triggers = (start.triggers ?? [])
+    const triggers = savedState(start.triggers ?? [])
       .filter((item) => item !== pinned?.item || entitiesFilled(pinned.kind, pinned.options))
       .map((item) => {
         const { [PINNED]: _pinned, ...rest } = item;
@@ -393,6 +407,9 @@ export function toSaved(draft: EditorNotification): EditorNotification {
         );
         return { ...rest, options };
       });
+    step.conditions = { ...step.conditions, conditions: savedState(step.conditions.conditions) };
+    if (!step.done_when.expires) delete step.done_when.expires;
+    if (!step.dismiss_when.expires) delete step.dismiss_when.expires;
     step.activation =
       start.type === "schedule"
         ? { type: "schedule", schedule: start.schedule! }
@@ -496,6 +513,34 @@ export function pinnedEntities(step: EditorStep): PinnedEntities | undefined {
   if (!item?.[PINNED]) return undefined;
   const options = (item.options as Obj | undefined) ?? {};
   return { item, kind: item.trigger === ENTITIES_NUMERIC ? "numeric" : "state", options };
+}
+
+// Marks the Notification state row (steps 2 and later) while it is edited.
+export const PINNED_STATE = "_nc_pinned_state";
+
+function markState(items: Obj[], at: number, key: "trigger" | "condition"): void {
+  const item = items[at];
+  const options = item?.options as Obj | undefined;
+  if (item && options && item[key] === NOTIFICATION_STATE && !options.notification && options.step !== undefined) {
+    item[PINNED_STATE] = true;
+  }
+}
+
+/** The Notification state row of a list of triggers or conditions. */
+export function pinnedState(items: Obj[] | undefined): Obj | undefined {
+  return (items ?? []).find((item) => item[PINNED_STATE]);
+}
+
+/** The items without the Notification state row's mark; the row only when it is set. */
+function savedState(items: Obj[]): Obj[] {
+  return items
+    .filter((item) => !item[PINNED_STATE] || !!(item.options as Obj | undefined)?.state)
+    .map((item) => {
+      if (!item[PINNED_STATE]) return item;
+      const { [PINNED_STATE]: _mark, ...rest } = item;
+      void _mark;
+      return rest;
+    });
 }
 
 /** True when the trigger at the top of Start tests something. */

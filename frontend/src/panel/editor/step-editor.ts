@@ -13,14 +13,20 @@ import {
   type EditorStep,
   ENTITIES_NUMERIC,
   ENTITIES_STATE,
+  type Expires,
+  NOTIFICATION_STATE,
   type Obj,
   PINNED,
+  PINNED_STATE,
   newId,
   type Schedule,
   type StepData,
   pinnedEntities,
   pinnedFilled,
+  pinnedState,
 } from "./model";
+import { stateFilled } from "./builtin-forms";
+import "./builtin-forms";
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
 import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
@@ -130,6 +136,12 @@ export class NcStepEditor extends LitElement {
 
   @property() public notificationId?: string;
 
+  // Which step this is (from 0) and how many the notification has: steps
+  // 2 and later have the Notification state rows.
+  @property({ type: Number }) public stepIndex = 0;
+
+  @property({ type: Number }) public stepCount = 1;
+
   // The step is stored as it is (Next of a Repeat can be set).
   @property({ type: Boolean }) public saved = false;
 
@@ -174,7 +186,8 @@ export class NcStepEditor extends LitElement {
 
   @state() private _help?: keyof typeof HELP;
 
-  @state() private _pinnedOpen = false;
+  // The built-in rows that are open (by key).
+  @state() private _openRows: Set<string> = new Set();
 
   // The text field the entity parameters go into.
   private _field: "message" | "info" = "message";
@@ -218,10 +231,12 @@ export class NcStepEditor extends LitElement {
     const kind = this._kind(step);
     const doneCount =
       step.done_when.triggers.length +
+      (step.done_when.expires ? 1 : 0) +
       (step.done_when.activation_conditions_no_longer_true &&
       this._startCanEnd(step)
         ? 1
         : 0);
+    const stateCondition = pinnedState(step.conditions.conditions);
     return html`
       ${this._panel(
         "message",
@@ -254,7 +269,8 @@ export class NcStepEditor extends LitElement {
         "show",
         "mdi:eye-outline",
         "Conditions",
-        step.conditions.conditions.length,
+        step.conditions.conditions.length -
+          (stateCondition && !stateFilled(stateCondition.options as Obj) ? 1 : 0),
         this._renderShow(step),
       )}
       ${this._panel(
@@ -268,7 +284,7 @@ export class NcStepEditor extends LitElement {
         "dismiss",
         "mdi:close-circle-outline",
         "Dismiss when",
-        step.dismiss_when.triggers.length,
+        step.dismiss_when.triggers.length + (step.dismiss_when.expires ? 1 : 0),
         this._renderDismiss(step),
       )}
       <div class="group-gap"></div>
@@ -299,9 +315,12 @@ export class NcStepEditor extends LitElement {
   private _startCount(step: EditorStep): number {
     const triggers = step.activation.triggers ?? [];
     const pinned = pinnedEntities(step);
-    return pinned && !entitiesFilled(pinned.kind, pinned.options)
-      ? triggers.length - 1
-      : triggers.length;
+    const state = pinnedState(triggers);
+    return (
+      triggers.length -
+      (pinned && !entitiesFilled(pinned.kind, pinned.options) ? 1 : 0) -
+      (state && !stateFilled(state.options as Obj) ? 1 : 0)
+    );
   }
 
   private _kind(step: EditorStep): StartKind {
@@ -559,6 +578,7 @@ export class NcStepEditor extends LitElement {
         }}
       ></ha-button-toggle-group>
       ${kind === "triggers" ? this._renderPinned(step) : nothing}
+      ${kind === "triggers" ? this._renderStateTrigger(step) : nothing}
       ${this._title(HELP[kind].title, kind)}
       ${kind === "triggers"
         ? html`<ha-automation-trigger
@@ -567,11 +587,7 @@ export class NcStepEditor extends LitElement {
             .triggers=${this._listTriggers(step)}
             @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
               ev.stopPropagation();
-              const pinned = pinnedEntities(step);
-              const triggers = pinned
-                ? [pinned.item, ...ev.detail.value]
-                : ev.detail.value;
-              this._change({ activation: { ...step.activation, triggers } });
+              this._setTriggers(step, { rest: ev.detail.value });
             }}
           ></ha-automation-trigger>`
         : html`<nc-schedule-editor
@@ -590,10 +606,100 @@ export class NcStepEditor extends LitElement {
     </div>`;
   }
 
-  // The triggers of the list: all but the one at the top.
+  // The triggers of the list: all but the built-in rows at the top.
   private _listTriggers(step: EditorStep): Obj[] {
     const triggers = step.activation.triggers ?? [];
-    return pinnedEntities(step) ? triggers.slice(1) : triggers;
+    return triggers.filter((item) => !item[PINNED] && !item[PINNED_STATE]);
+  }
+
+  // The triggers in their stored order: Notification entities, Notification
+  // state, then the list. A part not given stays as it is.
+  private _setTriggers(
+    step: EditorStep,
+    parts: { entities?: Obj; state?: Obj; rest?: Obj[] },
+  ): void {
+    const entities = parts.entities ?? pinnedEntities(step)?.item;
+    const state = parts.state ?? pinnedState(step.activation.triggers);
+    const rest = parts.rest ?? this._listTriggers(step);
+    const triggers = [entities, state, ...rest].filter((item): item is Obj => !!item);
+    this._change({ activation: { ...step.activation, triggers } });
+  }
+
+  // A built-in row: in a card, as Home Assistant's trigger rows, so it has
+  // their background; it opens and closes like one, closed at first.
+  private _builtinRow(key: string, icon: string, title: string, filled: boolean, content: unknown) {
+    return html`<ha-card outlined class="pinned-card"
+      ><ha-expansion-panel
+        class="pinned"
+        .expanded=${this._openRows.has(key)}
+        @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
+          ev.stopPropagation();
+          if (ev.target !== ev.currentTarget) return;
+          const open = new Set(this._openRows);
+          if (ev.detail.expanded) open.add(key);
+          else open.delete(key);
+          this._openRows = open;
+        }}
+        @expanded-will-change=${(ev: Event) => ev.stopPropagation()}
+      >
+        <ha-icon slot="leading-icon" class="builtin" .icon=${icon}></ha-icon>
+        <div slot="header" class="pinned-title">
+          ${title}
+          <span class="pinned-state">· ${filled ? "Set" : "Not in use"}</span>
+        </div>
+        <div class="pinned-content">${content}</div>
+      </ha-expansion-panel></ha-card
+    >`;
+  }
+
+  // Notification state at the top of Activation (or Conditions) on steps 2
+  // and later: a state of a step of this notification, the previous one at
+  // first. It is the first trigger (after Notification entities) or the
+  // first condition.
+  private _stateRow(key: "trigger" | "condition", items: Obj[], changed: (item: Obj) => void) {
+    if (this.stepIndex < 1) return nothing;
+    const item = pinnedState(items);
+    const options = (item?.options as Obj | undefined) ?? {};
+    return this._builtinRow(
+      `state-${key}`,
+      "mdi:message-badge-outline",
+      "Notification state",
+      stateFilled(options),
+      html`<nc-state-form
+        .hass=${this.hass}
+        .value=${options}
+        .stepIndex=${this.stepIndex}
+        .stepCount=${this.stepCount}
+        @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
+          ev.stopPropagation();
+          changed({ [key]: NOTIFICATION_STATE, options: ev.detail.value, [PINNED_STATE]: true });
+        }}
+      ></nc-state-form>`,
+    );
+  }
+
+  private _renderStateTrigger(step: EditorStep) {
+    return this._stateRow("trigger", step.activation.triggers ?? [], (item) =>
+      this._setTriggers(step, { state: item }),
+    );
+  }
+
+  // Expires at the top of Done when and Dismiss when.
+  private _expiresRow(key: "done" | "dismiss", value: Expires | null | undefined, changed: (value: Expires | null) => void) {
+    return this._builtinRow(
+      `expires-${key}`,
+      "mdi:timer-sand",
+      "Expires",
+      !!value,
+      html`<nc-expires-form
+        .hass=${this.hass}
+        .value=${value ?? null}
+        @value-changed=${(ev: CustomEvent<{ value: Expires | null }>) => {
+          ev.stopPropagation();
+          changed(ev.detail.value);
+        }}
+      ></nc-expires-form>`,
+    );
   }
 
   // Notification entities at the top of Start, when the notification lists
@@ -606,44 +712,28 @@ export class NcStepEditor extends LitElement {
     const kind: EntitiesKind =
       pinned?.kind ?? (this._allNumeric() ? "numeric" : "state");
     const options = pinned?.options ?? {};
-    // In a card, as Home Assistant's trigger rows, so it has their background.
-    return html`<ha-card outlined class="pinned-card"
-      ><ha-expansion-panel
-        class="pinned"
-        .expanded=${this._pinnedOpen}
-        @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
+    return this._builtinRow(
+      "entities",
+      "mdi:format-list-checks",
+      "Notification entities",
+      pinnedFilled(step),
+      html`<nc-entities-form
+        kind-switch
+        .hass=${this.hass}
+        .kind=${kind}
+        .value=${options}
+        .entities=${this.entities}
+        @kind-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
           ev.stopPropagation();
-          if (ev.target === ev.currentTarget)
-            this._pinnedOpen = ev.detail.expanded;
+          // Every field stays, so switching back brings them again.
+          this._pinnedChanged(step, ev.detail.value, options);
         }}
-        @expanded-will-change=${(ev: Event) => ev.stopPropagation()}
-      >
-        <ha-icon
-          slot="leading-icon"
-          class="builtin"
-          icon="mdi:format-list-checks"
-        ></ha-icon>
-        <div slot="header" class="pinned-title">
-          Notification entities
-          <span class="pinned-state">· ${pinnedFilled(step) ? "Set" : "Not in use"}</span>
-        </div>
-        <nc-entities-form
-          kind-switch
-          .hass=${this.hass}
-          .kind=${kind}
-          .value=${options}
-          .entities=${this.entities}
-          @kind-changed=${(ev: CustomEvent<{ value: EntitiesKind }>) => {
-            ev.stopPropagation();
-            // Every field stays, so switching back brings them again.
-            this._pinnedChanged(step, ev.detail.value, options);
-          }}
-          @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
-            ev.stopPropagation();
-            this._pinnedChanged(step, kind, ev.detail.value);
-          }}
-        ></nc-entities-form> </ha-expansion-panel
-    ></ha-card>`;
+        @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
+          ev.stopPropagation();
+          this._pinnedChanged(step, kind, ev.detail.value);
+        }}
+      ></nc-entities-form>`,
+    );
   }
 
   private _allNumeric(): boolean {
@@ -671,10 +761,7 @@ export class NcStepEditor extends LitElement {
       options,
       [PINNED]: true,
     };
-    const rest = this._listTriggers(step);
-    this._change({
-      activation: { ...step.activation, triggers: [item, ...rest] },
-    });
+    this._setTriggers(step, { entities: item });
   }
 
   private _kindChanged(kind: StartKind): void {
@@ -746,15 +833,27 @@ export class NcStepEditor extends LitElement {
           ></ha-switch>
         </ha-card>
       </div>
+      ${this._stateRow("condition", show.conditions, (item) =>
+        this._change({
+          conditions: {
+            ...show,
+            conditions: [item, ...show.conditions.filter((other) => !other[PINNED_STATE])],
+          },
+        }),
+      )}
       ${this._title("Conditions", "show")}
       <ha-automation-condition
         .hass=${conditionTestHass(this.hass, this.sensor)}
         .narrow=${this.narrow}
-        .conditions=${show.conditions}
+        .conditions=${show.conditions.filter((item) => !item[PINNED_STATE])}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
+          const state = pinnedState(show.conditions);
           this._change({
-            conditions: { ...show, conditions: ev.detail.value },
+            conditions: {
+              ...show,
+              conditions: state ? [state, ...ev.detail.value] : ev.detail.value,
+            },
           });
         }}
       ></ha-automation-condition>
@@ -777,6 +876,9 @@ export class NcStepEditor extends LitElement {
   private _renderDone(step: EditorStep) {
     const listed = this._startCanEnd(step);
     return html`<div class="block">
+      ${this._expiresRow("done", step.done_when.expires, (expires) =>
+        this._change({ done_when: { ...step.done_when, expires } }),
+      )}
       ${listed
         ? html`<ha-card outlined class="own-row">
             <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
@@ -814,6 +916,9 @@ export class NcStepEditor extends LitElement {
 
   private _renderDismiss(step: EditorStep) {
     return html`<div class="block">
+      ${this._expiresRow("dismiss", step.dismiss_when.expires, (expires) =>
+        this._change({ dismiss_when: { ...step.dismiss_when, expires } }),
+      )}
       ${this._title("Triggers", "dismiss")}
       <ha-automation-trigger
         .hass=${this.hass}
@@ -821,7 +926,7 @@ export class NcStepEditor extends LitElement {
         .triggers=${step.dismiss_when.triggers}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
-          this._change({ dismiss_when: { triggers: ev.detail.value } });
+          this._change({ dismiss_when: { ...step.dismiss_when, triggers: ev.detail.value } });
         }}
       ></ha-automation-trigger>
     </div>`;

@@ -110,5 +110,6 @@ suite instead of running everything locally.
 - **done** is an outcome (the Done button and status), not a block name. Built-in
   buttons: Done, Dismiss, Snooze, Mute; plus Tap behavior. The action that stops the lights,
   speakers and sirens is **Mute** (*muted*), never "Silence".
-- Statuses: active, upcoming, snoozed, done, dismissed, expired. Upcoming lines start
+- Statuses: active, upcoming, snoozed, done, dismissed (no *expired*: the Expires row of
+  Done when or Dismiss when closes as done or dismissed). Upcoming lines start
   with *Shows ...*; people by name, *someone* above three.

@@ -97,7 +97,7 @@ export const STEP_EDITOR_STYLES = css`
       /* The panel pads its content even while closed, so the form does. */
       --expansion-panel-content-padding: 0;
     }
-    ha-expansion-panel.pinned nc-entities-form {
+    ha-expansion-panel.pinned .pinned-content {
       padding: 16px;
     }
     ha-expansion-panel.pinned > ha-icon[slot="leading-icon"] {

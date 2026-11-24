@@ -156,16 +156,14 @@ async def test_expires_on_a_day(hass: HomeAssistant) -> None:
     """Expires: the same or a later day, at a time."""
     await hass.config.async_set_time_zone(ZONE)
     due = _local("2026-11-16 19:00")
-    same = sched.expires_at({"expires": {"day": 0, "at": "23:00"}}, due)
+    same = sched.expires_at({"day": 0, "at": "23:00"}, due)
     assert same == _local("2026-11-16 23:00")
-    earlier = sched.expires_at({"expires": {"day": 0, "at": "08:00"}}, due)
+    earlier = sched.expires_at({"day": 0, "at": "08:00"}, due)
     assert earlier == _local("2026-11-17 08:00")
-    nxt = sched.expires_at({"expires": {"day": 1, "at": "08:00"}}, due)
+    nxt = sched.expires_at({"day": 1, "at": "08:00"}, due)
     assert nxt == _local("2026-11-17 08:00")
-    assert sched.expires_at({"expires": {"hours": 2}}, due) == _local(
-        "2026-11-16 21:00"
-    )
-    assert sched.expires_at({}, due) is None
+    assert sched.expires_at({"hours": 2}, due) == _local("2026-11-16 21:00")
+    assert sched.expires_at(None, due) is None
 
 
 async def test_schedule_preview_and_set_next(

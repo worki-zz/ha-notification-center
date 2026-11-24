@@ -766,6 +766,8 @@ export class NcNotificationEditor extends LitElement {
           .narrow=${this.narrow}
           .step=${step}
           .notificationId=${draft.id}
+          .stepIndex=${index}
+          .stepCount=${draft.steps.length}
           .saved=${savedStep}
           .expanded=${expanded}
           .entities=${this.hass ? listedEntities(this.hass, draft) : []}
