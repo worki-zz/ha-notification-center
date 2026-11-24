@@ -1258,6 +1258,9 @@ class Engine(EngineQueries, EngineActions):
     @callback
     def _midnight(self, _now: datetime) -> None:
         self._prune()
+        # A Notification state condition on Done or Dismissed counts the
+        # day's cards only: check those conditions again on the new day.
+        self._refresh_own_conditions()
         self._save()
         self._notify()
 

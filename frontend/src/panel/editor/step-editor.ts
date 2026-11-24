@@ -24,6 +24,7 @@ import {
   pinnedEntities,
   pinnedFilled,
   pinnedState,
+  withOwnSensor,
 } from "./model";
 import { stateFilled } from "./builtin-forms";
 import "./builtin-forms";
@@ -587,7 +588,9 @@ export class NcStepEditor extends LitElement {
             .triggers=${this._listTriggers(step)}
             @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
               ev.stopPropagation();
-              this._setTriggers(step, { rest: ev.detail.value });
+              this._setTriggers(step, {
+                rest: withOwnSensor(this._listTriggers(step), ev.detail.value, this.sensor),
+              });
             }}
           ></ha-automation-trigger>`
         : html`<nc-schedule-editor
@@ -684,12 +687,12 @@ export class NcStepEditor extends LitElement {
     );
   }
 
-  // Expires at the top of Done when and Dismiss when.
+  // Expiration at the top of Done when and Dismiss when.
   private _expiresRow(key: "done" | "dismiss", value: Expires | null | undefined, changed: (value: Expires | null) => void) {
     return this._builtinRow(
       `expires-${key}`,
       "mdi:timer-sand",
-      "Expires",
+      "Expiration",
       !!value,
       html`<nc-expires-form
         .hass=${this.hass}
@@ -780,7 +783,7 @@ export class NcStepEditor extends LitElement {
     const type: Schedule["type"] =
       kind === "schedule" ? "calendar" : "after_last_done";
     this._change({
-      start: {
+      activation: {
         ...step.activation,
         type: "schedule",
         schedule: defaultSchedule(type, step.activation.schedule),
@@ -849,10 +852,15 @@ export class NcStepEditor extends LitElement {
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
           const state = pinnedState(show.conditions);
+          const conditions = withOwnSensor(
+            show.conditions.filter((item) => !item[PINNED_STATE]),
+            ev.detail.value,
+            this.sensor,
+          );
           this._change({
             conditions: {
               ...show,
-              conditions: state ? [state, ...ev.detail.value] : ev.detail.value,
+              conditions: state ? [state, ...conditions] : conditions,
             },
           });
         }}
@@ -907,7 +915,10 @@ export class NcStepEditor extends LitElement {
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
           this._change({
-            done_when: { ...step.done_when, triggers: ev.detail.value },
+            done_when: {
+              ...step.done_when,
+              triggers: withOwnSensor(step.done_when.triggers, ev.detail.value, this.sensor),
+            },
           });
         }}
       ></ha-automation-trigger>
@@ -926,7 +937,12 @@ export class NcStepEditor extends LitElement {
         .triggers=${step.dismiss_when.triggers}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
-          this._change({ dismiss_when: { ...step.dismiss_when, triggers: ev.detail.value } });
+          this._change({
+            dismiss_when: {
+              ...step.dismiss_when,
+              triggers: withOwnSensor(step.dismiss_when.triggers, ev.detail.value, this.sensor),
+            },
+          });
         }}
       ></ha-automation-trigger>
     </div>`;

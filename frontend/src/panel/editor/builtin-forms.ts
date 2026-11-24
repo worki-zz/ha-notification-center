@@ -1,6 +1,6 @@
 // The forms of two built-in rows of a step:
 //
-// - Expires, at the top of Done when and Dismiss when: the notification
+// - Expiration, at the top of Done when and Dismiss when: the notification
 //   closes by itself after a duration from when it became active, or on that
 //   day (or N days later) at a time.
 // - Notification state, at the top of Activation and Conditions on steps 2
@@ -62,7 +62,7 @@ export class NcExpiresForm extends LitElement {
           },
         },
         kind,
-        "Expires",
+        "Expiration",
         (value) => {
           if (value === kind) return;
           this._emit(
@@ -108,6 +108,10 @@ export class NcExpiresForm extends LitElement {
   }
 
   static override styles = css`
+    :host {
+      display: block;
+      container-type: inline-size;
+    }
     .row {
       display: flex;
       gap: 12px;
@@ -122,6 +126,12 @@ export class NcExpiresForm extends LitElement {
     }
     .grow {
       flex: 1 1 150px;
+    }
+    /* On a phone the Expiration dropdown takes the whole width. */
+    @container (max-width: 450px) {
+      .mode {
+        flex: 1 1 100%;
+      }
     }
   `;
 }

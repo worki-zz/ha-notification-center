@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The built-in rows of a step (Notification entities, Notification state, Expiration) have plain titles, as the other built-in rows. *Expires* is called **Expiration** (stored as `expires`, as before); on a phone its dropdown takes the whole width.
+- A Notification state or Notification entities trigger or condition added in the notification editor starts with this notification (once it is saved).
+
+### Fixed
+
+- *Schedule* and *Repeat* in Activation could not be chosen (the step stayed on Triggers).
+- *Reset* in a notification's Snooze dialog did not bring back the category's snooze times, and did not show when only the times were changed.
+- A Notification state condition on Done (or Dismissed) is checked again at midnight, so *Hide while conditions are not met* follows it on the new day.
+
 ## 0.7.5
 
 ### Added
