@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- **Notification info** in a button's Navigation (beside Navigate and More info): opens the notification's Status dialog on the Overview, from the dashboard and from a push. The address is `/notification-center?info=<notification id>` (a notification's sensor works too), so a link can open it as well.
+- Back of the browser, the app's back gesture and a mouse's back button ask *Leave without saving?* in the notification and category editors while there are unsaved changes, as the editor's own back button does; reloading or closing the page asks the browser's question.
+
 ### Changed
+
+- **Notification state** has one compact form, in the built-in row of Activation and Conditions and in Home Assistant's trigger and condition rows (with a *Notification* field there, this notification at first): *Step* by name (*Any step*, or the previous one at first in the built-in row) and *State*. A trigger has *For*; a condition chooses **Now, for at least** (in the state now) or **Within the last** (reached the state within that time, even if it has left it since: for a step done yesterday evening, as Done and Dismissed with Now count only today's notifications).
+- **Upcoming** is purple: the status chip in the Notifications list and the editor's header, the Notification badge and card, and the sensor's `icon_color` (`purple`).
 
 - The built-in rows of a step (Notification entities, Notification state, Expiration) have plain titles, as the other built-in rows. *Expires* is called **Expiration** (stored as `expires`, as before); on a phone its dropdown takes the whole width.
 - A Notification state or Notification entities trigger or condition added in the notification editor starts with this notification (once it is saved).

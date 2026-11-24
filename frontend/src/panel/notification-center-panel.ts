@@ -36,6 +36,7 @@ import {
 import type { HomeAssistant, PanelInfo } from "../shared/types";
 import "./category-editor";
 import "./general-page";
+import "./editor/info-dialog";
 import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";
 import "./settings-page";
@@ -77,6 +78,9 @@ export class NotificationCenterPanel extends LitElement {
 
   @state() private _notice?: string;
 
+  // The notification whose Status dialog is open (Notification info).
+  @state() private _info?: string;
+
 
   // Home Assistant's settings elements are loaded (for the settings pages).
   @state() private _haReady = false;
@@ -88,8 +92,14 @@ export class NotificationCenterPanel extends LitElement {
 
   private _timer?: number;
 
+  // A button's Notification info, or a push, opens ?info=<id>.
+  private _locationChanged = (): void => {
+    void this._pushTapped();
+  };
+
   public override connectedCallback(): void {
     super.connectedCallback();
+    window.addEventListener("location-changed", this._locationChanged);
     // Home Assistant's custom panel wrapper has no height of its own, so
     // the page would grow and scroll as a whole, header and all. With the
     // wrapper's height set, the header stays and the page under it scrolls.
@@ -105,6 +115,7 @@ export class NotificationCenterPanel extends LitElement {
 
   public override disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener("location-changed", this._locationChanged);
     window.clearInterval(this._timer);
     this._timer = undefined;
     this._unsubscribe?.();
@@ -138,10 +149,20 @@ export class NotificationCenterPanel extends LitElement {
 
   // A push was tapped (or its button opens a page): the address names the
   // button to press ("nc_press") and maybe the page to open then ("nc_then").
+  // Notification info opens the Status dialog of a notification ("info").
   private async _pushTapped(): Promise<void> {
     const query = new URLSearchParams(window.location.search);
     const press = query.get("nc_press");
     const { config, state } = this._store;
+    const info = query.get("info");
+    if (info && config && state && !press) {
+      // A notification id, or its sensor.
+      this._info =
+        config.notifications.find((item) => item.id === info)?.id ??
+        Object.entries(state.notifications).find(([, item]) => item.entity_id === info)?.[0];
+      navigate(window.location.pathname, true);
+      return;
+    }
     if (!press || !config || !state || !this.hass) return;
     const then = query.get("nc_then");
     // Once: the address loses the query at once.
@@ -257,7 +278,21 @@ export class NotificationCenterPanel extends LitElement {
               ? this._renderDone()
               : this._renderOverview()}
       </div></div>
+      ${this._renderInfo()}
     `;
+  }
+
+  private _renderInfo() {
+    const { config, state } = this._store;
+    const notification = config?.notifications.find((item) => item.id === this._info);
+    if (!notification) return nothing;
+    return html`<nc-info-dialog
+      .hass=${this.hass}
+      .config=${config}
+      .state=${state}
+      .notification=${notification}
+      @info-closed=${() => (this._info = undefined)}
+    ></nc-info-dialog>`;
   }
 
   private _renderLive(

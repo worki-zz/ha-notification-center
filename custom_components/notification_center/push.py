@@ -151,6 +151,11 @@ def press_url(press: str, then: str | None = None) -> str:
     return url
 
 
+def info_url(notification_id: str) -> str:
+    """Return the Overview's address with a notification's Status dialog open."""
+    return f"{PANEL_PATH}?info={quote(notification_id, safe='')}"
+
+
 def push_body(message: str | None, info: str | None) -> str:
     """Return the text of a push: the message, and the Info on its own line."""
     parts = [part.strip() for part in (message, info) if part and part.strip()]
@@ -477,12 +482,11 @@ class PushDevice(Device):
             return page
         navigation = actions.get("navigation") or {}
         # Only a page to open: no need to press it.
-        if (
-            set(actions) == {"navigation"}
-            and navigation.get("type") == "navigate"
-            and target["type"] not in BUTTON_EFFECTS
-        ):
-            return str(navigation["path"])
+        if set(actions) == {"navigation"} and target["type"] not in BUTTON_EFFECTS:
+            if navigation.get("type") == "navigate":
+                return str(navigation["path"])
+            if navigation.get("type") == "notification_info":
+                return info_url(card.notification_id)
         return press_url(action_id(card, tap["id"]), page)
 
     def actions_of(self, card: Card) -> list[dict[str, Any]]:

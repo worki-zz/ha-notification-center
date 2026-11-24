@@ -594,6 +594,12 @@ async def test_example_config_runs(
         "upcoming",
         "disabled",
     }
+    # Upcoming shows purple, as the status chips.
+    assert all(
+        state.attributes["icon_color"] == "purple"
+        for state in sensors
+        if state.state == "upcoming"
+    )
     assert not [
         record
         for record in caplog.records

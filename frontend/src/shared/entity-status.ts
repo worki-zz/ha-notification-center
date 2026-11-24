@@ -88,7 +88,9 @@ export function entityStatusOf(
   const upcoming = scheduledSteps(hass, store, now, { ignoreAudience, ignoreChannels: true }).filter(
     (item) => item.notificationId === notification.id && item.due.getTime() < end,
   );
-  if (upcoming.length) return { ...base, status: "upcoming", upcoming, color: grey };
+  if (upcoming.length) {
+    return { ...base, status: "upcoming", upcoming, color: "var(--purple-color)" };
+  }
   const done = own(["done"]);
   if (done.length) return { ...base, status: "done", cards: done, color: "var(--green-color)" };
   return { ...base, status: "idle", color: grey };

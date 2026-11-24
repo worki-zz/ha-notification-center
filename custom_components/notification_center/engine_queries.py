@@ -47,6 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 # notification's colour); the status chips of the Overview use the same.
 STATE_COLORS: dict[str, str] = {
     STATE_SNOOZED: "orange",
+    STATE_UPCOMING: "purple",
     STATE_DONE: "green",
 }
 
@@ -233,7 +234,8 @@ class EngineQueries:
         """Return the colour of the sensor's icon for its state.
 
         Active: the notification's colour (a system colour's name, an own
-        colour as ``#rrggbb``); Snoozed orange, Done green, the rest grey.
+        colour as ``#rrggbb``); Snoozed orange, Upcoming purple, Done green,
+        the rest grey.
         Home Assistant does not read it; cards and templates can.
         """
         state = self.notification_state(notification_id)

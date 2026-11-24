@@ -326,13 +326,29 @@ async def test_tap_opens_the_page(center: Center, hass: HomeAssistant) -> None:
             ],
         ),
     )
+    info_id = await center.add(
+        "Info",
+        step(
+            "Hello",
+            buttons=[
+                {
+                    "type": "tap",
+                    "enabled": True,
+                    "actions": {"navigation": {"type": "notification_info"}},
+                }
+            ],
+        ),
+    )
     await center.call("trigger", "sensor.nc_plain")
     await center.call("trigger", "sensor.nc_tapped")
+    await center.call("trigger", "sensor.nc_info")
     await hass.async_block_till_done()
     urls = [call.data["data"]["url"] for call in ios]
     assert urls[0] == "/lovelace/home"
     assert urls[1].startswith("/notification-center?nc_press=NC%7C")
     assert urls[1].endswith("&nc_then=%2Flovelace%2Fgarden")
+    # Notification info: the Overview opens the notification's Status dialog.
+    assert urls[2] == f"/notification-center?info={info_id}"
 
 
 async def test_push_test_and_repairs(

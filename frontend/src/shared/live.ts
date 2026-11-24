@@ -484,8 +484,15 @@ export async function pressButton(
     }
   } else if (navigation?.type === "navigate" && navigation.path) {
     navigate(navigation.path);
+  } else if (navigation?.type === "notification_info") {
+    navigate(notificationInfoPath(card.notification_id));
   }
   if (failed) throw failed;
+}
+
+/** The Overview with a notification's Status dialog open. */
+export function notificationInfoPath(notificationId: string): string {
+  return `/notification-center?info=${encodeURIComponent(notificationId)}`;
 }
 
 /** Go to a page of Home Assistant, as its own links do. */

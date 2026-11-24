@@ -13,7 +13,7 @@ export interface Status {
 }
 
 /**
- * Active (in the notification's colour), Upcoming (grey), Snoozed (orange)
+ * Active (in the notification's colour), Upcoming (purple), Snoozed (orange)
  * or Disabled (grey); nothing when idle. The same colours as the
  * ``icon_color`` attribute of the notification's sensor.
  */
@@ -29,7 +29,7 @@ export function statusOf(
     case "snoozed":
       return { label: "Snoozed", tone: "orange" };
     case "upcoming":
-      return { label: "Upcoming", tone: "grey" };
+      return { label: "Upcoming", tone: "purple" };
     default:
       return undefined;
   }
@@ -78,8 +78,8 @@ export const STATUS_STYLES = `
     background-color: rgb(from var(--red-color, #f44336) r g b / 0.15);
   }
   .status.purple {
-    color: var(--deep-purple-color, #673ab7);
-    background-color: rgb(from var(--deep-purple-color, #673ab7) r g b / 0.15);
+    color: var(--purple-color, #926bc7);
+    background-color: rgb(from var(--purple-color, #926bc7) r g b / 0.15);
   }
   .status.grey {
     color: var(--secondary-text-color);

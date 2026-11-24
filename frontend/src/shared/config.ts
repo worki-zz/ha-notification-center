@@ -96,7 +96,9 @@ export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "mute" | "custo
 /** Where a button takes the user, on the device it was pressed on. */
 export type ButtonNavigation =
   | { type: "more_info"; entity_id?: string | null }
-  | { type: "navigate"; path: string };
+  | { type: "navigate"; path: string }
+  // The notification's Status dialog, on the Overview.
+  | { type: "notification_info" };
 
 /** The notification state an own button or the Tap sets. */
 export interface ButtonState {

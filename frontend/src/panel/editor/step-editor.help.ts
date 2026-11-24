@@ -11,7 +11,7 @@ export const HELP: Record<
     text: [
       "The step is activated when one of its triggers fires, like an automation.",
       "Notification entities, at the top, watches the entities of the Entities block: every entity gets its own notification when it starts to match, for example when a leak sensor turns on. State tests the state or an attribute; Numeric state tests a number against a limit. Left empty, it is not used.",
-      "Notification state, at the top from step 2, activates the step when a step of this notification (the previous one at first) reaches a state, for a while if For is set: for example step 2 when step 1 has been active for an hour.",
+      "Notification state, at the top from step 2, activates the step when a step of this notification (the previous one at first, or Any step) reaches a state, for a while if For is set: for example step 2 when step 1 has been active for an hour.",
       "The Notification entities triggers in the list do the same with the entities of any notification, and Notification state activates the step when this or another notification (or one of its steps) reaches a state, for example when step 1 is snoozed.",
       "Without triggers, only the Trigger action (or Run now) activates the step.",
     ],
@@ -36,7 +36,7 @@ export const HELP: Record<
     text: [
       "One set of conditions, used as switched on above them.",
       "Activate only while conditions are met: the step is activated only when they are all true at that moment, for example the door notification only while the alarm is armed. A scheduled notification waits for them, hidden, until Expiration closes it.",
-      "Notification state, at the top from step 2, is true while a step of this notification (the previous one at first) is in a state, for a while if For is set.",
+      "Notification state, at the top from step 2, tests a step of this notification (the previous one at first, or Any step): Now, for at least is true while it is in a state (for a while if set); Within the last is true when it reached the state within that time, even if it has left it since. Done and Dismissed with Now count only today's notifications, so for a step done yesterday evening use Within the last.",
       "Hide while conditions are not met: an active notification is hidden while any of them is false, and shows again when they are all true, for example the window notification only while the heating is on. Push and light come again when it shows.",
     ],
   },

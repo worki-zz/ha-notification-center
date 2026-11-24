@@ -655,7 +655,8 @@ DISMISS_WHEN_SCHEMA = vol.Schema(
 )
 
 # Where a button takes the user, on the device it was pressed on: the
-# entity's more info dialog (empty: the card's entity) or a page.
+# entity's more info dialog (empty: the card's entity), a page, or the
+# notification's Status dialog on the Overview.
 NAVIGATION_SCHEMA = vol.Any(
     vol.Schema(
         {
@@ -664,6 +665,7 @@ NAVIGATION_SCHEMA = vol.Any(
         }
     ),
     vol.Schema({vol.Required("type"): "navigate", vol.Required("path"): cv.string}),
+    vol.Schema({vol.Required("type"): "notification_info"}),
 )
 
 # What an own button or the Tap does to the card. Snooze snoozes for one
