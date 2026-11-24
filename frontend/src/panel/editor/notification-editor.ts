@@ -8,7 +8,7 @@ import { sleepersOf } from "../channel-helpers";
 import { customElement, property, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 
-import { DOMAIN, type CardState, type Notification, type NotificationCenterConfig, type StateMessage, colorCss } from "../../shared/config";
+import { DOMAIN, type CardState, type Notification, type NotificationCenterConfig, type StateMessage, colorCss, sortedCategories } from "../../shared/config";
 import { cssColor } from "../../shared/format";
 import { errorTarget, errorWithPlace } from "./error-target";
 import { cardData, categoryOf, errorText, liveButtons, navigate } from "../../shared/live";
@@ -18,7 +18,7 @@ import { isTemplate, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import { chimeField, colorField, highlightField } from "../color-field";
 import { confirmDialog } from "../confirm";
-import { type FieldOptions, field, iconSelect } from "../fields";
+import { type FieldOptions, field, iconSelect, subpageTitle } from "../fields";
 import { renderStatus, statusOf } from "../status";
 import { dismissAll, openMoreInfo, renderNotificationMenu, runNow } from "../notification-menu";
 import { BLOCK_INTROS, block } from "./block";
@@ -352,9 +352,9 @@ export class NcNotificationEditor extends LitElement {
       <hass-subpage
         .hass=${this.hass}
         .narrow=${this.narrow}
-        .header=${title}
         .backCallback=${() => void this._back()}
       >
+        ${subpageTitle(title)}
         ${draft ? this._renderToolbar(draft) : nothing}
         <div class="content">
           ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
@@ -580,7 +580,7 @@ export class NcNotificationEditor extends LitElement {
         ${iconSelect(
           draft.category,
           "Category",
-          this.config!.categories.map((item) => ({
+          sortedCategories(this.config!.categories).map((item) => ({
             value: item.id,
             label: item.name,
             icon: item.icon || "mdi:shape-outline",

@@ -84,6 +84,13 @@ export interface Category {
   channels: Record<string, ChannelSettings>;
 }
 
+/** The categories by name (A to Z), the order they show in everywhere. */
+export function sortedCategories<T extends { name: string }>(categories: readonly T[]): T[] {
+  return [...categories].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
+}
+
 export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "mute" | "custom";
 
 /** Where a button takes the user, on the device it was pressed on. */
@@ -99,8 +106,8 @@ export interface ButtonState {
 }
 
 /**
- * The actions of a button. They run in this fixed order: Mute, the
- * entity action, the notification state, the Home Assistant actions, then
+ * The actions of a button. They run in this fixed order: the entity
+ * action, Mute, the notification state, the Home Assistant actions, then
  * the navigation. Left out: not used.
  */
 export interface ButtonActions {

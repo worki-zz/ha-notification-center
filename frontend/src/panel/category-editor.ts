@@ -32,9 +32,16 @@ import type { HomeAssistant } from "../shared/types";
 import "./audience-table";
 import "./channel-table";
 import { audienceCount, channelCount, channelsOf, sleepersOf } from "./channel-helpers";
+import {
+  deleteCategory,
+  duplicateCategory,
+  notificationCount,
+  renderCategoryMenu,
+  viewCategoryNotifications,
+} from "./category-menu";
 import { confirmDialog } from "./confirm";
 import { chimeField, colorField, highlightField } from "./color-field";
-import { field } from "./fields";
+import { field, subpageTitle } from "./fields";
 import { BLOCK_INTROS, BLOCK_STYLES, block } from "./editor/block";
 import {
   INTERACTION_DEFAULTS,
@@ -71,7 +78,6 @@ export class NcCategoryEditor extends LitElement {
   @state() private _error?: string;
 
   // Delete was refused: the category still has notifications.
-  @state() private _inUse = false;
 
   @state() private _saving = false;
 
@@ -153,7 +159,6 @@ export class NcCategoryEditor extends LitElement {
   private _load(): void {
     this._loadedFor = this.categoryId;
     this._error = undefined;
-    this._inUse = false;
     if (this._isNew) {
       // A new category starts with General's icon and colour.
       const general = this.config!.categories.find(
@@ -263,26 +268,13 @@ export class NcCategoryEditor extends LitElement {
       <hass-subpage
         .hass=${this.hass}
         .narrow=${this.narrow}
-        .header=${title}
         .backCallback=${() => void this._back()}
       >
+        ${subpageTitle(title)}
         ${draft ? this._renderToolbar() : nothing}
         <div class="content">
           ${this._error
             ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
-            : nothing}
-          ${this._inUse
-            ? html`<ha-alert alert-type="warning">
-                ${draft?.name || "This category"} has notifications, so it
-                cannot be deleted.
-                <ha-button
-                  slot="action"
-                  appearance="plain"
-                  @click=${this._viewNotifications}
-                >
-                  View notifications
-                </ha-button>
-              </ha-alert>`
             : nothing}
           ${draft ? this._renderEditor(draft) : nothing}
         </div>
@@ -304,18 +296,24 @@ export class NcCategoryEditor extends LitElement {
   }
 
   private _renderToolbar() {
+    const count = this._isNew ? 0 : this._notifications().length;
     return html`<div slot="toolbar-icon" class="toolbar">
-      ${this._isNew
+      ${this._isNew || this.narrow
         ? nothing
         : html`<ha-button appearance="plain" @click=${this._viewNotifications}>
             <ha-icon slot="start" icon="mdi:format-list-bulleted"></ha-icon>
-            Notifications
+            ${notificationCount(count)}
           </ha-button>`}
-      ${this._isNew || this.categoryId === "general"
-        ? nothing
-        : html`<ha-icon-button .label=${"Delete"} @click=${this._delete}>
-            <ha-icon icon="mdi:delete"></ha-icon>
-          </ha-icon-button>`}
+      <ha-dropdown @wa-select=${this._menu}>
+        <ha-icon-button slot="trigger" .label=${"Menu"}>
+          <ha-icon icon="mdi:dots-vertical"></ha-icon>
+        </ha-icon-button>
+        ${renderCategoryMenu({
+          saved: !this._isNew,
+          count,
+          deletable: this.categoryId !== "general",
+        })}
+      </ha-dropdown>
     </div>`;
   }
 
@@ -574,23 +572,50 @@ export class NcCategoryEditor extends LitElement {
   // -- Actions -----------------------------------------------------------------
 
   private _viewNotifications(): void {
-    navigate(
-      `${this.base}/settings/notifications?category=${encodeURIComponent(this.categoryId)}`,
-    );
+    viewCategoryNotifications(this.base, this.categoryId);
   }
 
-  private async _back(): Promise<void> {
-    if (
-      this._dirty &&
-      !(await confirmDialog(this, {
+  private async _menu(ev: CustomEvent<{ item: { value: string } }>): Promise<void> {
+    switch (ev.detail.item.value) {
+      case "notifications":
+        this._viewNotifications();
+        return;
+      case "duplicate":
+        await this._duplicate();
+        return;
+      case "delete":
+        await this._delete();
+        return;
+    }
+  }
+
+  private async _duplicate(): Promise<void> {
+    const category = this.config?.categories.find((item) => item.id === this.categoryId);
+    if (!category || !this.hass || !(await this._confirmLeave())) return;
+    try {
+      const copy = await duplicateCategory(this.hass, this.config!, category);
+      this._original = JSON.stringify(this._draft);
+      navigate(`${this.base}/settings/categories/${copy.id}`);
+    } catch (err) {
+      this._error = errorText(err);
+    }
+  }
+
+  // Whether to go on when there are unsaved changes.
+  private async _confirmLeave(): Promise<boolean> {
+    return (
+      !this._dirty ||
+      confirmDialog(this, {
         title: "Leave without saving?",
         text: "The changes of this category are lost.",
         confirm: "Leave",
         destructive: true,
-      }))
-    ) {
-      return;
-    }
+      })
+    );
+  }
+
+  private async _back(): Promise<void> {
+    if (!(await this._confirmLeave())) return;
     navigate(`${this.base}/settings/categories`);
   }
 
@@ -632,25 +657,10 @@ export class NcCategoryEditor extends LitElement {
   }
 
   private async _delete(): Promise<void> {
-    if (this._notifications().length) {
-      this._inUse = true;
-      return;
-    }
-    if (
-      !(await confirmDialog(this, {
-        title: `Delete ${this._draft?.name || "the category"}?`,
-        confirm: "Delete",
-        destructive: true,
-      }))
-    ) {
-      return;
-    }
+    const category = this.config?.categories.find((item) => item.id === this.categoryId);
+    if (!category || !this.hass) return;
     try {
-      await this.hass!.callWS({
-        type: `${DOMAIN}/item/delete`,
-        section: "categories",
-        item_id: this.categoryId,
-      });
+      if (!(await deleteCategory(this, this.hass, this.config!, category, this.base))) return;
       this._original = JSON.stringify(this._draft);
       navigate(`${this.base}/settings/categories`, true);
     } catch (err) {

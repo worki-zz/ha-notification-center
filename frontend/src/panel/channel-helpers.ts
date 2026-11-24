@@ -127,7 +127,11 @@ export function channelSummary(
 ): string {
   const ticked = modes.filter((mode) => settings.modes?.includes(mode.id));
   if (!ticked.length) return "Off";
-  return `${ticked.map((mode) => mode.name).join(", ")} · ${whenText(settings)}`;
+  const names =
+    modes.length > 1 && ticked.length === modes.length
+      ? "All home modes"
+      : ticked.map((mode) => mode.name).join(", ");
+  return `${names} · ${whenText(settings)}`;
 }
 
 /** The names of the push priorities and what each does, in one line. */

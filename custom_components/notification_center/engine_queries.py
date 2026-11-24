@@ -275,7 +275,10 @@ class EngineQueries:
         return {
             "state": total,
             "mode": self.modes.current["name"] if self.modes.current else None,
-            "categories": counts,
+            # By name (A to Z), as the categories show everywhere.
+            "categories": dict(
+                sorted(counts.items(), key=lambda item: item[0].casefold())
+            ),
             "top_notification": top["notification"] if top else None,
             "top_message": top["message"] if top else None,
         }

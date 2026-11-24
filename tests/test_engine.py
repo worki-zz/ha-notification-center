@@ -248,7 +248,7 @@ async def test_show_when_no_longer_met_closes(center: Center) -> None:
 async def test_retrigger_keeps_the_card(
     hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A trigger on an open card keeps its start time; a snoozed one shows."""
+    """A trigger on an open card keeps its start time; a snoozed one stays."""
     await center.add(
         "Bell",
         step(
@@ -272,8 +272,8 @@ async def test_retrigger_keeps_the_card(
     assert center.state("sensor.nc_bell") == "snoozed"
     hass.bus.async_fire("bell")
     await hass.async_block_till_done()
-    assert center.state("sensor.nc_bell") == "active"
-    assert center.kinds() == ["active", "snoozed", "active"]
+    assert center.state("sensor.nc_bell") == "snoozed"
+    assert center.kinds() == ["active", "snoozed"]
 
 
 async def test_expires_rows(
@@ -321,6 +321,39 @@ async def test_snooze_comes_back(
     assert center.state("sensor.nc_plants") == "active"
     assert center.events[-1][1]["source"] == "snooze_end"
     assert center.engine.cards_of(nid)[0].snoozed_until is None
+
+
+async def test_snooze_wins_over_a_new_trigger(
+    hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
+) -> None:
+    """A snoozed card triggered again stays snoozed and keeps its expiry."""
+    await center.set("input_boolean.door", "off")
+    nid = await center.add(
+        "Door",
+        step(
+            "Door open",
+            activation={
+                "type": "triggers",
+                "triggers": [state_trigger("input_boolean.door")],
+            },
+            done_when={"expires": {"hours": 2}},
+        ),
+    )
+    await center.set("input_boolean.door", "on")
+    card = center.engine.cards_of(nid)[0]
+    expires_at = card.expires_at
+    assert expires_at is not None
+    await center.call("snooze", "sensor.nc_door", duration={"minutes": 30})
+    await tick(hass, freezer, timedelta(minutes=10))
+    await center.set("input_boolean.door", "off")
+    await center.set("input_boolean.door", "on")
+    assert center.state("sensor.nc_door") == "snoozed"
+    card = center.engine.cards_of(nid)[0]
+    assert card.snoozed_until is not None
+    assert card.expires_at == expires_at
+    # The trigger action (Run now) still wakes it.
+    await center.call("trigger", "sensor.nc_door")
+    assert center.state("sensor.nc_door") == "active"
 
 
 async def test_snooze_until_tomorrow(

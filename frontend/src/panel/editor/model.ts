@@ -236,6 +236,7 @@ const BUTTON_NAMES: Record<string, string> = {
   done: "Done",
   dismiss: "Dismiss",
   snooze: "Snooze",
+  mute: "Mute",
   custom: "Button",
 };
 

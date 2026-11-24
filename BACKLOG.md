@@ -58,6 +58,9 @@ Overlaps with the button actions: an action that should run whenever a notificat
 ### Keep when done
 *Area: Channels (Push).* A *Keep when done* switch of the push: when the notification ends, the push is not removed but silently replaced by a closing line, such as *Ended at 14:32*, *Done by Dóra at 14:32* or *Muted by Kristóf*. Until then the push follows the card (Mute keeps it). *(Kristóf, 2026-11-23; phase 6.2)*
 
+### Speaker without announce while playing
+*Area: Sound.* A speaker that cannot announce (Home Assistant's announce feature) stops what it plays to play a chime or a message. A speaker-level setting *While playing*: *Skip*, *Play anyway*, or *After it stops* (with a timeout). Highlighted notifications always play. The reason shows in the Status dialog and the Activity log. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
+
 ## Low priority
 
 ### Hungarian frontend

@@ -676,7 +676,7 @@ NOTIFICATION_STATE_SCHEMA = vol.Schema(
 )
 
 # The actions of a button. They run one after the other in this fixed
-# order: Mute, the entity action, the notification state, the Home
+# order: the entity action, Mute, the notification state, the Home
 # Assistant actions (in their order), then the navigation (where the button
 # was pressed). One that cannot run is skipped; the others still run.
 BUTTON_ACTIONS_SCHEMA = vol.Schema(

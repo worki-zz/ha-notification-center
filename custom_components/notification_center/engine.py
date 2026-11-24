@@ -77,6 +77,7 @@ from .const import (
     EVENT_DISMISSED,
     EVENT_DONE,
     EVENT_SNOOZED,
+    SOURCE_ACTION,
     SOURCE_ENTITY,
     SOURCE_EXPIRES,
     SOURCE_SNOOZE_END,
@@ -725,6 +726,11 @@ class Engine(EngineQueries, EngineActions):
         ``since`` is when it became active (a scheduled card: when it was
         due); the Expires rows of the step count from it. A refreshed card
         keeps its expiry, unless ``since`` is given again.
+
+        Snooze wins: a snoozed card that is triggered again or has a new
+        scheduled occurrence is only refreshed (content, trigger data); it
+        stays snoozed and keeps its expiry. Only the trigger action (Run
+        now) wakes it.
         """
         now = dt_util.utcnow()
         key = (step.notification.id, step.step_id, entity_id or "")
@@ -732,10 +738,16 @@ class Engine(EngineQueries, EngineActions):
         trigger_data = _jsonable(trigger) if trigger else None
         if card is not None and card.is_open:
             self._refresh(card, trigger_data, overrides)
+            snoozed = card.phase == PHASE_SNOOZED
+            if snoozed and source != SOURCE_ACTION:
+                self._render(card)
+                self._save()
+                self._notify()
+                return card
             if since is not None:
                 self._set_expiry(card, step, since)
                 self._schedule_expiry(card)
-            if card.phase == PHASE_SNOOZED:
+            if snoozed:
                 self._cancel_unsnooze(card)
                 self._change(
                     card,

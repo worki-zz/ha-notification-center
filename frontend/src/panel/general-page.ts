@@ -6,6 +6,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import { type NotificationCenterConfig, type StateMessage } from "../shared/config";
+import { subpageTitle } from "./fields";
 import { navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import "./settings-colors";
@@ -76,9 +77,9 @@ export class NcGeneralPage extends LitElement {
     return html`<hass-subpage
       .hass=${this.hass}
       .narrow=${this.narrow}
-      .header=${page?.title ?? "General"}
       .backCallback=${() => navigate(`${this.base}/settings/general${this.page === "chimes" ? "/sound" : ""}`)}
     >
+      ${subpageTitle(page?.title ?? "General")}
       <div class="content">
         ${page
           ? page.intro.map((text) => html`<p class="intro">${text}</p>`)

@@ -2,7 +2,7 @@
 // General tab, in Home Assistant's own subpage layout.
 
 import { mdiBellOutline, mdiCogOutline, mdiShapeOutline } from "@mdi/js";
-import { LitElement, css, html, nothing, unsafeCSS } from "lit";
+import { LitElement, type PropertyValues, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
@@ -13,6 +13,7 @@ import {
   type NotificationCenterConfig,
   type StateMessage,
   colorCss,
+  sortedCategories,
 } from "../shared/config";
 import { cssColor } from "../shared/format";
 import { errorText, navigate } from "../shared/live";
@@ -20,6 +21,13 @@ import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
 import "./editor/info-dialog";
 import "./empty-state";
+import {
+  deleteCategory,
+  duplicateCategory,
+  notificationCount,
+  renderCategoryMenu,
+  viewCategoryNotifications,
+} from "./category-menu";
 import { dismissAll, openMoreInfo, renderNotificationMenu, runNow } from "./notification-menu";
 import "./settings-general";
 import { STATUS_STYLES, renderStatus, statusOf } from "./status";
@@ -60,6 +68,13 @@ export class NcSettings extends LitElement {
   public override connectedCallback(): void {
     super.connectedCallback();
     this._category = new URLSearchParams(window.location.search).get("category") ?? "";
+  }
+
+  protected override willUpdate(changed: PropertyValues): void {
+    // A category's "N notifications" opens this list from the Categories tab.
+    if (changed.has("tab") && this.tab === "notifications" && changed.get("tab")) {
+      this._category = new URLSearchParams(window.location.search).get("category") ?? "";
+    }
   }
 
   private _visible(): Notification[] {
@@ -128,9 +143,7 @@ export class NcSettings extends LitElement {
   private _renderCategories() {
     const config = this.config;
     if (!config) return nothing;
-    const categories = [...config.categories].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-    );
+    const categories = sortedCategories(config.categories);
     return html`<ha-card outlined>
       <ha-list-base class="rows">
         ${categories.map((item) => {
@@ -143,8 +156,22 @@ export class NcSettings extends LitElement {
               <ha-icon .icon=${item.icon || "mdi:bell"}></ha-icon>
             </div>
             <span slot="headline">${item.name}</span>
-            <span slot="supporting-text">${count === 1 ? "1 notification" : `${count} notifications`}</span>
-            ${this.narrow ? nothing : html`<ha-icon-next slot="end"></ha-icon-next>`}
+            <span slot="supporting-text">${notificationCount(count)}</span>
+            <div slot="end" class="end">
+              <ha-dropdown
+                @click=${(ev: Event) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                }}
+                @wa-select=${(ev: CustomEvent<{ item: { value: string } }>) =>
+                  this._categoryMenu(ev, item)}
+              >
+                <ha-icon-button slot="trigger" .label=${"Menu"}>
+                  <ha-icon icon="mdi:dots-vertical"></ha-icon>
+                </ha-icon-button>
+                ${renderCategoryMenu({ saved: true, count, deletable: item.id !== "general" })}
+              </ha-dropdown>
+            </div>
           </ha-list-item-button>`;
         })}
       </ha-list-base>
@@ -183,7 +210,7 @@ export class NcSettings extends LitElement {
           <ha-dropdown-item value="all" class=${selected ? "" : "selected"}>
             All
           </ha-dropdown-item>
-          ${config.categories.map(
+          ${sortedCategories(config.categories).map(
             (item) => html`<ha-dropdown-item
               .value=${item.id}
               class=${item.id === this._category ? "selected" : ""}
@@ -307,6 +334,30 @@ export class NcSettings extends LitElement {
       .notification=${item}
       @info-closed=${() => (this._info = undefined)}
     ></nc-info-dialog>`;
+  }
+
+  private async _categoryMenu(
+    ev: CustomEvent<{ item: { value: string } }>,
+    item: Category,
+  ): Promise<void> {
+    const hass = this.hass!;
+    const config = this.config!;
+    switch (ev.detail.item.value) {
+      case "notifications":
+        viewCategoryNotifications(this.base, item.id);
+        return;
+      case "duplicate":
+        await this._run(async () => {
+          const copy = await duplicateCategory(hass, config, item);
+          navigate(`${this.base}/settings/categories/${copy.id}`);
+        });
+        return;
+      case "delete":
+        await this._run(async () => {
+          await deleteCategory(this, hass, config, item, this.base);
+        });
+        return;
+    }
   }
 
   private async _menu(ev: CustomEvent<{ item: { value: string } }>, item: Notification): Promise<void> {

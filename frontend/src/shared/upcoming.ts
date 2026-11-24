@@ -16,6 +16,7 @@ import {
   doneEarly,
   inAudience,
   liveCards,
+  onDashboard,
   personOf,
   stepOf,
   type LiveCard,
@@ -40,6 +41,8 @@ export interface Upcoming {
 export interface UpcomingFilter {
   categories?: string[];
   ignoreAudience?: boolean;
+  // A card or badge placed for one notification: the channels do not count.
+  ignoreChannels?: boolean;
 }
 
 /** One line of Upcoming: a held or snoozed card, or a scheduled step. */
@@ -77,6 +80,9 @@ export function scheduledSteps(
     for (const item of entry?.upcoming ?? []) {
       const step = stepOf(notification, item.step_id);
       if (!step) continue;
+      // Shown when the Dashboard gets it in some home mode and the viewer
+      // in some state (the home mode and person state now do not count).
+      if (!filter.ignoreChannels && !onDashboard(category, step)) continue;
       if (!filter.ignoreAudience && !inAudience(category, step, person, people)) continue;
       // A step with an open card shows that card instead.
       if (entry.cards.some((card) => card.step_id === step.id && card.status !== "done")) {
@@ -124,7 +130,9 @@ export function upcomingToday(
   const held = liveCards(config, state, { ...common, statuses: ["active"], withHeld: true }).filter(
     (live) => live.held,
   );
-  const snoozed = liveCards(config, state, { ...common, statuses: ["snoozed"] });
+  const snoozed = liveCards(config, state, { ...common, statuses: ["snoozed"] }).filter((live) =>
+    onDashboard(live.category, live.step),
+  );
   const end = endOfToday(now);
   return [
     ...held.map((live) => ({

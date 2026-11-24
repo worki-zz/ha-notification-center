@@ -49,13 +49,15 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 ## Frontend map (`frontend/src/`)
 
 - `shared/`: config types (`config.ts`), live card logic (`live.ts`, `live-card.ts`),
-  Upcoming of the Overview and the list card (`upcoming.ts`), channel helpers (`channels.ts`),
+  Upcoming of the Overview and the list card (`upcoming.ts`), status of one notification for a
+  card or badge (`entity-status.ts`), channel helpers (`channels.ts`),
   look of a notification (`notification-view.ts`), formatting, text, store.
-- `card/`: dashboard cards and their editors.
+- `card/`: dashboard cards, the Notification badge (`notification-center-badge.ts`) and their
+  editors; Show when / Ignore audience fields (`nc-options.ts`).
 - `panel/notification-center-panel.ts`: the panel shell; `settings-page.ts`: Notifications
   list and settings tabs; `settings-*.ts`: General subpages (general, modes, people, lights,
   sound, colors); `category-editor.ts`; `audience-table.ts`, `channel-table.ts` (Audience and Channels tables), `channel-helpers.ts` (their counts, names and summaries), `table-styles.ts`;
-  `notification-menu.ts` (the ... menu of the list and the editor);
+  `notification-menu.ts` (the ... menu of the list and the editor), `category-menu.ts` (the same for a category);
   `ha-elements.ts`, `fields.ts`, `confirm.ts`, `dialog-back.ts`: shared UI helpers.
 - `panel/editor/`: notification editor (`notification-editor.ts`), its Entities block
   (`entities-block.ts`), one step (`step-editor.ts`), schedule, interaction (button)
