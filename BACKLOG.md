@@ -21,7 +21,7 @@ Overlaps with the button actions: an action that should run whenever a notificat
 *Area: Notification editor.* A button's Action (Home Assistant action) can target the card's own entity, so one button action fits every entity of the notification without entity actions. *(Kristóf, 2026-11-20; phase 4)*
 
 ### Notification details view
-*Area: Notification content.* A detail page per notification (like a more-info dialog of its own) with the title, the message, the Info line, the buttons, the attachments and the time, plus the data and history. Once it exists, it is also offered as a button action ("Notification details") next to Entity action, More info, Action and Navigate, and as one of the pages a tapped push can open (besides a path). *(Phase 3 and phase 4, 2026-11-19; extended by Kristóf, 2026-11-23, phase 6.2)*
+*Area: Notification content.* A detail page per notification (like a more-info dialog of its own) with the title, the message, the Info line, the buttons, the attachments and the time, plus the data and history. Once it exists, it is also offered as a button action ("Notification details") next to Entity action, More info, Action and Navigate, and as one of the pages a tapped push can open (besides a path). Until then the Navigation *Notification info* opens the Status dialog on the Overview; it then opens this page, which may become the default navigation. *(Phase 3 and phase 4, 2026-11-19; extended by Kristóf, 2026-11-23, phase 6.2 and 2026-11-24)*
 
 ### Skip next
 *Area: Buttons and interactions.* Skip the next occurrence of a scheduled or repeating notification without marking it done, for example when the garbage collection is moved or the family is away. *(Dev plan, 2026-11-15)*

@@ -149,6 +149,20 @@ export function withOwnSensor(before: Obj[], after: Obj[], sensor: string | unde
   });
 }
 
+/** A step by its message, shortened; "Step N" while it has none. */
+export function stepLabel(step: { message?: string | null }, index: number): string {
+  // Placeholders and template variables read as plain words: {Area} and
+  // {{ states('sensor.x') }} lose their braces.
+  const text = (step.message ?? "")
+    .replace(/\{\{-?\s*(.*?)\s*-?\}\}/g, "$1")
+    .replace(/\{%-?.*?-?%\}/g, "")
+    .replace(/\{(\w+(?: \w+)?)\}/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return `Step ${index + 1}`;
+  return text.length > 28 ? `${text.slice(0, 27)}…` : text;
+}
+
 /** A new notification: one step that only the trigger action starts. */
 export function newNotification(category?: Category): EditorNotification {
   return {
@@ -314,15 +328,14 @@ function toEditorItem(
   const { [key]: _kind, target, ...options } = item;
   void _kind;
   if (kind === NOTIFICATION_STATE) {
+    // This notification's sensor too (empty only until it has one); the
+    // built-in row drops it again (markState).
     const ref = options.notification;
-    if (ref === selfId || !ref) {
-      delete options.notification;
-    } else {
-      const sensor = sensorOf(state, ref);
-      if (sensor) options.notification = sensor;
-    }
+    const sensor = sensorOf(state, ref || selfId);
+    if (sensor) options.notification = sensor;
+    else if (!ref || ref === selfId) delete options.notification;
     if (typeof options.step === "string") {
-      const number = numbers.get(`${String(ref)}|${options.step}`);
+      const number = numbers.get(`${String(ref || selfId)}|${options.step}`);
       if (number !== undefined) options.step = number;
     }
   } else {
@@ -377,14 +390,16 @@ export function toEditor(
       }
       // Steps 2 and later: a Notification state trigger on this
       // notification, first after the one above, is the row at the top.
-      if (index > 0) markState(step.activation.triggers, first?.[PINNED] ? 1 : 0, "trigger");
+      if (index > 0) {
+        markState(step.activation.triggers, first?.[PINNED] ? 1 : 0, "trigger", selfSensor);
+      }
     }
     step.conditions = {
       activate_only_while_met: step.conditions?.activate_only_while_met ?? true,
       hide_while_not_met: step.conditions?.hide_while_not_met ?? true,
       conditions: conditions(step.conditions?.conditions),
     };
-    if (index > 0) markState(step.conditions.conditions, 0, "condition");
+    if (index > 0) markState(step.conditions.conditions, 0, "condition", selfSensor);
     step.done_when = {
       triggers: triggers(step.done_when?.triggers),
       activation_conditions_no_longer_true: step.done_when?.activation_conditions_no_longer_true ?? false,
@@ -535,13 +550,29 @@ export function pinnedEntities(step: EditorStep): PinnedEntities | undefined {
   return { item, kind: item.trigger === ENTITIES_NUMERIC ? "numeric" : "state", options };
 }
 
+/** The Step of the built-in Notification state row set to any step (left out when saved). */
+export const ANY_STEP = "any";
+
 // Marks the Notification state row (steps 2 and later) while it is edited.
 export const PINNED_STATE = "_nc_pinned_state";
 
-function markState(items: Obj[], at: number, key: "trigger" | "condition"): void {
+function markState(
+  items: Obj[],
+  at: number,
+  key: "trigger" | "condition",
+  selfSensor: string | undefined,
+): void {
   const item = items[at];
   const options = item?.options as Obj | undefined;
-  if (item && options && item[key] === NOTIFICATION_STATE && !options.notification && options.step !== undefined) {
+  if (
+    item &&
+    options &&
+    item[key] === NOTIFICATION_STATE &&
+    (!options.notification || options.notification === selfSensor)
+  ) {
+    delete options.notification;
+    // Saved without a step: any step.
+    if (options.step === undefined) options.step = ANY_STEP;
     item[PINNED_STATE] = true;
   }
 }
@@ -559,7 +590,9 @@ function savedState(items: Obj[]): Obj[] {
       if (!item[PINNED_STATE]) return item;
       const { [PINNED_STATE]: _mark, ...rest } = item;
       void _mark;
-      return rest;
+      const options = { ...((rest.options as Obj | undefined) ?? {}) };
+      if (options.step === ANY_STEP) delete options.step;
+      return { ...rest, options };
     });
 }
 

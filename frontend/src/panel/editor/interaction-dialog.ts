@@ -173,6 +173,8 @@ export function actionsText(
     );
   } else if (navigation?.type === "navigate") {
     parts.push(navigation.path ? `Navigate: ${navigation.path}` : "Navigate");
+  } else if (navigation?.type === "notification_info") {
+    parts.push("Notification info");
   }
   return parts;
 }
@@ -652,6 +654,7 @@ export class NcInteractionDialog extends LitElement {
               options: [
                 { value: "navigate", label: "Navigate" },
                 { value: "more_info", label: "More info" },
+                { value: "notification_info", label: "Notification info" },
               ],
             },
           },
@@ -663,7 +666,9 @@ export class NcInteractionDialog extends LitElement {
               navigation:
                 value === "navigate"
                   ? { type: "navigate", path: "" }
-                  : { type: "more_info", entity_id: null },
+                  : value === "notification_info"
+                    ? { type: "notification_info" }
+                    : { type: "more_info", entity_id: null },
             });
           },
         )}
@@ -680,11 +685,15 @@ export class NcInteractionDialog extends LitElement {
                 });
               }}
             ></ha-entity-picker>`
-          : field(hass, { navigation: {} }, navigation.path, "Path", (value) =>
-              this._setActions({
-                navigation: { type: "navigate", path: (value as string) ?? "" },
-              }),
-            )}
+          : navigation.type === "navigate"
+            ? field(hass, { navigation: {} }, navigation.path, "Path", (value) =>
+                this._setActions({
+                  navigation: { type: "navigate", path: (value as string) ?? "" },
+                }),
+              )
+            : html`<div class="secondary">
+                Opens the notification's Status dialog on the Overview.
+              </div>`}
       </div>`,
       removable ? () => this._setActions({ navigation: undefined }) : undefined,
     );
@@ -772,7 +781,12 @@ export class NcInteractionDialog extends LitElement {
             The push opens ${navigation.path || "the Navigate page"}
             (${this._tapNavigationSource(button)}).
           </div>`
-        : this._renderOpenOnTap(button, navigation?.type === "more_info")}`;
+        : navigation?.type === "notification_info"
+          ? html`<div class="secondary">
+              The push opens the Overview with the notification's Status dialog
+              (${this._tapNavigationSource(button)}).
+            </div>`
+          : this._renderOpenOnTap(button, navigation?.type === "more_info")}`;
   }
 
   // The navigation a Tap does: its own actions', or the run button's.
@@ -786,7 +800,9 @@ export class NcInteractionDialog extends LitElement {
   private _tapNavigationSource(button: Button): string {
     const run = this._runOf(button);
     const label = run ? this.runChoices.find((choice) => choice.value === run)?.label : undefined;
-    return label ? `Navigate of ${label}` : "Navigate";
+    const name =
+      this._tapNavigation(button)?.type === "notification_info" ? "Notification info" : "Navigate";
+    return label ? `${name} of ${label}` : name;
   }
 
   private _renderPush(button: Button) {

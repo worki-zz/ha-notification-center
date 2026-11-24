@@ -5,6 +5,8 @@
 // them on demand. They are loaded here the way Home Assistant's own panel
 // resolver does, so the editor uses the very same elements.
 
+import "./editor/builtin-forms";
+import type { NcStateForm } from "./editor/builtin-forms";
 import "./editor/entities-form";
 import type { EntitiesKind, NcEntitiesForm } from "./editor/entities-form";
 
@@ -60,16 +62,19 @@ async function load(hass: unknown, host: HTMLElement): Promise<boolean> {
 // The Notification entities triggers and conditions: inside the editor
 // they show the compact form of Home Assistant's own State and Numeric
 // state triggers instead of the generic form (with a check box for each
-// optional field) that Home Assistant builds from their description.
+// optional field) that Home Assistant builds from their description. The
+// Notification state ones show the form of the built-in row.
 const ENTITIES_KINDS: Record<string, EntitiesKind> = {
   "notification_center.entities_state": "state",
   "notification_center.entities_numeric_state": "numeric",
 };
+const NOTIFICATION_STATE = "notification_center.notification_state";
 
 interface PlatformElement extends HTMLElement {
   hass: unknown;
   disabled: boolean;
   _ncForm?: NcEntitiesForm;
+  _ncStateForm?: NcStateForm;
   [key: string]: unknown;
 }
 
@@ -82,11 +87,9 @@ function patchPlatform(name: string, key: "trigger" | "condition"): void {
     const original = proto.render;
     proto.render = function (this: PlatformElement) {
       const item = this[key] as Record<string, unknown> | undefined;
-      const kind = item ? ENTITIES_KINDS[String(item[key])] : undefined;
-      if (!item || !kind) return original.call(this);
-      let form = this._ncForm;
-      if (!form) {
-        form = document.createElement("nc-entities-form");
+      if (!item) return original.call(this);
+      // The form's options go into the item, without a target.
+      const listen = (form: HTMLElement) => {
         form.setAttribute("with-notification", "");
         form.addEventListener("value-changed", (ev) => {
           ev.stopPropagation();
@@ -101,6 +104,26 @@ function patchPlatform(name: string, key: "trigger" | "condition"): void {
             }),
           );
         });
+      };
+      if (item[key] === NOTIFICATION_STATE) {
+        let stateForm = this._ncStateForm;
+        if (!stateForm) {
+          stateForm = document.createElement("nc-state-form");
+          listen(stateForm);
+          this._ncStateForm = stateForm;
+        }
+        stateForm.hass = this.hass as NcStateForm["hass"];
+        stateForm.condition = key === "condition";
+        stateForm.disabled = this.disabled;
+        stateForm.value = { ...((item.options as Record<string, unknown> | undefined) ?? {}) };
+        return stateForm;
+      }
+      const kind = ENTITIES_KINDS[String(item[key])];
+      if (!kind) return original.call(this);
+      let form = this._ncForm;
+      if (!form) {
+        form = document.createElement("nc-entities-form");
+        listen(form);
         this._ncForm = form;
       }
       form.hass = this.hass as NcEntitiesForm["hass"];

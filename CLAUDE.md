@@ -58,7 +58,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
   list and settings tabs; `settings-*.ts`: General subpages (general, modes, people, lights,
   sound, colors); `category-editor.ts`; `audience-table.ts`, `channel-table.ts` (Audience and Channels tables), `channel-helpers.ts` (their counts, names and summaries), `table-styles.ts`;
   `notification-menu.ts` (the ... menu of the list and the editor), `category-menu.ts` (the same for a category);
-  `ha-elements.ts`, `fields.ts`, `confirm.ts`, `dialog-back.ts`: shared UI helpers.
+  `ha-elements.ts`, `fields.ts`, `confirm.ts`, `dialog-back.ts`, `leave-guard.ts` (Back with unsaved changes): shared UI helpers.
 - `panel/editor/`: notification editor (`notification-editor.ts`), its Entities block
   (`entities-block.ts`), one step (`step-editor.ts`), schedule, interaction (button)
   dialog, entity groups, Status dialog (`info-dialog.ts`), condition Test for own

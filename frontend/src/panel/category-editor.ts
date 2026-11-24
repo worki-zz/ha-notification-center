@@ -22,7 +22,6 @@ import {
   categoryButtons,
   errorText,
   liveButtons,
-  navigate,
   snoozeChoices,
 } from "../shared/live";
 import "../shared/notification-view";
@@ -40,6 +39,7 @@ import {
   viewCategoryNotifications,
 } from "./category-menu";
 import { confirmDialog } from "./confirm";
+import { LeaveGuard } from "./leave-guard";
 import { chimeField, colorField, highlightField } from "./color-field";
 import { field, subpageTitle } from "./fields";
 import { BLOCK_INTROS, BLOCK_STYLES, block } from "./editor/block";
@@ -95,6 +95,27 @@ export class NcCategoryEditor extends LitElement {
 
   private get _isNew(): boolean {
     return this.categoryId === "new";
+  }
+
+  // Back of the browser or the app, and reload, ask first while there are
+  // changes.
+  private _guard = new LeaveGuard(
+    () => this._dirty,
+    () => this._confirmLeave(),
+  );
+
+  public override connectedCallback(): void {
+    super.connectedCallback();
+    this._guard.connect();
+  }
+
+  public override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._guard.disconnect();
+  }
+
+  protected override updated(): void {
+    this._guard.update();
   }
 
   private get _dirty(): boolean {
@@ -595,7 +616,7 @@ export class NcCategoryEditor extends LitElement {
     try {
       const copy = await duplicateCategory(this.hass, this.config!, category);
       this._original = JSON.stringify(this._draft);
-      navigate(`${this.base}/settings/categories/${copy.id}`);
+      await this._guard.navigate(`${this.base}/settings/categories/${copy.id}`);
     } catch (err) {
       this._error = errorText(err);
     }
@@ -616,7 +637,7 @@ export class NcCategoryEditor extends LitElement {
 
   private async _back(): Promise<void> {
     if (!(await this._confirmLeave())) return;
-    navigate(`${this.base}/settings/categories`);
+    await this._guard.navigate(`${this.base}/settings/categories`);
   }
 
   private async _save(): Promise<void> {
@@ -638,7 +659,7 @@ export class NcCategoryEditor extends LitElement {
           data,
         });
         this._original = JSON.stringify(this._draft);
-        navigate(`${this.base}/settings/categories/${created.id}`, true);
+        await this._guard.navigate(`${this.base}/settings/categories/${created.id}`, true);
       } else {
         await this.hass.callWS({
           type: `${DOMAIN}/item/update`,
@@ -662,7 +683,7 @@ export class NcCategoryEditor extends LitElement {
     try {
       if (!(await deleteCategory(this, this.hass, this.config!, category, this.base))) return;
       this._original = JSON.stringify(this._draft);
-      navigate(`${this.base}/settings/categories`, true);
+      await this._guard.navigate(`${this.base}/settings/categories`, true);
     } catch (err) {
       this._error = errorText(err);
     }

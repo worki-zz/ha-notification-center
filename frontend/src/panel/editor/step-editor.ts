@@ -673,6 +673,7 @@ export class NcStepEditor extends LitElement {
         .value=${options}
         .stepIndex=${this.stepIndex}
         .stepCount=${this.stepCount}
+        .condition=${key === "condition"}
         @value-changed=${(ev: CustomEvent<{ value: Obj }>) => {
           ev.stopPropagation();
           changed({ [key]: NOTIFICATION_STATE, options: ev.detail.value, [PINNED_STATE]: true });

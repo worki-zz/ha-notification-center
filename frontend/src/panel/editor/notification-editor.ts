@@ -11,13 +11,14 @@ import { keyed } from "lit/directives/keyed.js";
 import { DOMAIN, type CardState, type Notification, type NotificationCenterConfig, type StateMessage, colorCss, sortedCategories } from "../../shared/config";
 import { cssColor } from "../../shared/format";
 import { errorTarget, errorWithPlace } from "./error-target";
-import { cardData, categoryOf, errorText, liveButtons, navigate } from "../../shared/live";
+import { cardData, categoryOf, errorText, liveButtons } from "../../shared/live";
 import "../../shared/notification-view";
 import type { NotificationViewData } from "../../shared/notification-view";
 import { isTemplate, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import { chimeField, colorField, highlightField } from "../color-field";
 import { confirmDialog } from "../confirm";
+import { LeaveGuard } from "../leave-guard";
 import { type FieldOptions, field, iconSelect, subpageTitle } from "../fields";
 import { renderStatus, statusOf } from "../status";
 import { dismissAll, openMoreInfo, renderNotificationMenu, runNow } from "../notification-menu";
@@ -25,11 +26,12 @@ import { BLOCK_INTROS, block } from "./block";
 import "./group-dialog";
 import "./info-dialog";
 import { ACTION_SLOT_STYLES } from "./action-slots";
-import { type EditorNotification, type EditorStep, applyCategoryDefaults, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, toEditor, toSaved } from "./model";
+import { type EditorNotification, type EditorStep, applyCategoryDefaults, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, stepLabel, toEditor, toSaved } from "./model";
 import "./entities-block";
 import "./step-editor";
 import { NOTIFICATION_EDITOR_STYLES } from "./notification-editor.styles";
 import { setEntitiesResolver } from "./entities-form";
+import { setStepsResolver } from "./builtin-forms";
 
 const MAX_UNDO = 50;
 
@@ -91,13 +93,13 @@ export class NcNotificationEditor extends LitElement {
   public override connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener("keydown", this._keydown);
-    window.addEventListener("beforeunload", this._beforeUnload);
+    this._guard.connect();
   }
 
   public override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("keydown", this._keydown);
-    window.removeEventListener("beforeunload", this._beforeUnload);
+    this._guard.disconnect();
     window.clearTimeout(this._previewTimer);
   }
 
@@ -132,6 +134,7 @@ export class NcNotificationEditor extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     setEntitiesResolver(this._entitiesOfSensor);
+    setStepsResolver(this._stepsOfSensor);
     if (changed.has("notificationId") && this._loadedFor !== this.notificationId) {
       this._draft = undefined;
       this._yaml = undefined;
@@ -214,6 +217,19 @@ export class NcNotificationEditor extends LitElement {
     return listedEntities(hass, toEditor(stored as unknown as EditorNotification, all, this.state.notifications));
   };
 
+  // The steps of a notification by its sensor ("" or this one's: the
+  // draft's), for the Notification state forms.
+  private _stepsOfSensor = (sensor: string): string[] | undefined => {
+    const draft = this._draft;
+    const own = !sensor || (!!draft?.id && sensor === this._sensor());
+    if (own) return draft?.steps.map((step, index) => stepLabel(step, index));
+    const id = Object.entries(this.state?.notifications ?? {}).find(
+      ([, item]) => item.entity_id === sensor,
+    )?.[0];
+    const stored = this.config?.notifications.find((item) => item.id === id);
+    return stored?.steps.map((step, index) => stepLabel(step as { message?: string }, index));
+  };
+
   private _changeStep(index: number, step: EditorStep): void {
     const steps = [...this._draft!.steps];
     steps[index] = step;
@@ -258,9 +274,16 @@ export class NcNotificationEditor extends LitElement {
     else this._undoChange();
   };
 
-  private _beforeUnload = (ev: BeforeUnloadEvent): void => {
-    if (this._dirty) ev.preventDefault();
-  };
+  // Back of the browser or the app, and reload, ask first while there are
+  // changes.
+  private _guard = new LeaveGuard(
+    () => this._dirty,
+    () => this._confirmLeave(),
+  );
+
+  protected override updated(): void {
+    this._guard.update();
+  }
 
   // -- Preview ---------------------------------------------------------------
 
@@ -642,19 +665,6 @@ export class NcNotificationEditor extends LitElement {
 
   // -- Steps -----------------------------------------------------------------
 
-  private _stepLabel(step: EditorStep, index: number): string {
-    // Placeholders and template variables read as plain words: {Area} and
-    // {{ states('sensor.x') }} lose their braces.
-    const text = step.message
-      .replace(/\{\{-?\s*(.*?)\s*-?\}\}/g, "$1")
-      .replace(/\{%-?.*?-?%\}/g, "")
-      .replace(/\{(\w+(?: \w+)?)\}/g, "$1")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!text) return `Step ${index + 1}`;
-    return text.length > 28 ? `${text.slice(0, 27)}…` : text;
-  }
-
   private _renderSteps(draft: EditorNotification) {
     const index = Math.min(this._step, draft.steps.length - 1);
     const step = draft.steps[index];
@@ -695,7 +705,7 @@ export class NcNotificationEditor extends LitElement {
                 : item.id && live.has(item.id)
                   ? html`<ha-icon class="live-dot" icon="mdi:circle-medium" title="Active"></ha-icon>`
                   : nothing}
-              <span class="step-label">${this._stepLabel(item, i)}</span>
+              <span class="step-label">${stepLabel(item, i)}</span>
             </ha-tab-group-tab>`,
           )}
         </ha-tab-group>
@@ -930,7 +940,7 @@ export class NcNotificationEditor extends LitElement {
             enabled: false,
           });
           this._original = JSON.stringify(this._draft);
-          navigate(`${this.base}/settings/notifications/${copy.id}`);
+          await this._guard.navigate(`${this.base}/settings/notifications/${copy.id}`);
         });
         return;
       case "toggle":
@@ -952,7 +962,7 @@ export class NcNotificationEditor extends LitElement {
               item_id: draft.id,
             });
             this._original = JSON.stringify(this._draft);
-            navigate(`${this.base}/settings`);
+            await this._guard.navigate(`${this.base}/settings`);
           });
         }
         return;
@@ -996,8 +1006,7 @@ export class NcNotificationEditor extends LitElement {
       this._original = JSON.stringify(this._draft);
       if (this._isNew) {
         this._loadedFor = item.id;
-        history.replaceState(history.state, "", `${this.base}/settings/notifications/${item.id}`);
-        window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: true } }));
+        await this._guard.navigate(`${this.base}/settings/notifications/${item.id}`, true);
       }
     } catch (err) {
       const text = errorText(err);
@@ -1038,7 +1047,7 @@ export class NcNotificationEditor extends LitElement {
   private async _back(): Promise<void> {
     if (this._dirty && !(await this._confirmLeave())) return;
     this._original = JSON.stringify(this._draft);
-    navigate(`${this.base}/settings`);
+    await this._guard.navigate(`${this.base}/settings`);
   }
 
   private async _run(task: () => Promise<unknown>): Promise<void> {
