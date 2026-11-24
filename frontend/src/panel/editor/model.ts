@@ -253,9 +253,14 @@ export function detachCategoryButtons(
   }
 }
 
-/** A new id for an item, so an entity action can point to a new button. */
+/**
+ * A new id for an item, so an entity action can point to a new button.
+ * Not crypto.randomUUID: browsers offer it only on HTTPS (or localhost),
+ * and Home Assistant is often opened over plain HTTP.
+ */
 export function newId(): string {
-  return crypto.randomUUID().replace(/-/g, "");
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /** A place for an entity action: a switched on button that runs one. */
