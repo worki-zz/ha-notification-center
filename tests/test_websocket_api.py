@@ -286,7 +286,7 @@ async def test_import_export_round_trip(
     exported = (await client.ok("config/export"))["yaml"]
     data = yaml_util.parse_yaml(exported)
     assert isinstance(data, dict)
-    assert data["version"] == 4
+    assert data["version"] == 5
     stored = hass_storage[CONFIG_KEY]["data"]
     assert {key: value for key, value in data.items() if key != "version"} == stored
 
@@ -331,7 +331,7 @@ async def test_import_of_an_older_export(
     }
     assert actions["mute"] == {"entity_action": True}
     assert actions["off"] == {"ha_actions": [{"action": "light.turn_off"}]}
-    assert actions["quiet"] == {"silence": True}
+    assert actions["quiet"] == {"mute": True}
     assert actions["clips"] == {}
 
 
@@ -483,5 +483,5 @@ async def test_export_download(
     assert "attachment" in response.headers["Content-Disposition"]
     data = yaml_util.parse_yaml(await response.text())
     assert isinstance(data, dict)
-    assert data["version"] == 4
+    assert data["version"] == 5
     assert data["categories"] == hass_storage[CONFIG_KEY]["data"]["categories"]

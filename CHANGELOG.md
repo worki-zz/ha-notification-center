@@ -1,10 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A speaker's *Repeat* has a *Times* field for Loop and Recurring: how many times it plays in all; empty, it repeats until the notification is done or muted. *Repeat*, *Every* and *Times* share one row (it wraps on a phone), with *Until done or muted.* under it.
+- The Notification Center card has a *Show* option (`show`) with *Active*, *Upcoming* and *Empty state* (default: Active). *Upcoming* lists what shows later today and the snoozed notifications under the active ones, as on the Overview, each with its *Shows …* line. It replaces `show_empty`; `show_empty: true` still works and reads as Active and Empty state.
+- *More info* in the ... menu of a notification (the Notifications list and the editor's header) opens the sensor's dialog.
+- The notification sensor has an `icon_color` attribute: active, the notification's colour (a system colour's name or `#rrggbb`); snoozed `orange`; done `green`; upcoming, dismissed, expired, idle and disabled `grey`. Home Assistant does not colour the icon by it, but cards and templates can use it. The status chips use the same colours: *Active* in the notification's colour, *Snoozed* orange, *Upcoming* and *Disabled* grey.
+
+### Changed
+
+- **Silence is now Mute** everywhere: the button action, its *Add mute* button, the Status dialog (*Muted*), the help texts and the README. The stored keys change too (a button's `silence` action is `mute`, an open notification's `silenced` is `muted`, the device sensors' `silenced` attribute is `muted`, the `card/action` websocket command takes `mute`); saved settings, open notifications and older YAML exports are upgraded when loaded (export version 5).
+- The ... menu is the same in the Notifications list and the editor's header: *More info*, *Status*, *Run now for me*, *Run now for everyone*, *Dismiss notifications* (was *Clear notifications*), *Duplicate*, (the editor's *Edit in YAML*), then *Disable* and *Delete*. The list gains *Status*, *Run now for me* and *Dismiss notifications*. In the step menu *Run this step for me* comes before *Run this step for everyone*.
+- The lights' own highlight effect is called **Notification Pulse** (stored as `notification_pulse`, upgraded from `blink`), so a light's own effect named *blink* (Hue) can be chosen. A dimmable light (RGB too) now pulses between its brightness and half of it instead of turning off; a switch still turns on and off.
+- In the button dialog the built-in Done, Dismiss and Snooze state rows are titled by their type with their own icon and a switch that is always on, like the Entity action row: *Closes the notification as done.*, *Closes the notification without marking it done.*, and Snooze with its times under the title. The Mute row is laid out like the Entity action row, with its delete button at the end.
+
+### Fixed
+
+- The Activity log's detail dialog showed nothing under *What happened* for the notification sensors. The sensors are now written in the context of what caused the change (the entity's state change, the action and its user), so the log finds the cause.
+- Dragging a row by its handle in the Notifications list sometimes did not start on a desktop, because the browser started dragging the row's link instead.
+
 ## 0.7.3
 
 ### Added
 
-- *Status* in the notification editor's menu (and a click on its status chip) opens a dialog of the notification's status: active since, snoozed until, hidden, last active, last done, next due. For each active step it lists every channel and what it does now: *Sends to Anna and Béla*, *Waiting for home mode: Night (now Away)*, *Delay until 18:40*, *Nobody in the audience: Anna is not home*, *Off*, *Silenced*, and for Push the people with no phone set. Under Dashboard and Push (then only headings) one row per person says whether they get it and why not (*Not home · Not in the audience while not home*, *No phone set*). *Step status* in the step menu shows the same for one step. The entity's more-info is a button in the dialog's header.
+- *Status* in the notification editor's menu (and a click on its status chip) opens a dialog of the notification's status: active since, snoozed until, hidden, last active, last done, next due. For each active step it lists every channel and what it does now: *Sends to Anna and Béla*, *Waiting for home mode: Night (now Away)*, *Delay until 18:40*, *Nobody in the audience: Anna is not home*, *Off*, *Muted*, and for Push the people with no phone set. Under Dashboard and Push (then only headings) one row per person says whether they get it and why not (*Not home · Not in the audience while not home*, *No phone set*). *Step status* in the step menu shows the same for one step. The entity's more-info is a button in the dialog's header.
 - A single-step notification shows a green dot on its step tab while it is active, as a numbered step shows a green number.
 - Live marks in the editor's Channels and Audience tables: a green dot at the home mode now; in the column of the home mode now (and at each person's state now) a ticked box is green; each person's state now under their name; a badge on each channel icon and person avatar, as on a tile card: a green check when it sends or gets the notification now, an orange timer while a delay applies, an orange pause when the home mode or person state holds it back, a grey cross when no home mode or state is ticked at all. The Status dialog uses the same marks. The channel dialog marks the home mode now with an *Active* tag, and names a light, speaker or siren as the Entities dialogs do (name, then area ▸ device).
 - A person with no sleep condition has a disabled *Asleep* box in the Audience table instead of none.
@@ -46,7 +67,7 @@ Code review fixes, button dialog order, Tap behavior as one block, export in the
 - A light shows the new settings (brightness, colour, effect) at once when they are saved while it shows a card; it also blinks again.
 - A channel's **Test** uses the values of the dialog for the test only; the running light, speaker or siren keeps its saved settings (closing the dialog with Cancel used to leave the tried values in use).
 - A sounding siren moves to a changed entity, and stops when the integration unloads or reloads.
-- A button's actions run one after the other: each waits for the one before it (Silence, the entity action, the notification state, then the Home Assistant actions). The panel does not wait for the actions to finish.
+- A button's actions run one after the other: each waits for the one before it (Mute, the entity action, the notification state, then the Home Assistant actions). The panel does not wait for the actions to finish.
 - A *Notification entities* trigger in an automation keeps following the lists after the integration is reloaded, and passes the context of the state change on.
 - Saving checks the notification and step named by a *Notification state* or *Notification entities* condition too (not only triggers), and the step of a trigger or condition. Deleting a notification that others refer to says which ones.
 - Two changes of the configuration made at the same time no longer lose one of them (they run one after the other).
@@ -62,7 +83,7 @@ Code review fixes, button dialog order, Tap behavior as one block, export in the
 
 ### Changed
 
-- A button's dialog shows its Actions in this order: *Notification state* (fixed on Done, Dismiss and Snooze), *Entity action* (a switch, always there), *Silence* (added with *Add silence*, deleted from its row), the Home Assistant actions and *Navigation*. They still run Silence first.
+- A button's dialog shows its Actions in this order: *Notification state* (fixed on Done, Dismiss and Snooze), *Entity action* (a switch, always there), *Mute* (added with *Add mute*, deleted from its row), the Home Assistant actions and *Navigation*. They still run Mute first.
 - **Tap behavior** is one block, in the category too: *Action* (the Tap's Actions, edited as a button's, with the Navigation always in it) or *Button action* (only the button is chosen). A notification follows the category's whole block, or has its own; *Reset* beside Tap behavior follows the category again. Saved Taps that only showed more info, or ran the category's button, follow the category (storage minor 5, export version 4).
 - The *Notification entities* trigger at the top of Activation says in its title whether it is *Set* or *Not in use*.
 - The push and the engine take a card's buttons from the same place (one copy of the code); the same for the condition of a mode.
@@ -73,7 +94,7 @@ Button action list.
 
 ### Changed
 
-- A button's single **Action** is now an **Actions** list, in a fixed order: *Silence* and *Entity action* (switch rows, as the Conditions and Done rows), *Notification state* (Done, Dismiss or Snooze for a chosen time; fixed on the built-in Done, Dismiss and Snooze, where Snooze shows its times), any number of Home Assistant actions (each its own row, reorderable among themselves), and *Navigation* (Navigate or More info) last. Under the list: *Add action*, *Add notification state* and *Add navigation*. *Reset* beside Actions brings back the default of a category's button. An action that cannot run is skipped and the others still run.
+- A button's single **Action** is now an **Actions** list, in a fixed order: *Mute* and *Entity action* (switch rows, as the Conditions and Done rows), *Notification state* (Done, Dismiss or Snooze for a chosen time; fixed on the built-in Done, Dismiss and Snooze, where Snooze shows its times), any number of Home Assistant actions (each its own row, reorderable among themselves), and *Navigation* (Navigate or More info) last. Under the list: *Add action*, *Add notification state* and *Add navigation*. *Reset* beside Actions brings back the default of a category's button. An action that cannot run is skipped and the others still run.
 - **Tap behavior** can be *Custom* (its own actions) or *Button action* (runs another button, for example Done). Set in the category, changed in a notification.
 - The built-in rows of Conditions and Done have their switch at the end.
 - An entity group member's entity action: no *Custom action* switch; changing the action makes it the member's own, *Reset* beside the button brings the group's back.
@@ -120,7 +141,7 @@ First round of phase 7 (moving a real setup into the panel).
 - **Push channel:** sends notifications to the people's phones through their notify actions (Companion app). A Push row after the Dashboard in every Channels table, switched off until you tick a home mode. Title, message and Info line; on iOS the notification's icon on its colour, on Android the icon and colour; pushes grouped per category.
 - Push **Priority**: Silent, Normal, Time-sensitive and Critical (iOS interruption levels; on Android a channel per category for Normal and shared Silent, Time-sensitive and alarm-stream channels for the others; Critical cannot be swiped away until the notification ends).
 - Push buttons: the buttons shown in the push work from the phone, as the person who pressed them. iOS shows all of them, Android the first 3; Snooze uses its first time.
-- One push per notification and phone: the next step replaces it; it goes away on Done, Dismiss, Snooze, expiry and Hide while, and comes back with the card. Silence keeps it.
+- One push per notification and phone: the next step replaces it; it goes away on Done, Dismiss, Snooze, expiry and Hide while, and comes back with the card. Mute keeps it.
 - **Open on tap:** the page a tapped push opens, in General › Push (Overview by default) and in the Tap behavior's dialog of a category or notification. A Tap behavior action that is on for the push runs too.
 - People: the dialog's **Push** part with *Device* (the notify action) and *Type* (iOS, Android, Other; filled in for a Companion app phone) and a Test; the row shows the device after the sleep condition.
 - Test buttons in the Push channel's dialog: to your own phone, and to every phone the notification can reach.
@@ -210,7 +231,7 @@ Phase 6.1: lights, speakers and sirens.
 - A new light, speaker or siren asks which modes it sends in, the same in every category.
 - The channel tables list the Dashboard, then every light, speaker and siren with its entity's icon. A device channel's dialog has **Test** (a play icon in its header) that runs it once with the settings shown. A speaker channel has *Chime* (the category's unless changed), *Repeat* (Once, or again and again every so often) and *Read the message* with Name, Message and Info ticks.
 - Category: **Color** (a system colour, or *Custom* with *Card color* and *Light color*), **Chime** and **Highlight**. A notification has Color and Highlight (the category's, On or Off) too.
-- Button action **Silence**: stops the lights, speakers and sirens of the notification; the card stays.
+- Button action **Mute**: stops the lights, speakers and sirens of the notification; the card stays.
 - A diagnostic sensor per light, speaker and siren: `sensor.nc_channel_<light|speaker|siren>_<object id>`.
 
 ### Changed

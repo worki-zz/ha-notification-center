@@ -21,7 +21,7 @@ people:
 - {person: person.child, notify: notify.mobile_app_child_phone, device_type: ios}
 lights:
 - {id: kitchen_strip, entity_id: light.kitchen_strip, brightness: 80, illuminance_sensor: sensor.outdoor_illuminance, dim_below: 30,
-  dim_brightness: 30, dim_continuously: true, effect: blink}
+  dim_brightness: 30, dim_continuously: true, effect: notification_pulse}
 speakers:
 - {id: kitchen_speaker, entity_id: media_player.kitchen_speaker, volume: 0.5}
 sirens:
@@ -243,7 +243,7 @@ notifications:
         - action: alarm_control_panel.alarm_disarm
           target: {entity_id: alarm_control_panel.home}
     - type: custom
-      label: Silence
+      label: Mute
       icon: mdi:volume-off
       actions:
         ha_actions:

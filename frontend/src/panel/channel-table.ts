@@ -1,6 +1,6 @@
 // The Channels table of a category and of a step.
 
-import { LitElement, html, nothing, unsafeCSS } from "lit";
+import { LitElement, css, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { PUSH_PRIORITIES, PUSH_PRIORITY_DEFAULT, type PushPriority, type ChannelSettings, type Duration, type Mode, type NotificationCenterConfig } from "../shared/config";
@@ -385,10 +385,9 @@ export class NcChannelTable extends LitElement {
               { helper: "After the notification becomes active." },
             )}
           </div>
-          ${after || channel.kind === "speaker"
+          ${after
             ? html`<div class="column">
-            ${after
-              ? field(
+            ${field(
                   this.hass,
                   { duration: {} },
                   settings.delay,
@@ -398,12 +397,11 @@ export class NcChannelTable extends LitElement {
                       ...this._own(key),
                       delay: (value as Duration | undefined) ?? null,
                     }),
-                )
-              : nothing}
-            ${channel.kind === "speaker" ? this._renderRepeat(key, settings) : nothing}
+                )}
               </div>`
             : nothing}
         </div>
+        ${channel.kind === "speaker" ? this._renderRepeat(key, settings) : nothing}
         ${channel.kind === "speaker" ? this._renderSpeaker(key, settings) : nothing}
         ${channel.kind === "push" ? this._renderPriority(key, settings) : nothing}
       </div>
@@ -527,43 +525,94 @@ export class NcChannelTable extends LitElement {
     </div>`;
   }
 
-  // A speaker's repeat until done or silenced: Once; Loop, again and again
-  // without a pause; or Recurring, every so often.
+  // A speaker's repeat until done or muted: Once; Loop, again and again
+  // without a pause; or Recurring, every so often. Times limits how many
+  // times it plays in all. Repeat, Every and Times share a row.
   private _renderRepeat(key: string, settings: ChannelSettings) {
     const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
-    const repeat = (settings.repeat as { type: string; every?: Duration } | undefined) ?? { type: "once" };
+    const repeat = (settings.repeat as
+      | { type: string; every?: Duration; times?: number }
+      | undefined) ?? { type: "once" };
     const every = repeat.every ?? { hours: 1 };
-    return html`${field(
-        this.hass,
-        {
-          select: {
-            mode: "dropdown",
-            options: [
-              { value: "once", label: "Once" },
-              { value: "loop", label: "Loop" },
-              { value: "recurring", label: "Recurring" },
-            ],
+    const times = repeat.times;
+    const keep = times ? { times } : {};
+    const setRepeat = (changes: Record<string, unknown>) => {
+      const next: Record<string, unknown> = { ...repeat, ...changes };
+      if (next.times === undefined) delete next.times;
+      set({ repeat: next });
+    };
+    return html`<div>
+      <div class="repeat-row">
+        ${field(
+          this.hass,
+          {
+            select: {
+              mode: "dropdown",
+              options: [
+                { value: "once", label: "Once" },
+                { value: "loop", label: "Loop" },
+                { value: "recurring", label: "Recurring" },
+              ],
+            },
           },
-        },
-        repeat.type,
-        "Repeat",
-        (value) =>
-          set({
-            repeat:
-              value === "recurring"
-                ? { type: "recurring", every: { hours: 1 } }
-                : { type: value === "loop" ? "loop" : "once" },
-          }),
-        { helper: repeat.type === "once" ? "" : "Until done or silenced." },
-      )}
-      ${repeat.type === "recurring"
-        ? field(this.hass, { duration: {} }, every, "Every", (value) =>
-            set({ repeat: { type: "recurring", every: (value as Duration | undefined) ?? { hours: 1 } } }),
-          )
-        : nothing}`;
+          repeat.type,
+          "Repeat",
+          (value) =>
+            set({
+              repeat:
+                value === "recurring"
+                  ? { type: "recurring", every: { hours: 1 }, ...keep }
+                  : value === "loop"
+                    ? { type: "loop", ...keep }
+                    : { type: "once" },
+            }),
+        )}
+        ${repeat.type === "recurring"
+          ? field(this.hass, { duration: {} }, every, "Every", (value) =>
+              setRepeat({ every: (value as Duration | undefined) ?? { hours: 1 } }),
+            )
+          : nothing}
+        ${repeat.type === "once"
+          ? nothing
+          : field(
+              this.hass,
+              { number: { min: 1, max: 1000, step: 1, mode: "box" } },
+              times,
+              "Times",
+              (value) =>
+                setRepeat({
+                  times: value === undefined || value === null || value === "" ? undefined : Number(value),
+                }),
+            )}
+      </div>
+      ${repeat.type === "once"
+        ? nothing
+        : html`<div class="repeat-helper">Until done or muted.</div>`}
+    </div>`;
   }
 
-  static override styles = [TABLE_STYLES, CHANNEL_PAGE_STYLES, unsafeCSS(STATUS_STYLES)];
+  static override styles = [
+    TABLE_STYLES,
+    CHANNEL_PAGE_STYLES,
+    unsafeCSS(STATUS_STYLES),
+    css`
+      .repeat-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .repeat-row > * {
+        flex: 1 1 140px;
+        min-width: 0;
+      }
+      .repeat-helper {
+        margin: 4px 16px 0;
+        color: var(--secondary-text-color);
+        font-size: var(--ha-font-size-s, 12px);
+      }
+    `,
+  ];
 }
 
 declare global {

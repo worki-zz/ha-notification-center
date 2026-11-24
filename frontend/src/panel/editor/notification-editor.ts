@@ -20,6 +20,7 @@ import { chimeField, colorField, highlightField } from "../color-field";
 import { confirmDialog } from "../confirm";
 import { type FieldOptions, field, iconSelect } from "../fields";
 import { renderStatus, statusOf } from "../status";
+import { dismissAll, openMoreInfo, renderNotificationMenu, runNow } from "../notification-menu";
 import { BLOCK_INTROS, block } from "./block";
 import "./group-dialog";
 import "./info-dialog";
@@ -377,7 +378,12 @@ export class NcNotificationEditor extends LitElement {
   }
 
   private _renderToolbar(draft: EditorNotification) {
-    const status = statusOf(draft, this._isNew ? undefined : this.state?.notifications[draft.id ?? ""]);
+    const category = this.config ? categoryOf(this.config, draft as unknown as Notification) : undefined;
+    const status = statusOf(
+      draft,
+      this._isNew ? undefined : this.state?.notifications[draft.id ?? ""],
+      cssColor(colorCss(this.config, draft.color ?? category?.color)),
+    );
     return html`
       <div slot="toolbar-icon" class="toolbar">
         ${status && !this._isNew
@@ -442,47 +448,14 @@ export class NcNotificationEditor extends LitElement {
             </ha-dropdown-item>
             <wa-divider></wa-divider>`
         : nothing}
-      <ha-dropdown-item value="info" .disabled=${!saved}>
-        <ha-icon slot="icon" icon="mdi:list-status"></ha-icon>
-        Status
-      </ha-dropdown-item>
-      <ha-dropdown-item value="run_me" .disabled=${!runnable}>
-        <ha-icon slot="icon" icon="mdi:play"></ha-icon>
-        Run now, only me${draft.steps.length > 1 ? ` (step ${this._step + 1})` : ""}
-      </ha-dropdown-item>
-      <ha-dropdown-item value="run" .disabled=${!runnable}>
-        <ha-icon slot="icon" icon="mdi:play-box-multiple-outline"></ha-icon>
-        Run now, everyone${draft.steps.length > 1 ? ` (step ${this._step + 1})` : ""}
-      </ha-dropdown-item>
-      <ha-dropdown-item value="clear" .disabled=${!saved}>
-        <ha-icon slot="icon" icon="mdi:notification-clear-all"></ha-icon>
-        Clear notifications
-      </ha-dropdown-item>
-      <ha-dropdown-item value="duplicate" .disabled=${!saved}>
-        <ha-icon slot="icon" icon="mdi:content-duplicate"></ha-icon>
-        Duplicate
-      </ha-dropdown-item>
-      ${this._yaml
-        ? html`<ha-dropdown-item value="visual" .disabled=${!!this._yaml.error}>
-            <ha-icon slot="icon" icon="mdi:list-box-outline"></ha-icon>
-            Edit in visual editor
-          </ha-dropdown-item>`
-        : html`<ha-dropdown-item value="yaml">
-            <ha-icon slot="icon" icon="mdi:code-braces"></ha-icon>
-            Edit in YAML
-          </ha-dropdown-item>`}
-      <wa-divider></wa-divider>
-      <ha-dropdown-item value="toggle">
-        <ha-icon
-          slot="icon"
-          .icon=${draft.enabled ? "mdi:stop-circle-outline" : "mdi:play-circle-outline"}
-        ></ha-icon>
-        ${draft.enabled ? "Disable" : "Enable"}
-      </ha-dropdown-item>
-      <ha-dropdown-item value="delete" variant="danger" .disabled=${!saved}>
-        <ha-icon slot="icon" icon="mdi:delete"></ha-icon>
-        Delete
-      </ha-dropdown-item>
+      ${renderNotificationMenu({
+        saved,
+        runnable,
+        enabled: draft.enabled,
+        stepText: draft.steps.length > 1 ? ` (step ${this._step + 1})` : "",
+        yaml: this._yaml ? "visual" : "yaml",
+        yamlDisabled: !!this._yaml?.error,
+      })}
     </ha-dropdown>`;
   }
 
@@ -735,13 +708,13 @@ export class NcNotificationEditor extends LitElement {
           <ha-icon-button slot="trigger" .label=${"Step menu"}>
             <ha-icon icon="mdi:dots-vertical"></ha-icon>
           </ha-icon-button>
-          <ha-dropdown-item value="run" .disabled=${this._isNew || this._dirty || !draft.enabled || !step.enabled}>
-            <ha-icon slot="icon" icon="mdi:play"></ha-icon>
-            Run this step, everyone
-          </ha-dropdown-item>
           <ha-dropdown-item value="run_me" .disabled=${this._isNew || this._dirty || !draft.enabled || !step.enabled}>
             <ha-icon slot="icon" icon="mdi:play"></ha-icon>
-            Run this step, only me
+            Run this step for me
+          </ha-dropdown-item>
+          <ha-dropdown-item value="run" .disabled=${this._isNew || this._dirty || !draft.enabled || !step.enabled}>
+            <ha-icon slot="icon" icon="mdi:play"></ha-icon>
+            Run this step for everyone
           </ha-dropdown-item>
           <ha-dropdown-item value="info" .disabled=${this._isNew || !this._storedStep(step.id)}>
             <ha-icon slot="icon" icon="mdi:list-status"></ha-icon>
@@ -930,18 +903,17 @@ export class NcNotificationEditor extends LitElement {
       case "info":
         this._info = {};
         return;
+      case "more_info":
+        openMoreInfo(this, this._sensor());
+        return;
       case "run":
-        await this._run(() => this._call("trigger", { step: this._step + 1 }));
+      case "run_me": {
+        const onlyMe = ev.detail.item.value === "run_me";
+        await this._run(() => runNow(this.hass!, this._sensor(), this._step + 1, onlyMe));
         return;
-      case "run_me":
-        await this._run(() => this._call("trigger", { step: this._step + 1, only_me: true }));
-        return;
-      case "clear":
-        await this._run(async () => {
-          for (let number = 1; number <= draft.steps.length; number++) {
-            await this._call("clear", { step: number });
-          }
-        });
+      }
+      case "dismiss":
+        await this._run(() => dismissAll(this.hass!, this._sensor(), draft.steps.length));
         return;
       case "duplicate":
         if (this._dirty && !(await this._confirmLeave())) return;

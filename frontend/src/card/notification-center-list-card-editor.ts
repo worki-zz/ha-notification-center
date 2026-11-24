@@ -4,7 +4,7 @@ import { property, state } from "lit/decorators.js";
 import { subscribeStore, type StoreData } from "../shared/store";
 import type { HomeAssistant } from "../shared/types";
 import { loadEditorElements } from "./elements";
-import type { NotificationCenterCardConfig } from "./notification-center-list-card";
+import { upgradeListConfig, type NotificationCenterCardConfig } from "./notification-center-list-card";
 
 const EDITOR_TYPE = "notification-center-editor";
 
@@ -12,14 +12,14 @@ const LABELS: Record<string, string> = {
   categories: "Categories",
   max_cards: "Maximum notifications",
   ignore_audience: "Ignore audience",
-  show_empty: "Show empty state",
+  show: "Show",
 };
 
 const HELPERS: Record<string, string> = {
   categories: "Leave empty for every category.",
   max_cards: "Leave empty to show every notification. The rest opens the Notification Center.",
   ignore_audience: "Also show the notifications meant for other people.",
-  show_empty: "While nothing is active, show the card with All done instead of hiding it.",
+  show: "Upcoming as on the Overview. Empty state: All done instead of hiding the card.",
 };
 
 interface SchemaItem {
@@ -39,7 +39,7 @@ class NotificationCenterListCardEditor extends LitElement {
   private _unsubscribe?: () => void;
 
   public setConfig(config: NotificationCenterCardConfig): void {
-    this._config = config;
+    this._config = upgradeListConfig(config);
   }
 
   public override connectedCallback(): void {
@@ -83,7 +83,20 @@ class NotificationCenterListCardEditor extends LitElement {
       },
       { name: "max_cards", selector: { number: { min: 1, mode: "box" } } },
       { name: "ignore_audience", selector: { boolean: {} } },
-      { name: "show_empty", selector: { boolean: {} } },
+      {
+        name: "show",
+        selector: {
+          select: {
+            multiple: true,
+            mode: "list",
+            options: [
+              { value: "active", label: "Active" },
+              { value: "upcoming", label: "Upcoming" },
+              { value: "empty", label: "Empty state" },
+            ],
+          },
+        },
+      },
     ];
   }
 
@@ -93,7 +106,7 @@ class NotificationCenterListCardEditor extends LitElement {
     return html`
       <ha-form
         .hass=${this.hass}
-        .data=${this._config}
+        .data=${{ show: ["active"], ...this._config }}
         .schema=${this._schema()}
         .computeLabel=${(item: SchemaItem) => LABELS[item.name] ?? item.name}
         .computeHelper=${(item: SchemaItem) => HELPERS[item.name]}
@@ -116,6 +129,9 @@ class NotificationCenterListCardEditor extends LitElement {
         delete config[key];
       }
     }
+    // Active only is the default.
+    const show = config.show as string[] | undefined;
+    if (show?.length === 1 && show[0] === "active") delete config.show;
     this._config = config as unknown as NotificationCenterCardConfig;
     this.dispatchEvent(
       new CustomEvent("config-changed", {

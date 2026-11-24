@@ -49,11 +49,13 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 ## Frontend map (`frontend/src/`)
 
 - `shared/`: config types (`config.ts`), live card logic (`live.ts`, `live-card.ts`),
+  Upcoming of the Overview and the list card (`upcoming.ts`), channel helpers (`channels.ts`),
   look of a notification (`notification-view.ts`), formatting, text, store.
 - `card/`: dashboard cards and their editors.
 - `panel/notification-center-panel.ts`: the panel shell; `settings-page.ts`: Notifications
   list and settings tabs; `settings-*.ts`: General subpages (general, modes, people, lights,
   sound, colors); `category-editor.ts`; `audience-table.ts`, `channel-table.ts` (Audience and Channels tables), `channel-helpers.ts` (their counts, names and summaries), `table-styles.ts`;
+  `notification-menu.ts` (the ... menu of the list and the editor);
   `ha-elements.ts`, `fields.ts`, `confirm.ts`, `dialog-back.ts`: shared UI helpers.
 - `panel/editor/`: notification editor (`notification-editor.ts`), its Entities block
   (`entities-block.ts`), one step (`step-editor.ts`), schedule, interaction (button)
@@ -106,6 +108,7 @@ suite instead of running everything locally.
   conditions are met*, *Hide while conditions are not met*), Done when, Channels,
   Audience. Each block opens with a one-line intro (`BLOCK_INTROS` in `editor/block.ts`).
 - **done** is an outcome (the Done button and status), not a block name. Built-in
-  buttons: Done, Dismiss, Snooze; plus Tap behavior.
+  buttons: Done, Dismiss, Snooze; plus Tap behavior. The action that stops the lights,
+  speakers and sirens is **Mute** (*muted*), never "Silence".
 - Statuses: active, upcoming, snoozed, done, dismissed, expired. Upcoming lines start
   with *Shows ...*; people by name, *someone* above three.

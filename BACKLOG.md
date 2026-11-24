@@ -6,6 +6,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## High priority
 
+### Actions on every status change
+*Area: Notification editor.* Run Home Assistant actions when a notification's status changes, for every status: becomes active, done, dismissed, snoozed, muted (and back). For example: turn off the plug when the washing machine notification is done, or log a dismiss. Today an automation with the Notification state trigger can do it. *(Kristóf, 2026-11-24; feedback after v0.7.3)*
+
 ### Run snapshots (trace)
 *Area: Insight.* At each run event of a notification (a step becomes active; a trigger fires but the conditions are false; a notification is closed) store one snapshot: the time, the trigger with its entity and from/to states, the result of the conditions that were checked (as in Home Assistant's automation trace, checking stops at the first false one, so the rest show as not checked; likely recorded with Home Assistant's own condition trace), and the Status dialog's status and channel rows at that moment (which channels sent, to whom, and why the others held back). Keep the last N runs or X days per notification, in a Store key of its own. Shown as a History section in the Status dialog, one expandable row per snapshot. No visualisation of the whole logic chain. Builds on the Status dialog (0.7.x) and also covers "fired but the conditions were false" of the trigger statistics. Replaces the earlier *Why a notification is (not) active* and *Trace* ideas. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
 
@@ -22,6 +25,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Insight.* Simple statistics per notification, such as how often it fired and how long it took until it was done. Built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*
 
 ## Medium priority
+
+### Snooze and Mute status triggers and action blocks
+*Area: Notification editor.* Snooze and Mute as triggers of their own (for example: snooze or mute the notification when something happens, as Done when does for done) and as blocks of a step, like Done when. Kristóf's idea: a *Show … block* checkbox in the step menu that adds the block; to weigh against a built-in Mute button. Goes with the open Dismiss trigger question (item 8 of the feedback after v0.7.3). *(Kristóf, 2026-11-24; feedback after v0.7.3)*
 
 ### Live condition badges in the editor
 *Area: Notification editor.* Home Assistant's automation editor marks each condition with a live green or orange badge (true or false right now). It renders that badge only when the conditions open their options in the sidebar; the notification editor shows them inline, so they get no badge. Show the live result next to each condition of a step, Notification state and Notification entities included. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
@@ -48,7 +54,7 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Channels.* A Google Cast speaker cannot announce, so a chime stops what it plays. Resume the music (or the stream) after the chime instead of leaving it stopped. *(Kristóf, 2026-11-22; phase 6.1)*
 
 ### Keep when done
-*Area: Channels (Push).* A *Keep when done* switch of the push: when the notification ends, the push is not removed but silently replaced by a closing line, such as *Ended at 14:32*, *Done by Dóra at 14:32* or *Silenced by Kristóf*. Until then the push follows the card (Silence keeps it). *(Kristóf, 2026-11-23; phase 6.2)*
+*Area: Channels (Push).* A *Keep when done* switch of the push: when the notification ends, the push is not removed but silently replaced by a closing line, such as *Ended at 14:32*, *Done by Dóra at 14:32* or *Muted by Kristóf*. Until then the push follows the card (Mute keeps it). *(Kristóf, 2026-11-23; phase 6.2)*
 
 ## Low priority
 
@@ -62,7 +68,7 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 *Area: Channels (Push).* A *Send to* setting of the push channel: only people who are in the selected state (Home, Sleep, Away) get the push, apart from the Audience. For now Home modes cover the cases (push only in a "nobody home" mode, speaker off in a "someone asleep" mode). *(Kristóf, 2026-11-23; phase 6.2)*
 
 ### Repeat a push
-*Area: Channels (Push).* Send the push again every so often until the notification is done or silenced (Once or Loop), as a speaker repeats. Examples: a leak or an open freezer that nobody reacts to. Not needed for 1.0. *(Kristóf, 2026-11-23; phase 6.2)*
+*Area: Channels (Push).* Send the push again every so often until the notification is done or muted (Once or Loop), as a speaker repeats. Examples: a leak or an open freezer that nobody reacts to. Not needed for 1.0. *(Kristóf, 2026-11-23; phase 6.2)*
 
 ### Live push text
 *Area: Channels (Push).* When the text of an active notification changes (for example the washing machine's time left), update the push silently, at most every 5 minutes (the Companion app allows about 500 pushes a day per phone). Together with iOS Live Activities and Android Live Updates, which show such a value live. Now the push keeps the text it was sent with; a new step replaces it (one push per notification and phone). *(Kristóf, 2026-11-23; phase 6.2)*
@@ -82,8 +88,8 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### Large mode for displays
 *Area: Channels.* A larger card layout for wall or kitchen displays such as the Nest Hub, readable from a distance. Belongs with the Display channel. *(Phase 3, 2026-11-18)*
 
-### Glow and pulse light effects
-*Area: Channels.* Own light effects besides Blink for a highlighted notification: a slow glow or a pulse of the brightness, for lights without effects of their own. *(Phase 6.1, 2026-11-22)*
+### Glow light effect
+*Area: Channels.* An own light effect besides *Notification Pulse* (which since 0.7.4 pulses dimmable lights between their brightness and half of it) for a highlighted notification: a slow glow, for lights without effects of their own. *(Phase 6.1, 2026-11-22; pulse done 2026-11-24)*
 
 ### Confirmation for buttons
 *Area: Buttons and interactions.* Ask "Are you sure?" before a button runs its action, like the confirmation option of Home Assistant's tap actions. *(Phase 3, 2026-11-19)*

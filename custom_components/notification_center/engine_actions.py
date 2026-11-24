@@ -98,16 +98,16 @@ class EngineActions:
         for card in list(cards):
             self.close(card, reason, source, context)
 
-    def silence_cards(
+    def mute_cards(
         self: Engine,
         cards: Iterable[Card],
         source: str,
         context: Context | None = None,
     ) -> None:
-        """Keep cards open but stop their channels (Keep it silently)."""
+        """Keep cards open but stop their channels (Mute)."""
         for card in list(cards):
-            if card.is_open and not card.silenced:
-                self._change(card, source=source, context=context, silenced=True)
+            if card.is_open and not card.muted:
+                self._change(card, source=source, context=context, muted=True)
 
     def snooze_cards(
         self: Engine,
@@ -197,7 +197,7 @@ class EngineActions:
     ) -> None:
         """Press a button of a card: run its actions in their fixed order.
 
-        Each action finishes before the next one starts. Silence, the entity
+        Each action finishes before the next one starts. Mute, the entity
         action, then the notification state (Done marks the card done,
         Dismiss dismisses it and Snooze snoozes it: until the given time, or
         for the chosen or first of its times), then the Home Assistant actions.
@@ -211,8 +211,8 @@ class EngineActions:
             raise ServiceValidationError("The button is not there")
         actions: Mapping[str, Any] = button.get("actions") or {}
         variables = self.variables(card)
-        if actions.get("silence"):
-            self.silence_cards([card], SOURCE_BUTTON, context)
+        if actions.get("mute"):
+            self.mute_cards([card], SOURCE_BUTTON, context)
         if actions.get("entity_action"):
             entity_actions = self.entity_actions(card, button["id"])
             if entity_actions:

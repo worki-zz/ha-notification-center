@@ -123,9 +123,9 @@ BUILTIN_CHIMES: Final = {
     "nc_alarm": ("alarm.mp3", "Alarm"),
     "nc_alarm_indoor": ("alarm-indoor.mp3", "Indoor alarm"),
 }
-# How a light shows that a notification is highlighted: its own blinking,
-# or one of the light's effects (by name).
-EFFECT_BLINK: Final = "blink"
+# How a light shows that a notification is highlighted: its own pulse
+# (Notification Pulse), or one of the light's effects (by name).
+EFFECT_PULSE: Final = "notification_pulse"
 
 BUILTIN_BUTTONS: Final = ("tap", "done", "snooze", "dismiss")
 BUTTON_TYPES: Final = (*BUILTIN_BUTTONS, "custom")
@@ -333,7 +333,7 @@ PERSON_SCHEMA = vol.Schema(
 
 LIGHT_SCHEMA = _with_id(
     {
-        # A light, or a switch (a lamp on a plug): on, or blinking.
+        # A light, or a switch (a lamp on a plug): on, or pulsing.
         vol.Required("entity_id"): cv.entity_domain(["light", "switch"]),
         vol.Optional("brightness"): vol.Any(
             None, vol.All(vol.Coerce(int), vol.Range(1, 100))
@@ -353,9 +353,9 @@ LIGHT_SCHEMA = _with_id(
             None, vol.All(vol.Coerce(int), vol.Range(1, 100))
         ),
         vol.Optional("dim_continuously", default=True): cv.boolean,
-        # How a highlighted notification shows: ``blink`` or an effect of
-        # the light.
-        vol.Optional("effect", default=EFFECT_BLINK): cv.string,
+        # How a highlighted notification shows: ``notification_pulse`` (own)
+        # or an effect of the light.
+        vol.Optional("effect", default=EFFECT_PULSE): cv.string,
         # The light's own RGB for the system and own colours (only what
         # differs).
         vol.Optional("colors", default=dict): vol.Schema({cv.string: _rgb}),
@@ -408,17 +408,29 @@ CHIME_SCHEMA = _with_id(
 # ---------------------------------------------------------------------------
 # Channels
 
-# A speaker's repeat until done or silenced: Once, Loop (again and again,
-# without a pause) or Recurring (every so often).
+# A speaker's repeat until done or muted: Once, Loop (again and again,
+# without a pause) or Recurring (every so often). ``times`` is how many
+# times it plays in all (empty: until done or muted).
+_TIMES = vol.Any(None, vol.All(vol.Coerce(int), vol.Range(1, 1000)))
 _REPEAT_TYPES = vol.Any(
-    vol.Schema({vol.Required("type"): vol.In(("once", "loop"))}),
-    vol.Schema({vol.Required("type"): "recurring", vol.Required("every"): DURATION}),
+    vol.Schema({vol.Required("type"): "once"}),
+    vol.Schema({vol.Required("type"): "loop", vol.Optional("times"): _TIMES}),
+    vol.Schema(
+        {
+            vol.Required("type"): "recurring",
+            vol.Required("every"): DURATION,
+            vol.Optional("times"): _TIMES,
+        }
+    ),
 )
 
 
 def _repeat(value: Any) -> dict[str, Any]:
-    """Validate a repeat."""
-    return dict(_REPEAT_TYPES(value))
+    """Validate a repeat (an empty ``times`` is not stored)."""
+    repeat = dict(_REPEAT_TYPES(value))
+    if repeat.get("times") is None:
+        repeat.pop("times", None)
+    return repeat
 
 
 # Every key is optional so that a step can store only what it changes. A
@@ -531,7 +543,7 @@ CATEGORY_SCHEMA = _with_id(
         vol.Optional("icon"): _optional(cv.icon),
         # A system colour by name, or an own colour by its id.
         vol.Optional("color"): _optional(cv.string),
-        # How its cards stand out; any highlight also makes the lights blink
+        # How its cards stand out; any highlight also makes the lights pulse
         # (or show their effect).
         vol.Optional("highlight", default="none"): _highlight,
         # What the speakers play.
@@ -648,7 +660,7 @@ NOTIFICATION_STATE_SCHEMA = vol.Schema(
 )
 
 # The actions of a button. They run one after the other in this fixed
-# order: Silence, the entity action, the notification state, the Home
+# order: Mute, the entity action, the notification state, the Home
 # Assistant actions (in their order), then the navigation (where the button
 # was pressed). One that cannot run is skipped; the others still run.
 BUTTON_ACTIONS_SCHEMA = vol.Schema(
@@ -656,7 +668,7 @@ BUTTON_ACTIONS_SCHEMA = vol.Schema(
         vol.Optional("entity_action"): cv.boolean,
         vol.Optional("notification_state"): _optional(NOTIFICATION_STATE_SCHEMA),
         # Stop the lights, speakers and sirens; the card stays.
-        vol.Optional("silence"): cv.boolean,
+        vol.Optional("mute"): cv.boolean,
         vol.Optional("ha_actions"): ACTIONS,
         vol.Optional("navigation"): _optional(NAVIGATION_SCHEMA),
     }
@@ -679,8 +691,8 @@ def _clean_actions(kind: str, actions: dict[str, Any]) -> dict[str, Any]:
             result["notification_state"]["snooze"] = (
                 state.get("snooze") or DEFAULT_STATE_SNOOZE
             )
-    if actions.get("silence"):
-        result["silence"] = True
+    if actions.get("mute"):
+        result["mute"] = True
     if actions.get("ha_actions"):
         result["ha_actions"] = list(actions["ha_actions"])
     navigation = actions.get("navigation")

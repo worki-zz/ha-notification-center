@@ -235,8 +235,8 @@ async def test_push_follows_people_and_stays(
     assert len(ios) == 1, "not sent twice"
 
 
-async def test_silence_keeps_snooze_clears(center: Center, hass: HomeAssistant) -> None:
-    """Silence leaves the push on the phones; Snooze takes it away."""
+async def test_mute_keeps_snooze_clears(center: Center, hass: HomeAssistant) -> None:
+    """Mute leaves the push on the phones; Snooze takes it away."""
     android, _ios = await _setup(center, hass)
     await center.add(
         "Smoke",
@@ -247,7 +247,7 @@ async def test_silence_keeps_snooze_clears(center: Center, hass: HomeAssistant) 
                     "id": "quiet",
                     "type": "custom",
                     "label": "Quiet",
-                    "actions": {"silence": True},
+                    "actions": {"mute": True},
                 }
             ],
         ),
