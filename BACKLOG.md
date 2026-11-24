@@ -9,6 +9,8 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### Actions on every status change
 *Area: Notification editor.* Run Home Assistant actions when a notification's status changes, for every status: becomes active, done, dismissed, snoozed, muted (and back). For example: turn off the plug when the washing machine notification is done, or log a dismiss. Today an automation with the Notification state trigger can do it. *(Kristóf, 2026-11-24; feedback after v0.7.3)*
 
+Overlaps with the button actions: an action that should run whenever a notification is done (or dismissed, snoozed) could live here instead of on every button that leads there, and this can partly replace the button's own Home Assistant actions. When it is built, decide which actions stay on the buttons (only what depends on the button pressed, like the entity action) and how the editor shows the two together. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
+
 ### Run snapshots (trace)
 *Area: Insight.* At each run event of a notification (a step becomes active; a trigger fires but the conditions are false; a notification is closed) store one snapshot: the time, the trigger with its entity and from/to states, the result of the conditions that were checked (as in Home Assistant's automation trace, checking stops at the first false one, so the rest show as not checked; likely recorded with Home Assistant's own condition trace), and the Status dialog's status and channel rows at that moment (which channels sent, to whom, and why the others held back). Keep the last N runs or X days per notification, in a Store key of its own. Shown as a History section in the Status dialog, one expandable row per snapshot. No visualisation of the whole logic chain. Builds on the Status dialog (0.7.x) and also covers "fired but the conditions were false" of the trigger statistics. Replaces the earlier *Why a notification is (not) active* and *Trace* ideas. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
 
@@ -105,3 +107,6 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ### Chime per speaker
 *Area: Channels.* Let a speaker channel play another chime than the notification's (for example a softer one in the bedroom). 0.6.5 moved the chime to the category and the notification only. *(Kristóf, 2026-11-22; phase 6.1)*
+
+### Switch system colors on and off
+*Area: Settings.* Under Colors, a switch for each system color. A color that is switched off is not offered in the color pickers or in the channel lists, so the many greys do not crowd them. A color in use stays usable. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
