@@ -111,3 +111,17 @@ export function iconSelect(
     )}
   </ha-dropdown>`;
 }
+
+/**
+ * The title of a page header (hass-subpage), on one line: a long one is
+ * cut with an ellipsis (Home Assistant wraps it to two lines), and shows
+ * in full on hover.
+ */
+export function subpageTitle(text: string) {
+  return html`<span
+    slot="header"
+    title=${text}
+    style="display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+    >${text}</span
+  >`;
+}

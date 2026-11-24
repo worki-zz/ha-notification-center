@@ -197,8 +197,9 @@ class EngineActions:
     ) -> None:
         """Press a button of a card: run its actions in their fixed order.
 
-        Each action finishes before the next one starts. Mute, the entity
-        action, then the notification state (Done marks the card done,
+        Each action finishes before the next one starts, in the order of
+        the button's Actions list: the entity action, Mute, then the
+        notification state (Done marks the card done,
         Dismiss dismisses it and Snooze snoozes it: until the given time, or
         for the chosen or first of its times), then the Home Assistant actions.
         The navigation (More info or Navigate) happens where the button was
@@ -211,14 +212,14 @@ class EngineActions:
             raise ServiceValidationError("The button is not there")
         actions: Mapping[str, Any] = button.get("actions") or {}
         variables = self.variables(card)
-        if actions.get("mute") or button["type"] == "mute":
-            self.mute_cards([card], SOURCE_BUTTON, context)
         if actions.get("entity_action"):
             entity_actions = self.entity_actions(card, button["id"])
             if entity_actions:
                 await self._async_run_actions(
                     card, button, entity_actions, variables, context
                 )
+        if actions.get("mute") or button["type"] == "mute":
+            self.mute_cards([card], SOURCE_BUTTON, context)
         self._press_state(card, button, actions, until, context, choice)
         if actions.get("ha_actions"):
             await self._async_run_actions(

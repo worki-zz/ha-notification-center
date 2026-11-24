@@ -520,3 +520,30 @@ async def test_switched_on_again_reopens_a_due_card(
     await center.manager.async_set_enabled(nid, True)
     await hass.async_block_till_done()
     assert center.state("sensor.nc_mixed_waste") != "active"
+
+
+async def test_snooze_wins_over_a_new_occurrence(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """A new occurrence of a snoozed card keeps the snooze and the expiry."""
+    center = await load(hass, config_entry)
+    nid = await center.add(
+        "Plants",
+        _scheduled(
+            {"type": "calendar", "every": 1, "unit": "days", "at": "10:00"},
+            dismiss_when={"expires": {"days": 3}},
+        ),
+    )
+    await _move(hass, freezer, "2026-11-16 10:00")
+    assert center.state("sensor.nc_plants") == "active"
+    expires_at = center.engine.cards_of(nid)[0].expires_at
+    await center.call("snooze", "sensor.nc_plants", duration={"days": 2})
+    await _move(hass, freezer, "2026-11-17 10:00")
+    assert center.state("sensor.nc_plants") == "snoozed"
+    card = center.engine.cards_of(nid)[0]
+    assert card.expires_at == expires_at
+    await _move(hass, freezer, "2026-11-18 10:01")
+    assert center.state("sensor.nc_plants") == "active"

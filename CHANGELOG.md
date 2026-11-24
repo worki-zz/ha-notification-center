@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Notification badge** (`custom:notification-center-badge`), the small twin of the Notification card for one entity, at the top of a sections view. Its options are Home Assistant's entity badge's (Entity; Content: Name, Color, Icon, Displayed elements, State content; Interactions: tap, hold, double tap). With a notification's sensor everything comes from the notification: icon, colour by status (as `icon_color`), message (the first one's with *+N* when more are open) and highlight; *State content* offers Message, Info line, Status and Name. A tap runs the notification's Tap behavior unless the badge sets a tap action. The channels do not count. With another entity it is Home Assistant's entity badge.
+- *Show when the notification is* (`show_when`: Active, Snoozed, Upcoming, Done today, Idle; default all) and *Ignore audience* (`ignore_audience`, default on) on the Notification badge and on the Notification card with a notification's sensor. Off, only the notification's Audience sees it, in their person state now.
+- The ... menu of a category, in the Categories list and the category editor's header: *N notifications* (the Notifications list filtered to the category), *Duplicate* and *Delete*. The header's *Notifications* button shows the number too.
+
+### Changed
+
+- **Snooze wins:** a snoozed notification that is triggered again, or whose Schedule or Repeat comes round again, stays snoozed; only its message and data are updated and its Expires stays. It comes back when the snooze ends. The trigger action (*Run now*) still wakes it.
+- The Notification card with a notification's sensor no longer counts the channels, and by default shows in every status: snoozed greyed with *Snoozed until …*, upcoming with its *Done* button, done today without buttons, idle greyed with when it was last done. Before, it hid itself while nothing was active: set *Show when the notification is* to *Active* for that.
+- A button's Actions list starts with *Entity action*, then *Mute*, the notification state, the Home Assistant actions and the navigation, and they run in that order (Mute used to run first).
+- Tap behavior dialog: *Button action* is offered only when a button is switched on, with a warning when the button it runs was switched off later. The push part (its line and *Open on tap*) is at the bottom. When the Tap's actions or the button it runs have a Navigate, the dialog says which page the push opens (*The push opens /lovelace/kitchen (Navigate of Done)*) instead of *Open on tap*.
+- The categories are in the same alphabetical order everywhere: the Category pickers, the Notifications list filter, the Notification Center card's editor and the summary sensor's `categories` attribute.
+- The editor's Channels list says *All home modes* when every home mode is ticked.
+- Upcoming (the Overview and the Notification Center card) shows a scheduled or snoozed notification only when its Dashboard channel is on in at least one home mode, besides the viewer being in its Audience in at least one state.
+
+### Fixed
+
+- Every page header title (the notification and category editors, the General subpages) stays on one line, cut with an ellipsis.
+- The Mute button had no title in the Entity actions of an entity or entity group.
+
 ## 0.7.4
 
 ### Added

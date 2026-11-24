@@ -5,6 +5,13 @@ import { isTimestamp } from "../shared/format";
 import type { HomeAssistant } from "../shared/types";
 import { loadEditorElements } from "./elements";
 import {
+  NC_OPTION_HELPERS,
+  NC_OPTION_LABELS,
+  ncOptionsData,
+  ncOptionsSchema,
+  storeNcOptions,
+} from "./nc-options";
+import {
   isNotificationEntity,
   type DataType,
   type NotificationCardConfig,
@@ -235,7 +242,15 @@ class NotificationCenterCardEditor extends LitElement {
         @value-changed=${this._valueChanged}
       ></ha-form>
       ${fromCenter
-        ? html`<ha-alert alert-type="info">Settings from the Notification Center</ha-alert>`
+        ? html`<ha-alert alert-type="info">Settings from the Notification Center</ha-alert>
+            <ha-form
+              .hass=${this.hass}
+              .data=${ncOptionsData(this._config)}
+              .schema=${ncOptionsSchema()}
+              .computeLabel=${this._label}
+              .computeHelper=${this._helper}
+              @value-changed=${this._valueChanged}
+            ></ha-form>`
         : html`<ha-form
             .hass=${this.hass}
             .data=${data}
@@ -247,9 +262,11 @@ class NotificationCenterCardEditor extends LitElement {
     `;
   }
 
-  private _label = (schema: SchemaItem): string => LABELS[schema.name] ?? schema.title ?? "";
+  private _label = (schema: SchemaItem): string =>
+    LABELS[schema.name] ?? NC_OPTION_LABELS[schema.name] ?? schema.title ?? "";
 
-  private _helper = (schema: SchemaItem): string | undefined => HELPERS[schema.name];
+  private _helper = (schema: SchemaItem): string | undefined =>
+    HELPERS[schema.name] ?? NC_OPTION_HELPERS[schema.name];
 
   private _valueChanged(ev: CustomEvent<{ value: FormData }>): void {
     ev.stopPropagation();
@@ -276,6 +293,7 @@ class NotificationCenterCardEditor extends LitElement {
     } else {
       delete config.data;
     }
+    storeNcOptions(config);
     for (const [key, item] of Object.entries(config)) {
       if (
         item === undefined ||

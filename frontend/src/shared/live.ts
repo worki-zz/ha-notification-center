@@ -5,10 +5,13 @@
 // Notification Center card and the panel, so a card works the same
 // everywhere.
 
+import { effectiveChannel } from "./channels";
 import {
   AUDIENCE_STATES,
+  CHANNEL_DASHBOARD,
   DOMAIN,
   type AudienceEntry,
+  type AudienceState,
   type Button,
   type ButtonActions,
   type CategoryButton,
@@ -303,6 +306,28 @@ export function inAudience(
   return AUDIENCE_STATES.some((state) => entry[state]);
 }
 
+/** True when a person gets a step in their state now (with no person: always). */
+export function inAudienceNow(
+  category: Category | undefined,
+  step: Step | undefined,
+  person: string | undefined,
+  people: string[],
+  states: Record<string, AudienceState> | undefined,
+): boolean {
+  if (!person || !people.length) return true;
+  const now = states?.[person];
+  if (!now) return inAudience(category, step, person, people);
+  return audienceOf(category, step, [person])[person][now];
+}
+
+/** True when a step's Dashboard channel is on in at least one home mode. */
+export function onDashboard(category: Category | undefined, step: Step | undefined): boolean {
+  return !!effectiveChannel(
+    category?.channels?.[CHANNEL_DASHBOARD],
+    step?.channels?.[CHANNEL_DASHBOARD],
+  ).modes?.length;
+}
+
 /** Why a card is held back from the Dashboard for the viewer. */
 export interface Held {
   reason: Exclude<ChannelReason, "off">;
@@ -318,6 +343,9 @@ export interface LiveFilter {
   ignoreAudience?: boolean;
   // Also return the active cards the Dashboard holds back now (``held``).
   withHeld?: boolean;
+  // Every open card, whatever the channels say (a card or badge placed for
+  // one notification); the audience counts in the person's state now.
+  ignoreChannels?: boolean;
 }
 
 /**
@@ -362,7 +390,9 @@ export function liveCards(
       if (!filter.statuses.includes(card.status)) continue;
       const step = stepOf(notification, card.step_id);
       let held: Held | undefined;
-      if (card.status === "active") {
+      if (filter.ignoreChannels) {
+        if (!inAudienceNow(category, step, person, people, state.people)) continue;
+      } else if (card.status === "active") {
         const dashboard = dashboardOf(card, person, people);
         if (!dashboard) continue;
         if (!dashboard.show) {
@@ -402,8 +432,8 @@ export function hasActions(actions: ButtonActions | undefined): boolean {
 /**
  * Press a button of a card.
  *
- * Its actions run in their fixed order: Mute, the entity action, the
- * notification state and the Home Assistant actions in Home Assistant, then the
+ * Its actions run in the order of its Actions list: the entity action, Mute,
+ * the notification state and the Home Assistant actions in Home Assistant, then the
  * navigation (More info or Navigate) here, from the given element. One that
  * cannot run is skipped; the navigation still happens.
  */

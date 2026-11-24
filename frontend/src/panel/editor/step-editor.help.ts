@@ -43,7 +43,7 @@ export const HELP: Record<
   interactions: {
     title: "Interactions",
     text: [
-      "The buttons of the notification and what a tap on it does. Each button has a list of Actions that run one after the other: Mute, the entity action, the notification state (Done, Dismiss or Snooze), the Home Assistant actions, then the Navigation (More info or Navigate).",
+      "The buttons of the notification and what a tap on it does. Each button has a list of Actions that run one after the other: the entity action, Mute, the notification state (Done, Dismiss or Snooze), the Home Assistant actions, then the Navigation (More info or Navigate).",
       "Tap behavior comes from the category unless the notification sets its own: Action runs the Tap's own Actions, Button action runs the actions of the chosen button.",
       "Show in push puts the button on the push notification too (with the push channel). Android shows at most 3.",
     ],

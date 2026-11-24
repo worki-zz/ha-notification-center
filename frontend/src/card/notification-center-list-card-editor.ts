@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 
+import { sortedCategories } from "../shared/config";
 import { subscribeStore, type StoreData } from "../shared/store";
 import type { HomeAssistant } from "../shared/types";
 import { loadEditorElements } from "./elements";
@@ -69,7 +70,7 @@ class NotificationCenterListCardEditor extends LitElement {
   }
 
   private _schema(): SchemaItem[] {
-    const categories = this._store.config?.categories ?? [];
+    const categories = sortedCategories(this._store.config?.categories ?? []);
     return [
       {
         name: "categories",

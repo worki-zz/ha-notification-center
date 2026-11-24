@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
-import { DOMAIN, colorCss } from "../shared/config";
+import { DOMAIN } from "../shared/config";
 import { defineElement } from "../shared/define";
 import {
   cssColor,
@@ -14,12 +14,21 @@ import {
   type ColorValue,
   type TimeFormat,
 } from "../shared/format";
-import { cardKey, liveCards, type LiveCard } from "../shared/live";
+import {
+  SHOW_STATUS_LABELS,
+  entityStatusOf,
+  showsFor,
+  statusText,
+  type EntityStatus,
+  type ShowStatus,
+} from "../shared/entity-status";
+import { cardKey, type LiveCard } from "../shared/live";
 import "../shared/live-card";
 import { type Highlight, type NotificationViewData } from "../shared/notification-view";
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
 import { TemplateTexts } from "../shared/text";
+import { doneEarlyOf, renderScheduled } from "../shared/upcoming";
 import type { ActionConfig, HassEntity, HomeAssistant } from "../shared/types";
 import { loadDashboardElements } from "./elements";
 
@@ -57,6 +66,11 @@ export interface NotificationCardConfig {
   };
   tap_action?: ActionConfig;
   buttons?: CardButtonConfig[];
+  // A notification's sensor: the statuses it shows in (left out: always).
+  show_when?: ShowStatus[];
+  // A notification's sensor: everyone sees it (default); false: only its
+  // Audience, in their state now.
+  ignore_audience?: boolean;
 }
 
 const DEFAULT_TIME_FORMAT: TimeFormat = "relative";
@@ -76,8 +90,9 @@ export function isNotificationEntity(hass: HomeAssistant, entityId?: string): bo
 //
 // On its own it shows what its options say. When its entity is a
 // notification's sensor of the Notification Center, everything comes from
-// there: one card per open card of the notification, with working Done,
-// Dismiss and Snooze buttons, hidden while nothing is active.
+// there: one card per open card of the notification, with working buttons;
+// snoozed, upcoming, done today or idle as the Overview shows them. The
+// channels do not count; Show when hides it in the statuses left out.
 export class NotificationCenterCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
@@ -121,6 +136,9 @@ export class NotificationCenterCard extends LitElement {
     }
     if (config.buttons !== undefined && !Array.isArray(config.buttons)) {
       throw new Error("buttons must be a list");
+    }
+    if (config.show_when !== undefined && !Array.isArray(config.show_when)) {
+      throw new Error("show_when must be a list");
     }
     this._config = config;
   }
@@ -210,14 +228,15 @@ export class NotificationCenterCard extends LitElement {
     this._store = {};
   }
 
-  // The open cards of the notification, active ones only.
-  private _liveCards(): LiveCard[] | undefined {
-    const { config, state } = this._store;
-    const entityId = this._config?.entity;
-    if (!config || !state || !entityId) return undefined;
-    // A card placed for one notification shows to everyone.
-    return liveCards(config, state, { statuses: ["active"], ignoreAudience: true }).filter(
-      (live) => live.entityId === entityId,
+  // The notification's status for the viewer, with its cards.
+  private _status(): EntityStatus | undefined {
+    if (!this.hass) return undefined;
+    return entityStatusOf(
+      this.hass,
+      this._store,
+      this._config?.entity,
+      this._config?.ignore_audience ?? true,
+      this._now,
     );
   }
 
@@ -225,33 +244,55 @@ export class NotificationCenterCard extends LitElement {
     if (this.preview || !this._isNcMode()) return false;
     // Until the data is there, stay as it is: showing and hiding again
     // would make the dashboard lay out the card twice.
-    const cards = this._liveCards();
-    if (!cards) return this.hidden;
-    return cards.length === 0;
+    const status = this._status();
+    if (!status) return this._store.config ? false : this.hidden;
+    return !showsFor(this._config?.show_when, status.status);
   }
 
-  // Shown in the editor while nothing is active.
-  private _placeholder(): NotificationViewData | undefined {
-    const { config, state } = this._store;
-    const entityId = this._config?.entity;
-    if (!config || !state || !entityId) return undefined;
-    const found = Object.entries(state.notifications).find(
-      ([, item]) => item.entity_id === entityId,
-    );
-    const notification = found && config.notifications.find((item) => item.id === found[0]);
-    if (!notification) return undefined;
-    const category =
-      config.categories.find((item) => item.id === notification.category) ??
-      config.categories.find((item) => item.id === "general");
+  // Idle: the notification, greyed, with when it was last done.
+  private _idleView(status: EntityStatus): NotificationViewData {
+    const { notification, category } = status;
+    const entityId = this._config!.entity!;
     const icon = notification.icon || category?.icon || undefined;
+    const lastDone = this._store.state?.notifications[notification.id]?.last_done;
     return {
       label: notification.name,
       message: "No active notification",
-      info: "This card is hidden on the dashboard while nothing is active.",
+      info: lastDone ? `Last done ${this._time(lastDone)}` : undefined,
       icon,
       stateObj: icon ? undefined : this.hass!.states[entityId],
-      color: cssColor(colorCss(config, notification.color ?? category?.color)),
+      color: "var(--state-inactive-color)",
+      muted: true,
     };
+  }
+
+  private _renderStatus(status: EntityStatus) {
+    const hass = this.hass!;
+    if (status.status === "idle") {
+      return html`<notification-center-view
+        .hass=${hass}
+        .view=${this._idleView(status)}
+      ></notification-center-view>`;
+    }
+    if (status.status === "upcoming") {
+      return renderScheduled(hass, status.upcoming, (item) => void doneEarlyOf(hass, item));
+    }
+    const snoozed = status.status === "snoozed";
+    const when = snoozed ? statusText(hass, status, this._now) : undefined;
+    return repeat(
+      status.cards,
+      (live: LiveCard) => cardKey(live.card),
+      (live: LiveCard) => html`
+        <notification-center-live-card
+          .hass=${hass}
+          .live=${live}
+          .now=${this._now}
+          .when=${when}
+          .muted=${snoozed}
+          .interactive=${status.status !== "done"}
+        ></notification-center-live-card>
+      `,
+    );
   }
 
   // -- On its own ---------------------------------------------------------
@@ -355,34 +396,22 @@ export class NotificationCenterCard extends LitElement {
       if (this._store.error) {
         return html`<ha-card class="warning">${this._store.error}</ha-card>`;
       }
-      const cards = this._liveCards() ?? [];
-      if (!cards.length) {
-        if (!this.preview) return nothing;
-        const placeholder = this._placeholder();
-        return placeholder
-          ? html`<notification-center-view
-              class="placeholder"
-              .hass=${this.hass}
-              .view=${placeholder}
-            ></notification-center-view>`
-          : html`<ha-card class="warning">
-              ${this._store.config ? "Notification not found" : "Loading…"}
-            </ha-card>`;
+      const status = this._status();
+      if (!status) {
+        return html`<ha-card class="warning">
+          ${this._store.config ? "Notification not found" : "Loading…"}
+        </ha-card>`;
       }
+      const shown = showsFor(this._config.show_when, status.status);
+      if (!shown && !this.preview) return nothing;
+      // In the editor a card hidden now shows faded, with why.
       return html`
-        <div class="stack">
-          ${repeat(
-            cards,
-            (live) => cardKey(live.card),
-            (live) => html`
-              <notification-center-live-card
-                .hass=${this.hass}
-                .live=${live}
-                .now=${this._now}
-              ></notification-center-live-card>
-            `,
-          )}
-        </div>
+        <div class="stack ${shown ? "" : "placeholder"}">${this._renderStatus(status)}</div>
+        ${shown
+          ? nothing
+          : html`<div class="hidden-note">
+              Hidden on the dashboard while ${SHOW_STATUS_LABELS[status.status].toLowerCase()}.
+            </div>`}
       `;
     }
     return html`
@@ -409,6 +438,11 @@ export class NotificationCenterCard extends LitElement {
     .placeholder {
       opacity: 0.6;
     }
+    .hidden-note {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
+      padding: 4px 4px 0;
+    }
     .warning {
       padding: 16px;
       color: var(--secondary-text-color);
@@ -424,7 +458,7 @@ if (!window.customCards.some((card) => card.type === CARD_TYPE)) {
     type: CARD_TYPE,
     name: "Notification",
     description:
-      "One notification, with its message, data and buttons. With a Notification Center notification's sensor it shows that notification.",
+      "One notification, with its message, data and buttons. With a Notification Center notification's sensor it shows that notification in every status.",
     preview: true,
     documentationURL: "https://github.com/worki-zz/ha-notification-center",
   });

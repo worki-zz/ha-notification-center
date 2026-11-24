@@ -32,7 +32,7 @@ A few words are used the same way everywhere, in the Overview and in this docume
 
 - **Notification:** what you set up in the editor: a message with its steps, buttons and channels. It belongs to a **category**, which gives it its defaults (buttons, audience, channels, colour).
 - **Step:** one stage of a notification. It says when it starts, when it is done, what it shows and who gets it. Several steps make a sequence, for example a reminder that gets louder.
-- **Active notification:** the live result of a step, one for each time it is active (a step started by its entities has one for each entity). It is active, snoozed or closed (done or dismissed).
+- **Active notification:** the live result of a step, one for each time it is active (a step started by its entities has one for each entity). It is active, snoozed or closed (done or dismissed). Snooze wins: a snoozed notification that is triggered again, or whose Schedule or Repeat comes round again, stays snoozed (its message and data are updated, its Expires stays) and comes back when the snooze ends. *Run now* still shows it at once.
 - **Dashboard notification:** a notification as the Dashboard channel shows it, in the Overview and in the dashboard cards. The push is not one.
 - **Home mode:** the house's current situation (Home, Away, a night mode, ...), set in the settings. It decides which channels send.
 - **Audience:** who gets the notification in each state: each person is *At home*, *Asleep* or *Not home*. The home mode and the audience both have to allow a channel: the home mode is checked first.
@@ -66,7 +66,7 @@ Open notifications, snoozes and last done times are kept in `.storage/notificati
 
 ## The Overview
 
-The **Overview** shows the active notifications meant for you, with their buttons. Below them, under *Upcoming*, the scheduled steps due today and the snoozed notifications in one list, by time, in a neutral colour, with a line that tells when they come. **Schedule** lists the scheduled steps due after today, by their next day, under *This week*, *This month*, *This year* and *Next year* (only the ones with something in them); **Done today** the notifications done today. A scheduled step is meant for its day; its time only says when it reaches you. So a step that is not due yet can be marked *Done* already: it shows in Done today like any done notification, a calendar step skips its next occurrence, and an "after last done" step counts from now. A notification hidden by its *Conditions* is not shown. Administrators find the settings behind the gear in the header (see [Settings](#settings)).
+The **Overview** shows the active notifications meant for you, with their buttons. Below them, under *Upcoming*, the scheduled steps due today and the snoozed notifications in one list, by time, in a neutral colour, with a line that tells when they come. Upcoming shows a notification when its Dashboard channel is on in at least one home mode and you are in its Audience in at least one state (the home mode and your person state now do not count). **Schedule** lists the scheduled steps due after today, by their next day, under *This week*, *This month*, *This year* and *Next year* (only the ones with something in them); **Done today** the notifications done today. A scheduled step is meant for its day; its time only says when it reaches you. So a step that is not due yet can be marked *Done* already: it shows in Done today like any done notification, a calendar step skips its next occurrence, and an "after last done" step counts from now. A notification hidden by its *Conditions* is not shown. Administrators find the settings behind the gear in the header (see [Settings](#settings)).
 
 ## Settings
 
@@ -74,7 +74,7 @@ The settings use Home Assistant's own layout and elements, with the tabs (with i
 
 ### Categories
 
-The category editor is a page: in the header *Notifications* (the list filtered to this category) and Delete. A category that still has notifications cannot be deleted; *View notifications* opens them. The General category cannot be deleted. Under the header a preview of the notification.
+The category editor is a page: in the header *N notifications* (the Notifications list filtered to this category) and the ... menu, the same as a row's in the Categories list: *N notifications*, *Duplicate* (a copy named *… (copy)*, at the end of the list) and *Delete*. A category that still has notifications cannot be deleted; the dialog offers *View notifications*. The General category cannot be deleted. Under the header a preview of the notification.
 
 - **Settings:** the name (required) and **Icon** on the first row; **Color**, **Highlight** and **Chime** on the second. *Color* is a system colour or a custom colour of the Colors page (the system colours first); each light shows it as its Colors tab sets it. *Highlight* is a dropdown: *Normal* (default), *Pulse*, *Glow* or *Alert*, the styles of a dashboard notification; an active notification shows it, and every highlight but Normal makes the lights pulse (*Notification Pulse*), or show their effect. *Chime* is what the speakers play; a category always has one (*Chime* by default); it shows only when there is a speaker. A new category starts with the General category's settings, audience and channels.
 - **Interactions:** the category's Tap behavior, built-in buttons and its own custom buttons (*Add button*), with their label, icon, Snooze times and push setting, and the Tap behavior (see [Buttons](#buttons)), but no other action. New notifications of the category start with the category's buttons switched on or off as there. The General category has only Done switched on (*Mute*, the built-in button that stops the lights, speakers and sirens, starts off in every category).
@@ -162,15 +162,15 @@ Inside a notification, the Notification state trigger with no notification means
 
 A notification's buttons work the same in the Overview and on both dashboard cards. Each button has a list of **Actions**, shown in this fixed order (it cannot be changed):
 
-1. **Notification state**: *Done* closes the notification, *Dismiss* dismisses it, *Snooze* snoozes it for the chosen time. The built-in buttons have their own, a row titled by its type (*Done*: closes the notification as done; *Dismiss*: closes it without marking it done; *Snooze*: its times under the title) with a switch that is always on, like the Entity action row, and cannot be removed; the Tap and own buttons can add one (at most one). Without one, the notification stays as it is (to close it when something happens, use Done when).
-2. **Entity action** (a switch, always there): the listed entity's own action for that button, set in the entity's (or entity group's) dialog under *Entity actions*, which lists the switched-on buttons that use it.
-3. **Mute** (added, and deleted with the icon at the end of its row; the built-in *Mute* button has it as its own row with a switch that is always on): stops the notification lights, speakers and sirens; the notification stays.
+1. **Entity action** (a switch, always there): the listed entity's own action for that button, set in the entity's (or entity group's) dialog under *Entity actions*, which lists the switched-on buttons that use it.
+2. **Mute** (added, and deleted with the icon at the end of its row; the built-in *Mute* button has it as its own row with a switch that is always on): stops the notification lights, speakers and sirens; the notification stays.
+3. **Notification state**: *Done* closes the notification, *Dismiss* dismisses it, *Snooze* snoozes it for the chosen time. The built-in buttons have their own, a row titled by its type (*Done*: closes the notification as done; *Dismiss*: closes it without marking it done; *Snooze*: its times under the title) with a switch that is always on, like the Entity action row, and cannot be removed; the Tap and own buttons can add one (at most one). Without one, the notification stays as it is (to close it when something happens, use Done when).
 4. **Home Assistant actions** (any number, each its own row of Home Assistant's action editor, in their own order).
 5. **Navigation** (at most one, always last): *Navigate* opens a page, *More info* opens the entity's dialog (the chosen entity, else the notification's entity, else the notification's sensor).
 
-They run one after the other: Mute first (so the sound stops at once), then the entity action, the notification state and the Home Assistant actions. The entity action and the Home Assistant actions run in Home Assistant, as the user who pressed the button; the navigation happens where it was pressed. An action that cannot run is skipped, and the others still run. Under the list, *Add notification state*, *Add mute*, *Add action* and *Add navigation* add them (each is hidden once the button has one, except *Add action*). In a notification, *Reset* beside Actions brings back the default of a category's button (the others do only what they are).
+They run one after the other, in the order of the list: the entity action, Mute, the notification state and the Home Assistant actions. The entity action and the Home Assistant actions run in Home Assistant, as the user who pressed the button; the navigation happens where it was pressed. An action that cannot run is skipped, and the others still run. Under the list, *Add notification state*, *Add mute*, *Add action* and *Add navigation* add them (each is hidden once the button has one, except *Add action*). In a notification, *Reset* beside Actions brings back the default of a category's button (the others do only what they are).
 
-**Tap behavior:** one block, set in the category and followed by its notifications. *Action* runs the Tap's own Actions, edited as a button's, with the Navigation always in the list (*More info* by default); *Button action* runs another switched-on button's actions instead (for example Done), and only that button is chosen. A notification can change the whole block (its *Type* then no longer says *category*); *Reset* beside Tap behavior follows the category again. A button that is off or gone falls back to the Tap's actions.
+**Tap behavior:** one block, set in the category and followed by its notifications. *Action* runs the Tap's own Actions, edited as a button's, with the Navigation always in the list (*More info* by default); *Button action* runs another switched-on button's actions instead (for example Done), and only that button is chosen. A notification can change the whole block (its *Type* then no longer says *category*); *Reset* beside Tap behavior follows the category again. *Button action* is offered only when a button is switched on; when the button it runs is switched off later, a warning says so (it then falls back to the Tap's actions). The push part comes last in the dialog: a tap on the push opens the app and does the same. When the Tap's actions (or the button it runs) have a Navigate, the push opens that page (*The push opens /lovelace/kitchen (Navigate of Done)*) and *Open on tap* is hidden; with More info the push opens the *Open on tap* page with More info on top.
 
 **Snooze times:** the Snooze button's dialog lists 15 and 30 minutes, 1, 2, 3, 6 and 12 hours, Tomorrow, 2 and 3 days, 1 and 2 weeks and 1 month; at least one is chosen (by default 1 h, 3 h and Tomorrow). With one, the button snoozes at once; with more, the notification offers them (15 min, 1 h, Tomorrow, 2 d, 1 w, 1 mo). Minutes and hours count from the press; days come back on that day at the step's time (a scheduled step) or at 8:00 (*Snooze* in General, `snooze_tomorrow_at`).
 
@@ -199,11 +199,17 @@ max_cards: 3
 
 The dashboard card that shows one notification on a dashboard, in the look of the tile and alert cards: an icon, a label with a short data after it, the message, an optional second line (Info), and buttons on the right. The card colour is used for the border, the icon, the label and the buttons; the background is the normal card background.
 
-**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active notification of the notification shows (a notification started by its entities can have several), with all its buttons and its tap (see [Buttons](#buttons)). A Snooze with more than one time offers them on the notification. The notification hides itself while nothing is active (in the dashboard editor it shows a placeholder instead).
+**With a Notification Center notification:** choose its sensor (`sensor.nc_<name>`) as the entity, and everything comes from the Notification Center: name, icon, colour, message and Info. Every active notification of the notification shows (a notification started by its entities can have several), with all its buttons and its tap (see [Buttons](#buttons)). A Snooze with more than one time offers them on the notification. The Channels do not count: the card was placed for this notification. Snoozed, it shows greyed with *Snoozed until …*; upcoming (due later today) as in Upcoming, with its *Done* button; done today without buttons; idle greyed, with *No active notification* and when it was last done. Two options, in the dashboard card editor:
+
+| Option | Description |
+| --- | --- |
+| `show_when` | *Show when the notification is*: `active`, `snoozed`, `upcoming`, `done` (*Done today*), `idle`. Left out: always shown. In the dashboard editor a card hidden now shows faded, with a line that says so. |
+| `ignore_audience` | *Ignore audience* (default `true`): everyone sees it. `false`: only the notification's Audience, in their person state now. |
 
 ```yaml
 type: custom:notification-center-card
 entity: sensor.nc_washing_machine
+show_when: [active, snoozed]
 ```
 
 **On its own:** with any other entity (or none), the dashboard card shows what its options say; when it shows is up to its Visibility tab. All options are in the dashboard card editor:
@@ -242,6 +248,21 @@ visibility:
     entity: binary_sensor.dishwasher_leak
     state: "on"
 ```
+
+## The Notification badge
+
+The small twin of the Notification dashboard card, for one entity, at the top of a sections view (*Add badge*, then *Notification*). Its options are those of Home Assistant's entity badge, with its own elements: **Entity**; under *Content* **Name**, **Color**, **Icon**, *Displayed elements* (name, state, icon) and **State content**; under *Interactions* the tap, hold and double tap actions.
+
+**With a Notification Center notification:** everything comes from the notification: its icon, its colour by status (active the notification's colour, snoozed orange, done green, the rest grey, as the sensor's `icon_color`), its message and its highlight (the icon pulses and the border takes the colour while it is active). *State content* picks one or more of *Message* (default), *Info line*, *Status* (*Active*, *Snoozed until 18:00*, *Shows today at 19:00*, *Done today*, *Idle*) and *Name*; with several open notifications (Notification entities) the first one's message shows, with *+N*. *Name*, *Icon* and *Color* change the notification's (the colour only while active). A tap runs the notification's Tap behavior, unless the badge sets its own tap action; hold and double tap work as on Home Assistant's badges. The Channels do not count. Under *Notification*: `show_when` and `ignore_audience`, as on the dashboard card (default: always shown, everyone sees it).
+
+```yaml
+type: custom:notification-center-badge
+entity: sensor.nc_cat_at_home
+state_content: [message, status]
+show_when: [active, snoozed]
+```
+
+**With another entity:** it is Home Assistant's entity badge, with the same options; when it shows is up to its Visibility tab.
 
 After an update the card follows the new version once Home Assistant is restarted and the browser page is reloaded.
 

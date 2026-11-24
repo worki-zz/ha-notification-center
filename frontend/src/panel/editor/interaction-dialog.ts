@@ -10,10 +10,11 @@
 // changed for this notification only, and Push is a choice that, left
 // empty, follows the category.
 //
-// In a notification, a button has a list of Actions in a fixed order: the
-// notification state (fixed on Done, Dismiss and Snooze, which shows its
-// times there; one can be added to the Tap and the own buttons), the Entity
-// action (a switch, always there), Mute (added and deleted), any number
+// In a notification, a button has a list of Actions in a fixed order (the
+// order they run in): the Entity action (a switch, always there), Mute
+// (added and deleted), the notification state (fixed on Done, Dismiss and
+// Snooze, which shows its times there; one can be added to the Tap and the
+// own buttons), any number
 // of Home Assistant actions (Home Assistant's own rows, in their own order),
 // and the Navigation last. Reset beside Actions brings back the default (a
 // category's button).
@@ -94,15 +95,23 @@ function haActionName(action: unknown): string | undefined {
   return item?.action ?? item?.service;
 }
 
+/** A button a Tap can run, with its navigation (what the push opens). */
+export interface RunChoice {
+  value: string;
+  label: string;
+  navigation?: ButtonNavigation;
+}
+
 /** The buttons a Tap can run (Button action): the switched on ones. */
 export function runChoicesOf(
-  buttons: Pick<CategoryButton, "id" | "type" | "enabled" | "label">[],
-): { value: string; label: string }[] {
+  buttons: Pick<CategoryButton, "id" | "type" | "enabled" | "label" | "actions">[],
+): RunChoice[] {
   return buttons
     .filter((button) => button.type !== "tap" && button.enabled)
     .map((button) => ({
       value: buttonRef(button),
       label: button.label || INTERACTION_DEFAULTS[button.type].label,
+      ...(button.actions?.navigation ? { navigation: button.actions.navigation } : {}),
     }));
 }
 
@@ -139,6 +148,8 @@ export function actionsText(
 ): string[] {
   const parts: string[] = [];
   if (!actions) return parts;
+  if (actions.entity_action) parts.push("Entity action");
+  if (actions.mute) parts.push("Mute");
   const state = actions.notification_state;
   if (state) {
     const label = STATES.find((item) => item.value === state.type)?.label ?? state.type;
@@ -147,8 +158,6 @@ export function actionsText(
       : undefined;
     parts.push(time ? `${label} ${time}` : label);
   }
-  if (actions.entity_action) parts.push("Entity action");
-  if (actions.mute) parts.push("Mute");
   const list = actions.ha_actions ?? [];
   if (list.length) {
     const name = haActionName(list[0]);
@@ -188,7 +197,7 @@ export class NcInteractionDialog extends LitElement {
   @property({ type: Boolean, attribute: false }) public entityActionSet = false;
 
   // The Tap: the buttons it can run (Button action), by their key.
-  @property({ attribute: false }) public runChoices: { value: string; label: string }[] = [];
+  @property({ attribute: false }) public runChoices: RunChoice[] = [];
 
   @state() private _button?: Button;
 
@@ -272,14 +281,17 @@ export class NcInteractionDialog extends LitElement {
           : button.type === "tap"
             ? nothing
             : this._iconField(button)}
-        ${inherited ? this._renderPushChoice(button, inherited) : this._renderPush(button)}
-        ${button.type === "tap" ? this._renderOpenOnTap(button) : nothing}
+        ${button.type === "tap"
+          ? nothing
+          : inherited
+            ? this._renderPushChoice(button, inherited)
+            : this._renderPush(button)}
         ${category && button.type === "snooze"
           ? html`<div class="divider"></div>
               ${this._renderSnooze(button)}`
           : nothing}
         ${button.type === "tap"
-          ? this._tapBehavior(button)
+          ? html`${this._tapBehavior(button)} ${this._renderTapPush(button)}`
           : category
             ? nothing
             : this._renderActions(button)}
@@ -354,9 +366,10 @@ export class NcInteractionDialog extends LitElement {
           {
             select: {
               mode: "dropdown",
+              // Button action only with a switched on button to run.
               options: [
                 { value: "action", label: "Action" },
-                { value: "button", label: "Button action" },
+                ...(choices.length || run ? [{ value: "button", label: "Button action" }] : []),
               ],
             },
           },
@@ -387,6 +400,12 @@ export class NcInteractionDialog extends LitElement {
             )
           : nothing}
       </div>
+      ${run && !choices.some((choice) => choice.value === run)
+        ? html`<ha-alert alert-type="warning">
+            The button it runs is switched off, so a tap does not run it. Switch it on, or choose
+            another button or Action.
+          </ha-alert>`
+        : nothing}
       ${run ? nothing : this._actionList(button)}`;
   }
 
@@ -400,7 +419,8 @@ export class NcInteractionDialog extends LitElement {
       ${this._actionList(button)}`;
   }
 
-  // The Actions list, in its fixed order, and the buttons that add to it.
+  // The Actions list, in its run order (Entity action, Mute, notification
+  // state, Home Assistant actions, navigation), and the buttons that add to it.
   private _actionList(button: Button) {
     const actions = this._actionsOf(button);
     const own = OWN_STATE[button.type];
@@ -413,7 +433,6 @@ export class NcInteractionDialog extends LitElement {
     // its dialog.
     const addAction = actionAddAvailable();
     return html`<div class="actions">
-        ${own || actions.notification_state ? this._stateCard(button, actions) : nothing}
         ${this._switchRow(
           "mdi:format-list-checks",
           "Entity action",
@@ -446,6 +465,7 @@ export class NcInteractionDialog extends LitElement {
               </ha-icon-button>
             </ha-card>`
           : nothing}
+        ${own || actions.notification_state ? this._stateCard(button, actions) : nothing}
         <ha-automation-action
           class="ha-actions"
           ?hidden=${addAction && !list.length}
@@ -735,16 +755,37 @@ export class NcInteractionDialog extends LitElement {
     </div>`;
   }
 
-  // Tap: a tap on the push always opens the app and runs the Tap.
-  private _renderTapPush() {
-    return html`<div class="secondary">
-      Tapping the push notification always opens the app and does the same.
-    </div>`;
+  // Tap: the push part, at the bottom. A tap on the push always opens the
+  // app and does the same; with a Navigate (its own, or the run button's)
+  // the push opens that page, else the Open on tap page.
+  private _renderTapPush(button: Button) {
+    const navigation = this._tapNavigation(button);
+    return html`<div class="divider"></div>
+      <div class="section-head"><span class="title">Push notification</span></div>
+      <div class="secondary">Tapping the push notification opens the app and does the same.</div>
+      ${navigation?.type === "navigate"
+        ? html`<div class="secondary">
+            The push opens ${navigation.path || "the Navigate page"}
+            (${this._tapNavigationSource(button)}).
+          </div>`
+        : this._renderOpenOnTap(button, navigation?.type === "more_info")}`;
+  }
+
+  // The navigation a Tap does: its own actions', or the run button's.
+  private _tapNavigation(button: Button): ButtonNavigation | undefined {
+    const run = this._runOf(button);
+    if (run) return this.runChoices.find((choice) => choice.value === run)?.navigation;
+    return this._actionsOf(button).navigation;
+  }
+
+  // Where the Tap's Navigate comes from: "Navigate of Done", "Navigate".
+  private _tapNavigationSource(button: Button): string {
+    const run = this._runOf(button);
+    const label = run ? this.runChoices.find((choice) => choice.value === run)?.label : undefined;
+    return label ? `Navigate of ${label}` : "Navigate";
   }
 
   private _renderPush(button: Button) {
-    const tap = button.type === "tap";
-    if (tap) return this._renderTapPush();
     const on = button.show_in_push ?? true;
     const times = button.type === "snooze" ? snoozeChoices(button) : [];
     return html`<label class="switch-row">
@@ -766,12 +807,11 @@ export class NcInteractionDialog extends LitElement {
       </label>`;
   }
 
-  // Tap: the page the app opens when the push is tapped. A Navigate action
-  // opens its own path.
-  private _renderOpenOnTap(button: Button) {
-    if (!this._runOf(button) && this._actionsOf(button).navigation?.type === "navigate")
-      return nothing;
+  // Tap: the page the app opens when the push is tapped (More info opens
+  // on top of it).
+  private _renderOpenOnTap(button: Button, moreInfo: boolean) {
     const base = this.inherited?.open_on_tap;
+    const top = moreInfo ? " More info opens on top of it." : "";
     return field(
       this.hass,
       { navigation: {} },
@@ -785,8 +825,8 @@ export class NcInteractionDialog extends LitElement {
       },
       {
         helper: base
-          ? `The page the push opens. Empty: ${base} (category).`
-          : "The page the push opens. Empty: the default under General, Push.",
+          ? `The page the push opens. Empty: ${base} (category).${top}`
+          : `The page the push opens. Empty: the default under General, Push.${top}`,
       },
     );
   }
@@ -794,7 +834,6 @@ export class NcInteractionDialog extends LitElement {
   // A category's button in a notification: Push follows the category unless
   // chosen here.
   private _renderPushChoice(button: Button, inherited: CategoryButton) {
-    if (button.type === "tap") return this._renderTapPush();
     const own = button.show_in_push;
     const base = inherited.show_in_push ?? true;
     const times = button.type === "snooze" ? snoozeChoices(button) : [];

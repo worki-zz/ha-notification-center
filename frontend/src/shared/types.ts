@@ -118,11 +118,14 @@ export interface CustomCardEntry {
 // The card helpers of the dashboard (`window.loadCardHelpers`).
 export interface CardHelpers {
   createCardElement(config: Record<string, unknown>): HTMLElement;
+  createBadgeElement?(config: Record<string, unknown>): HTMLElement;
 }
 
 declare global {
   interface Window {
     customCards?: CustomCardEntry[];
+    // Entries in the dashboard badge picker.
+    customBadges?: CustomCardEntry[];
     loadCardHelpers?: () => Promise<CardHelpers>;
   }
 }
