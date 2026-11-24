@@ -7,6 +7,8 @@
 - A speaker's *Repeat* has a *Times* field for Loop and Recurring: how many times it plays in all; empty, it repeats until the notification is done or muted. *Repeat*, *Every* and *Times* share one row (it wraps on a phone), with *Until done or muted.* under it.
 - The Notification Center card has a *Show* option (`show`) with *Active*, *Upcoming* and *Empty state* (default: Active). *Upcoming* lists what shows later today and the snoozed notifications under the active ones, as on the Overview, each with its *Shows …* line. It replaces `show_empty`; `show_empty: true` still works and reads as Active and Empty state.
 - *More info* in the ... menu of a notification (the Notifications list and the editor's header) opens the sensor's dialog.
+- A built-in **Mute** button beside Done, Dismiss and Snooze (off by default in every category): it keeps the notification and stops its lights, speakers and sirens. In its dialog Mute is its own row with a switch that is always on. On a dashboard notification it comes after Snooze.
+- **Dismiss when**: a step block right after Done when, with Home Assistant's trigger editor. One of its triggers closes the notification as dismissed (not done, so the last done time stays); the event's source is `dismiss_when`. Stored as the step's `dismiss_when: {triggers: [...]}`.
 - The notification sensor has an `icon_color` attribute: active, the notification's colour (a system colour's name or `#rrggbb`); snoozed `orange`; done `green`; upcoming, dismissed, expired, idle and disabled `grey`. Home Assistant does not colour the icon by it, but cards and templates can use it. The status chips use the same colours: *Active* in the notification's colour, *Snoozed* orange, *Upcoming* and *Disabled* grey.
 
 ### Changed

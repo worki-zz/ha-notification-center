@@ -84,7 +84,7 @@ export interface Category {
   channels: Record<string, ChannelSettings>;
 }
 
-export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "custom";
+export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "mute" | "custom";
 
 /** Where a button takes the user, on the device it was pressed on. */
 export type ButtonNavigation =

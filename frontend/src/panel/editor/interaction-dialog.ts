@@ -53,6 +53,7 @@ export const INTERACTION_DEFAULTS: Record<
   done: { label: "Done", icon: "mdi:check" },
   dismiss: { label: "Dismiss", icon: "mdi:close" },
   snooze: { label: "Snooze", icon: "mdi:alarm-snooze" },
+  mute: { label: "Mute", icon: "mdi:volume-off" },
   custom: { label: "Button", icon: "mdi:gesture-tap-button" },
 };
 
@@ -403,6 +404,9 @@ export class NcInteractionDialog extends LitElement {
   private _actionList(button: Button) {
     const actions = this._actionsOf(button);
     const own = OWN_STATE[button.type];
+    // The built-in Mute button has Mute as its own fixed row, and no
+    // notification state.
+    const muteButton = button.type === "mute";
     const list = actions.ha_actions ?? [];
     const tap = button.type === "tap";
     // Home Assistant's own Add action button is used where ours cannot open
@@ -417,7 +421,16 @@ export class NcInteractionDialog extends LitElement {
           !!actions.entity_action,
           (on) => this._setActions({ entity_action: on || undefined }),
         )}
-        ${actions.mute
+        ${muteButton
+          ? html`<ha-card outlined class="own-row">
+              <ha-icon class="builtin" icon="mdi:volume-off"></ha-icon>
+              <div class="own-text">
+                <div>Mute</div>
+                <div class="secondary">Stops the notification lights, speakers and sirens.</div>
+              </div>
+              <ha-switch .checked=${true} disabled .label=${"Mute"}></ha-switch>
+            </ha-card>`
+          : actions.mute
           ? html`<ha-card outlined class="own-row">
               <ha-icon class="builtin" icon="mdi:volume-off"></ha-icon>
               <div class="own-text">
@@ -452,12 +465,12 @@ export class NcInteractionDialog extends LitElement {
           : nothing}
       </div>
       <div class="add">
-        ${own || actions.notification_state
+        ${own || muteButton || actions.notification_state
           ? nothing
           : this._addButton("Add notification state", () =>
               this._setActions({ notification_state: { type: "done" } }),
             )}
-        ${actions.mute
+        ${actions.mute || muteButton
           ? nothing
           : this._addButton("Add mute", () => this._setActions({ mute: true }))}
         ${addAction ? this._addButton("Add action", () => this._addHaAction()) : nothing}

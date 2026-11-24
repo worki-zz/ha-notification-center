@@ -80,6 +80,7 @@ SOURCE_ENTITY: Final = "entity"
 SOURCE_ACTION: Final = "action"
 SOURCE_BUTTON: Final = "button"
 SOURCE_DONE_WHEN: Final = "done_when"
+SOURCE_DISMISS_WHEN: Final = "dismiss_when"
 SOURCE_SCHEDULE: Final = "schedule"
 SOURCE_SNOOZE_END: Final = "snooze_end"
 

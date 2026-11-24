@@ -72,6 +72,7 @@ export interface EditorStep {
   activation: Start;
   conditions: StepConditions;
   done_when: { triggers: Obj[]; activation_conditions_no_longer_true: boolean };
+  dismiss_when: { triggers: Obj[] };
   buttons: Button[];
   // The people whose states differ from the category's audience.
   audience?: Record<string, AudienceEntry>;
@@ -148,12 +149,14 @@ export function newStep(category?: Category): EditorStep {
     activation: { type: "triggers", triggers: [] },
     conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
     done_when: { triggers: [], activation_conditions_no_longer_true: false },
+    dismiss_when: { triggers: [] },
     buttons: [
       // The Tap follows the category's Tap behavior: no actions stored.
       { id: newId(), type: "tap", enabled: enabled("tap") } as Button,
       builtin("done", enabled("done")),
       builtin("dismiss", enabled("dismiss")),
       builtin("snooze", enabled("snooze")),
+      builtin("mute", enabled("mute")),
     ],
     audience: {},
     channels: {},
@@ -356,6 +359,7 @@ export function toEditor(
       triggers: triggers(step.done_when?.triggers),
       activation_conditions_no_longer_true: step.done_when?.activation_conditions_no_longer_true ?? false,
     };
+    step.dismiss_when = { triggers: triggers(step.dismiss_when?.triggers) };
     // Every button has an id, so an entity action can point to it.
     for (const button of step.buttons) button.id ||= newId();
   }

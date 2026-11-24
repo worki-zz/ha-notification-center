@@ -24,6 +24,8 @@ const BLOCKS: Record<string, { block: StepBlock; name: string }> = {
   conditions: { block: "show", name: "Conditions" },
   "done when": { block: "done", name: "Done when" },
   done_when: { block: "done", name: "Done when" },
+  "dismiss when": { block: "dismiss", name: "Dismiss when" },
+  dismiss_when: { block: "dismiss", name: "Dismiss when" },
   audience: { block: "audience", name: "Audience" },
   channels: { block: "channels", name: "Channels" },
 };

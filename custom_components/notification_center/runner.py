@@ -37,8 +37,10 @@ from .cards import (
     as_period,
 )
 from .const import (
+    CLOSED_DISMISSED,
     CLOSED_DONE,
     DOMAIN,
+    SOURCE_DISMISS_WHEN,
     SOURCE_DONE_WHEN,
     SOURCE_ENTITY,
     SOURCE_TRIGGER,
@@ -251,6 +253,11 @@ class StepRunner:
             self._done_fired,
             (self._done_listed, self._done_unmatched),
         )
+        await self._async_setup_triggers(
+            self.step.get("dismiss_when", {}).get("triggers", []),
+            self._dismiss_fired,
+            (self._dismiss_listed, self._done_unmatched),
+        )
 
     @callback
     def async_stop(self) -> None:
@@ -433,6 +440,24 @@ class StepRunner:
 
     @callback
     def _done_fired(self, trigger: dict[str, Any], context: Context | None) -> None:
+        self._close_fired(trigger, context, CLOSED_DONE, SOURCE_DONE_WHEN)
+
+    @callback
+    def _dismiss_fired(self, trigger: dict[str, Any], context: Context | None) -> None:
+        self._close_fired(trigger, context, CLOSED_DISMISSED, SOURCE_DISMISS_WHEN)
+
+    @callback
+    def _dismiss_listed(self, entity_id: str, trigger: dict[str, Any]) -> None:
+        self._dismiss_fired(trigger, None)
+
+    def _close_fired(
+        self,
+        trigger: dict[str, Any],
+        context: Context | None,
+        closed: str,
+        source: str,
+    ) -> None:
+        """Close the open cards of the step (the trigger entity's own first)."""
         cards = [
             card
             for card in self.engine.cards_of(self.notification.id, self.step_id)
@@ -442,7 +467,7 @@ class StepRunner:
         own = [card for card in cards if card.entity_id == entity_id]
         context = trigger_context(trigger, context)
         for card in own or cards:
-            self.engine.close(card, CLOSED_DONE, SOURCE_DONE_WHEN, context=context)
+            self.engine.close(card, closed, source, context=context)
 
     @callback
     def _done_listed(self, entity_id: str, trigger: dict[str, Any]) -> None:

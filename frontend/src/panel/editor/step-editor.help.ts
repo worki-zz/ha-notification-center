@@ -3,7 +3,7 @@
 export type StartKind = "triggers" | "schedule" | "repeat";
 
 export const HELP: Record<
-  StartKind | "show" | "done" | "interactions",
+  StartKind | "show" | "done" | "dismiss" | "interactions",
   { title: string; text: string[] }
 > = {
   triggers: {
@@ -50,7 +50,14 @@ export const HELP: Record<
     title: "Done when",
     text: [
       "The notification closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
+      "To close it as dismissed instead (not done), use Dismiss when, the next block.",
       "When the activation is no longer true: an entity's notification closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a notification closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
+    ],
+  },
+  dismiss: {
+    title: "Dismiss when",
+    text: [
+      "The notification closes as dismissed by itself when one of these triggers fires: it is not done, so Last done does not change. For example, the cat's notification is dismissed when everyone leaves home.",
     ],
   },
 };

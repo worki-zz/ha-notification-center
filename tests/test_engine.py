@@ -88,6 +88,31 @@ async def test_trigger_done_when_and_last_done(
     assert center.state("sensor.notification_center") == "0"
 
 
+async def test_dismiss_when(center: Center) -> None:
+    """A Dismiss when trigger dismisses the card; last done stays empty."""
+    await center.set("input_boolean.dishwasher", "off")
+    await center.set("input_boolean.away", "off")
+    await center.add(
+        "Dishwasher",
+        step(
+            activation={
+                "type": "triggers",
+                "triggers": [state_trigger("input_boolean.dishwasher")],
+            },
+            dismiss_when={"triggers": [state_trigger("input_boolean.away", "on")]},
+        ),
+    )
+    stored = center.manager.config["notifications"][0]["steps"][0]
+    assert stored["dismiss_when"]["triggers"]
+    await center.set("input_boolean.dishwasher", "on")
+    assert center.state("sensor.nc_dishwasher") == "active"
+    await center.set("input_boolean.away", "on")
+    assert center.state("sensor.nc_dishwasher") == "idle"
+    assert center.attrs("sensor.nc_dishwasher")["last_done"] is None
+    assert center.kinds() == ["active", "dismissed"]
+    assert center.events[-1][1]["source"] == "dismiss_when"
+
+
 async def test_start_conditions(center: Center) -> None:
     """The conditions are checked when the trigger fires."""
     await center.set("input_boolean.away", "on")

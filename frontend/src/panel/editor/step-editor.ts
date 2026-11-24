@@ -114,6 +114,7 @@ export const STEP_BLOCKS = [
   "start",
   "show",
   "done",
+  "dismiss",
   "audience",
   "channels",
 ] as const;
@@ -262,6 +263,13 @@ export class NcStepEditor extends LitElement {
         "Done when",
         doneCount,
         this._renderDone(step),
+      )}
+      ${this._panel(
+        "dismiss",
+        "mdi:close-circle-outline",
+        "Dismiss when",
+        step.dismiss_when.triggers.length,
+        this._renderDismiss(step),
       )}
       <div class="group-gap"></div>
       ${this._panel(
@@ -799,6 +807,21 @@ export class NcStepEditor extends LitElement {
           this._change({
             done_when: { ...step.done_when, triggers: ev.detail.value },
           });
+        }}
+      ></ha-automation-trigger>
+    </div>`;
+  }
+
+  private _renderDismiss(step: EditorStep) {
+    return html`<div class="block">
+      ${this._title("Triggers", "dismiss")}
+      <ha-automation-trigger
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .triggers=${step.dismiss_when.triggers}
+        @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
+          ev.stopPropagation();
+          this._change({ dismiss_when: { triggers: ev.detail.value } });
         }}
       ></ha-automation-trigger>
     </div>`;
