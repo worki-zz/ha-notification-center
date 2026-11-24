@@ -62,6 +62,8 @@ class _Played:
     repeat: CALLBACK_TYPE | None = None
     # Playing now (a Loop plays again when it ends).
     busy: bool = False
+    # How many times it was played (a repeat's Times stops it).
+    plays: int = 0
 
 
 @dataclass(slots=True)
@@ -159,6 +161,9 @@ class SpeakerDevice(Device):
         played = self._played.get(key)
         if played is None or played.repeat is not None:
             return
+        times = repeat.get("times")
+        if times and played.plays >= int(times):
+            return
         if kind == "recurring":
             every = repeat.get("every") or {}
             seconds = timedelta(**{unit: int(value) for unit, value in every.items()})
@@ -194,6 +199,7 @@ class SpeakerDevice(Device):
         played = self._played.get(key)
         if played is not None:
             played.busy = True
+            played.plays += 1
 
         async def run() -> None:
             started = time.monotonic()

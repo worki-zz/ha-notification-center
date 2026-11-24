@@ -13,7 +13,7 @@
 // In a notification, a button has a list of Actions in a fixed order: the
 // notification state (fixed on Done, Dismiss and Snooze, which shows its
 // times there; one can be added to the Tap and the own buttons), the Entity
-// action (a switch, always there), Silence (added and deleted), any number
+// action (a switch, always there), Mute (added and deleted), any number
 // of Home Assistant actions (Home Assistant's own rows, in their own order),
 // and the Navigation last. Reset beside Actions brings back the default (a
 // category's button).
@@ -62,6 +62,18 @@ const STATES: { value: ButtonState["type"]; label: string }[] = [
   { value: "dismiss", label: "Dismiss" },
   { value: "snooze", label: "Snooze" },
 ];
+
+// The icon and the line of a built-in button's own notification state.
+const OWN_STATE_ICONS: Record<ButtonState["type"], string> = {
+  done: "mdi:check",
+  dismiss: "mdi:close",
+  snooze: "mdi:alarm-snooze",
+};
+const OWN_STATE_TEXTS: Record<ButtonState["type"], string> = {
+  done: "Closes the notification as done.",
+  dismiss: "Closes the notification without marking it done.",
+  snooze: "",
+};
 
 // A built-in button's own notification state.
 const OWN_STATE: Partial<Record<Button["type"], ButtonState["type"]>> = {
@@ -135,7 +147,7 @@ export function actionsText(
     parts.push(time ? `${label} ${time}` : label);
   }
   if (actions.entity_action) parts.push("Entity action");
-  if (actions.silence) parts.push("Silence");
+  if (actions.mute) parts.push("Mute");
   const list = actions.ha_actions ?? [];
   if (list.length) {
     const name = haActionName(list[0]);
@@ -405,15 +417,21 @@ export class NcInteractionDialog extends LitElement {
           !!actions.entity_action,
           (on) => this._setActions({ entity_action: on || undefined }),
         )}
-        ${actions.silence
-          ? this._fixedCard(
-              "mdi:volume-off",
-              "Silence",
-              html`<div class="secondary">
-                Stops the notification lights, speakers and sirens.
-              </div>`,
-              () => this._setActions({ silence: undefined }),
-            )
+        ${actions.mute
+          ? html`<ha-card outlined class="own-row">
+              <ha-icon class="builtin" icon="mdi:volume-off"></ha-icon>
+              <div class="own-text">
+                <div>Mute</div>
+                <div class="secondary">Stops the notification lights, speakers and sirens.</div>
+              </div>
+              <ha-icon-button
+                class="end"
+                .label=${"Delete"}
+                @click=${() => this._setActions({ mute: undefined })}
+              >
+                <ha-icon icon="mdi:delete"></ha-icon>
+              </ha-icon-button>
+            </ha-card>`
           : nothing}
         <ha-automation-action
           class="ha-actions"
@@ -439,9 +457,9 @@ export class NcInteractionDialog extends LitElement {
           : this._addButton("Add notification state", () =>
               this._setActions({ notification_state: { type: "done" } }),
             )}
-        ${actions.silence
+        ${actions.mute
           ? nothing
-          : this._addButton("Add silence", () => this._setActions({ silence: true }))}
+          : this._addButton("Add mute", () => this._setActions({ mute: true }))}
         ${addAction ? this._addButton("Add action", () => this._addHaAction()) : nothing}
         ${actions.navigation
           ? nothing
@@ -513,14 +531,19 @@ export class NcInteractionDialog extends LitElement {
     const own = OWN_STATE[button.type];
     const hass = this.hass!;
     if (own) {
+      // Titled by its type, with a switch that is always on, as the Entity
+      // action row; Snooze has its times under the title.
       const state = STATES.find((item) => item.value === own)!;
-      return this._fixedCard(
-        "mdi:list-status",
-        "Notification state",
-        own === "snooze"
-          ? this._renderSnooze(button)
-          : html`<div class="secondary">${state.label}</div>`,
-      );
+      return html`<ha-card outlined class="own-row ${own === "snooze" ? "tall" : ""}">
+        <ha-icon class="builtin" .icon=${OWN_STATE_ICONS[own]}></ha-icon>
+        <div class="own-text">
+          <div>${state.label}</div>
+          ${own === "snooze"
+            ? html`<div class="own-content">${this._renderSnooze(button)}</div>`
+            : html`<div class="secondary">${OWN_STATE_TEXTS[own]}</div>`}
+        </div>
+        <ha-switch .checked=${true} disabled .label=${state.label}></ha-switch>
+      </ha-card>`;
     }
     const state = actions.notification_state ?? { type: "done" };
     return this._fixedCard(
@@ -880,6 +903,18 @@ export class NcInteractionDialog extends LitElement {
     }
     .own-text {
       flex: 1;
+      min-width: 0;
+    }
+    .own-row.tall {
+      align-items: flex-start;
+    }
+    .own-content {
+      margin-top: 12px;
+    }
+    /* A delete button at the end, as the switch of the other rows. */
+    .own-row ha-icon-button.end {
+      margin: -8px -8px -8px 0;
+      color: var(--secondary-text-color);
     }
     .own-text .secondary,
     .fixed-content .secondary {

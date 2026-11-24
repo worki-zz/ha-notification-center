@@ -70,8 +70,8 @@ class Card:
     # A listed entity's closed card blocks a new one until the entity stops
     # matching: a dismissed or done card does not come back by itself.
     blocked: bool = False
-    # The channels were silenced (Keep it, stop light, speaker and push).
-    silenced: bool = False
+    # The channels were muted (Keep it, stop light, speaker and push).
+    muted: bool = False
     # Closed because the entity stopped matching (a status): the card does
     # not stay as done today, the notification just goes back to idle.
     transient: bool = False
@@ -126,7 +126,7 @@ class Card:
             "closed_reason": self.closed_reason,
             "closed_at": to_iso(self.closed_at),
             "blocked": self.blocked,
-            "silenced": self.silenced,
+            "muted": self.muted,
             "trigger": self.trigger,
             "data": self.data,
             "message_override": self.message_override,
@@ -156,7 +156,8 @@ class Card:
             closed_reason=data.get("closed_reason"),
             closed_at=parse_iso(data.get("closed_at")),
             blocked=bool(data.get("blocked", False)),
-            silenced=bool(data.get("silenced", False)),
+            # "silenced" is the key of runtime state saved before 0.7.4.
+            muted=bool(data.get("muted", data.get("silenced", False))),
             trigger=data.get("trigger"),
             data=dict(data.get("data") or {}),
             message_override=data.get("message_override"),

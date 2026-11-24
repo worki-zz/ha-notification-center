@@ -33,7 +33,7 @@ import { field } from "./fields";
 const RGB_MODES = ["hs", "xy", "rgb", "rgbw", "rgbww"];
 const DIM_MODES = [...RGB_MODES, "color_temp", "brightness", "white"];
 
-export const BLINK = "blink";
+export const PULSE = "notification_pulse";
 
 interface Capabilities {
   dims: boolean;
@@ -71,7 +71,7 @@ const NEW_LIGHT: Omit<Light, "id" | "entity_id"> = {
   dim_below: 30,
   dim_brightness: 30,
   dim_continuously: true,
-  effect: BLINK,
+  effect: PULSE,
   colors: {},
 };
 
@@ -131,7 +131,7 @@ export class NcSettingsLights extends LitElement {
     const parts: string[] = [];
     if (can.dims && light.brightness) parts.push(`Brightness ${light.brightness}%`);
     if (can.dims && light.illuminance_sensor) parts.push(`Dim: ${light.dim_brightness ?? 30}%`);
-    parts.push(`Highlight: ${light.effect && light.effect !== BLINK ? light.effect : "Blink"}`);
+    parts.push(`Highlight: ${light.effect && light.effect !== PULSE ? light.effect : "Notification Pulse"}`);
     return html`<div class="row static">
       ${channelIcon(this.hass, { key: `light:${light.id}`, name, icon: "mdi:lightbulb-outline", entity_id: light.entity_id })}
       <div class="text">
@@ -236,7 +236,7 @@ export class NcSettingsLights extends LitElement {
 
   private _renderSettings(edit: Draft, can: Capabilities) {
     const effects = [
-      { value: BLINK, label: "Blink" },
+      { value: PULSE, label: "Notification Pulse" },
       ...can.effects.map((effect) => ({ value: effect, label: effect })),
     ];
     return html`
@@ -270,9 +270,9 @@ export class NcSettingsLights extends LitElement {
       ${field(
         this.hass,
         { select: { mode: "dropdown", options: effects } },
-        can.effects.includes(edit.effect ?? "") ? edit.effect : BLINK,
+        can.effects.includes(edit.effect ?? "") ? edit.effect : PULSE,
         "Highlight effect",
-        (value) => this._set({ effect: (value as string) || BLINK }),
+        (value) => this._set({ effect: (value as string) || PULSE }),
         { helper: "How a highlighted notification shows." },
       )}
       ${can.dims ? this._renderDim(edit) : nothing}
@@ -395,7 +395,7 @@ export class NcSettingsLights extends LitElement {
     const { id: _id, ...data } = edit;
     void _id;
     const can = capabilities(entityState(this.hass, edit.entity_id));
-    if (!can.effects.includes(data.effect ?? "")) data.effect = BLINK;
+    if (!can.effects.includes(data.effect ?? "")) data.effect = PULSE;
     return data;
   }
 

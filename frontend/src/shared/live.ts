@@ -391,7 +391,7 @@ export function hasActions(actions: ButtonActions | undefined): boolean {
     !!actions &&
     (!!actions.entity_action ||
       !!actions.notification_state ||
-      !!actions.silence ||
+      !!actions.mute ||
       !!actions.ha_actions?.length ||
       !!actions.navigation)
   );
@@ -400,7 +400,7 @@ export function hasActions(actions: ButtonActions | undefined): boolean {
 /**
  * Press a button of a card.
  *
- * Its actions run in their fixed order: Silence, the entity action, the
+ * Its actions run in their fixed order: Mute, the entity action, the
  * notification state and the Home Assistant actions in Home Assistant, then the
  * navigation (More info or Navigate) here, from the given element. One that
  * cannot run is skipped; the navigation still happens.

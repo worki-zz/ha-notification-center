@@ -135,7 +135,7 @@ export function chimeField(
 
 /**
  * Highlight: Normal or one of the card's highlights (Pulse, Glow, Alert);
- * any highlight also makes the lights blink. A notification shows its
+ * any highlight also makes the lights pulse. A notification shows its
  * category's until it sets its own, which has an X that goes back to the
  * category's; choosing the category's is no own value, as in the colour
  * picker.

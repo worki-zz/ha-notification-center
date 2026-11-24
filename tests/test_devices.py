@@ -189,10 +189,10 @@ async def test_light_dims_and_custom_colour(
     assert on[-1].data["rgb_color"] == [16, 32, 48]
 
 
-async def test_switch_blinks_for_highlight(
+async def test_switch_pulses_for_highlight(
     center: Center, hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A switch blinks for a highlighted notification, a second on, a second off."""
+    """A switch pulses for a highlighted notification, a second on, a second off."""
     await center.set("switch.lamp", "off")
     on = async_mock_service(hass, "switch", "turn_on")
     off = async_mock_service(hass, "switch", "turn_off")
@@ -210,6 +210,33 @@ async def test_switch_blinks_for_highlight(
     async_fire_time_changed(hass, dt_util.utcnow())
     await hass.async_block_till_done()
     assert len(on) == 2
+
+
+async def test_dimmable_light_pulses_to_half(
+    center: Center, hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A dimmable light pulses between its brightness and half of it."""
+    await center.set("light.strip", "off", supported_color_modes=["hs"])
+    on = async_mock_service(hass, "light", "turn_on")
+    off = async_mock_service(hass, "light", "turn_off")
+    item = await center.manager.async_create(
+        "lights", {"entity_id": "light.strip", "brightness": 80}
+    )
+    assert item["effect"] == "notification_pulse"
+    key = f"light:{item['id']}"
+    await _category(center, highlight="alert", channels={key: {"modes": ["home"]}})
+    await center.add("Smoke", step())
+    await center.call("trigger", "sensor.nc_smoke")
+    assert on[-1].data["brightness_pct"] == 80
+    freezer.tick(timedelta(seconds=1))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    assert on[-1].data["brightness_pct"] == 40
+    assert not off
+    freezer.tick(timedelta(seconds=1))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    assert on[-1].data["brightness_pct"] == 80
 
 
 async def test_light_changed_by_hand_is_left_alone(
@@ -239,7 +266,7 @@ async def test_light_changed_by_hand_is_left_alone(
 async def test_speaker_plays_reads_and_repeats(
     center: Center, hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Chime, then the message; again every 30 s until silenced."""
+    """Chime, then the message; again every 30 s until muted."""
     await center.set("media_player.kitchen", "idle", supported_features=0)
     play = async_mock_service(hass, "media_player", "play_media")
     speak = async_mock_service(hass, "tts", "speak")
@@ -281,21 +308,21 @@ async def test_speaker_plays_reads_and_repeats(
     assert len(play) == 2
 
     engine = center.engine
-    engine.silence_cards(list(engine.cards.values()), "button")
+    engine.mute_cards(list(engine.cards.values()), "button")
     await hass.async_block_till_done()
     freezer.tick(timedelta(seconds=31))
     async_fire_time_changed(hass, dt_util.utcnow())
     await hass.async_block_till_done()
     assert len(play) == 2
     attrs = center.attrs("sensor.nc_channel_speaker_kitchen")
-    assert attrs["silenced"] == 1
+    assert attrs["muted"] == 1
     assert attrs["last_notification"] == "Doorbell"
 
 
-async def test_speaker_loop_plays_again_until_silenced(
+async def test_speaker_loop_plays_again_until_muted(
     center: Center, hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Loop plays again right after a play ends, until silenced."""
+    """Loop plays again right after a play ends, until muted."""
     await center.set("media_player.kitchen", "idle", supported_features=0)
     play = async_mock_service(hass, "media_player", "play_media")
     item = await center.manager.async_create(
@@ -320,12 +347,34 @@ async def test_speaker_loop_plays_again_until_silenced(
         assert len(play) == count
 
     engine = center.engine
-    engine.silence_cards(list(engine.cards.values()), "button")
+    engine.mute_cards(list(engine.cards.values()), "button")
     await hass.async_block_till_done()
     freezer.tick(timedelta(seconds=6))
     async_fire_time_changed(hass, dt_util.utcnow())
     await hass.async_block_till_done()
     assert len(play) == 3
+
+
+async def test_speaker_loop_stops_after_times(
+    center: Center, hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A repeat with Times plays that many times in all, then stops."""
+    await center.set("media_player.kitchen", "idle", supported_features=0)
+    play = async_mock_service(hass, "media_player", "play_media")
+    item = await center.manager.async_create(
+        "speakers", {"entity_id": "media_player.kitchen"}
+    )
+    key = f"speaker:{item['id']}"
+    repeat = {"type": "loop", "times": 2}
+    await _category(center, channels={key: {"modes": ["home"], "repeat": repeat}})
+    await center.add("Alarm", step())
+    await center.call("trigger", "sensor.nc_alarm")
+    await hass.async_block_till_done()
+    for _ in range(3):
+        freezer.tick(timedelta(seconds=6))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+    assert len(play) == 2
 
 
 async def test_speaker_channel_volume_and_no_chime(
@@ -486,8 +535,8 @@ async def test_siren_follows_a_change_and_stops(
     assert off[-1].data["entity_id"] == "siren.hall"
 
 
-async def test_silence_button(center: Center, hass: HomeAssistant) -> None:
-    """A button with the Silence action keeps the card and stops the siren."""
+async def test_mute_button(center: Center, hass: HomeAssistant) -> None:
+    """A button with the Mute action keeps the card and stops the siren."""
     await center.set("switch.siren", "off")
     on = async_mock_service(hass, "switch", "turn_on")
     off = async_mock_service(hass, "switch", "turn_off")
@@ -501,7 +550,7 @@ async def test_silence_button(center: Center, hass: HomeAssistant) -> None:
                     "id": "quiet",
                     "type": "custom",
                     "label": "Quiet",
-                    "actions": {"silence": True},
+                    "actions": {"mute": True},
                 }
             ]
         ),

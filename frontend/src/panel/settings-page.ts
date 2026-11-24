@@ -18,11 +18,18 @@ import { cssColor } from "../shared/format";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
+import "./editor/info-dialog";
 import "./empty-state";
+import { dismissAll, openMoreInfo, renderNotificationMenu, runNow } from "./notification-menu";
 import "./settings-general";
 import { STATUS_STYLES, renderStatus, statusOf } from "./status";
 
 export type SettingsTab = "notifications" | "categories" | "general";
+
+// The rows are links: a mouse drag on the handle would start the browser's
+// own link drag, which stops the sorting on desktop. The fallback drag of
+// Sortable uses mouse events instead, and the link drag is turned off.
+const SORTABLE_OPTIONS = { forceFallback: true, fallbackTolerance: 3 };
 
 @customElement("nc-settings")
 export class NcSettings extends LitElement {
@@ -46,6 +53,9 @@ export class NcSettings extends LitElement {
   @state() private _category = "";
 
   @state() private _error?: string;
+
+  // The notification whose Status dialog is open.
+  @state() private _info?: string;
 
   public override connectedCallback(): void {
     super.connectedCallback();
@@ -94,6 +104,7 @@ export class NcSettings extends LitElement {
               ? this._renderCategories()
               : this._renderList()}
         </div>
+        ${this._renderInfo()}
         ${this.tab === "notifications" && this.config?.notifications.length
           ? html`<ha-button slot="fab" size="l" @click=${this._add}>
               <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -194,6 +205,7 @@ export class NcSettings extends LitElement {
           ? html`<div class="empty">No notifications match.</div>`
           : html`<ha-sortable
               handle-selector=".handle"
+              .options=${SORTABLE_OPTIONS}
               .disabled=${filtering}
               @item-moved=${this._moved}
             >
@@ -211,8 +223,8 @@ export class NcSettings extends LitElement {
 
   private _renderRow(item: Notification, category: Category | undefined, filtering: boolean) {
     const steps = item.steps.length;
-    const status = statusOf(item, this.state?.notifications[item.id]);
     const color = cssColor(colorCss(this.config, item.color ?? category?.color));
+    const status = statusOf(item, this.state?.notifications[item.id], color);
     // The menu and the handle are inside the row's link: they must not open it.
     const stop = (ev: Event) => {
       ev.preventDefault();
@@ -223,6 +235,7 @@ export class NcSettings extends LitElement {
         class=${item.enabled ? "" : "disabled"}
         href=${`${this.base}/settings/notifications/${item.id}`}
         @click=${this._link}
+        @dragstart=${stop}
       >
         ${filtering
           ? nothing
@@ -245,26 +258,11 @@ export class NcSettings extends LitElement {
             <ha-icon-button slot="trigger" .label=${"Menu"}>
               <ha-icon icon="mdi:dots-vertical"></ha-icon>
             </ha-icon-button>
-            <ha-dropdown-item value="run" .disabled=${!item.enabled}>
-              <ha-icon slot="icon" icon="mdi:play"></ha-icon>
-              Run now
-            </ha-dropdown-item>
-            <ha-dropdown-item value="duplicate">
-              <ha-icon slot="icon" icon="mdi:content-duplicate"></ha-icon>
-              Duplicate
-            </ha-dropdown-item>
-            <ha-dropdown-item value="toggle">
-              <ha-icon
-                slot="icon"
-                .icon=${item.enabled ? "mdi:stop-circle-outline" : "mdi:play-circle-outline"}
-              ></ha-icon>
-              ${item.enabled ? "Disable" : "Enable"}
-            </ha-dropdown-item>
-            <wa-divider></wa-divider>
-            <ha-dropdown-item value="delete" variant="danger">
-              <ha-icon slot="icon" icon="mdi:delete"></ha-icon>
-              Delete
-            </ha-dropdown-item>
+            ${renderNotificationMenu({
+              saved: true,
+              runnable: item.enabled,
+              enabled: item.enabled,
+            })}
           </ha-dropdown>
         </div>
       </ha-list-item-button>
@@ -299,15 +297,37 @@ export class NcSettings extends LitElement {
     );
   }
 
+  private _renderInfo() {
+    const item = this._info ? this.config?.notifications.find((n) => n.id === this._info) : undefined;
+    if (!item) return nothing;
+    return html`<nc-info-dialog
+      .hass=${this.hass}
+      .config=${this.config}
+      .state=${this.state}
+      .notification=${item}
+      @info-closed=${() => (this._info = undefined)}
+    ></nc-info-dialog>`;
+  }
+
   private async _menu(ev: CustomEvent<{ item: { value: string } }>, item: Notification): Promise<void> {
     const hass = this.hass!;
+    const entityId = this.state?.notifications[item.id]?.entity_id ?? undefined;
     switch (ev.detail.item.value) {
-      case "run": {
-        const entityId = this.state?.notifications[item.id]?.entity_id;
-        if (!entityId) return;
-        await this._run(() => hass.callService!(DOMAIN, "trigger", { entity_id: entityId }));
+      case "more_info":
+        openMoreInfo(this, entityId);
+        return;
+      case "info":
+        this._info = item.id;
+        return;
+      case "run":
+      case "run_me": {
+        const onlyMe = ev.detail.item.value === "run_me";
+        await this._run(() => runNow(hass, entityId, 1, onlyMe));
         return;
       }
+      case "dismiss":
+        await this._run(() => dismissAll(hass, entityId, item.steps.length));
+        return;
       case "duplicate":
         await this._run(async () => {
           const copy = await hass.callWS<Notification>({

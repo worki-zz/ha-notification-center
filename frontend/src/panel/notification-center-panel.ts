@@ -5,38 +5,36 @@ import { repeat } from "lit/directives/repeat.js";
 import "./dialog-back";
 import "./empty-state";
 import { loadDashboardElements } from "../card/elements";
-import { CHANNEL_DASHBOARD, colorCss, type AudienceEntry, type AudienceState } from "../shared/config";
 import {
-  cssColor,
   firstWeekday,
   formatDay,
   formatTime,
-  formatWhen,
   weekday,
 } from "../shared/format";
 import {
-  audienceOf,
   cardKey,
-  categoryOf,
-  doneEarly,
   effectiveButtons,
   errorText,
-  inAudience,
   liveCards,
   navigate,
   personOf,
   pressButton,
-  stepOf,
   type LiveCard,
 } from "../shared/live";
 import "../shared/live-card";
-import { type NotificationViewData } from "../shared/notification-view";
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
-import { isTemplate, replacePlaceholders } from "../shared/text";
+import {
+  doneEarlyOf,
+  endOfToday,
+  renderScheduled,
+  renderUpcoming,
+  scheduledSteps,
+  upcomingToday,
+  type Upcoming,
+} from "../shared/upcoming";
 import type { HomeAssistant, PanelInfo } from "../shared/types";
 import "./category-editor";
-import { effectiveChannel, modeColumns, sleepersOf } from "./channel-helpers";
 import "./general-page";
 import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";
@@ -57,13 +55,6 @@ const WEEK = "This week";
 // How often relative times are written again.
 const TICK = 30_000;
 
-interface Upcoming {
-  key: string;
-  notificationId: string;
-  stepId: string;
-  due: Date;
-  view: NotificationViewData;
-}
 
 // The sidebar panel: the Overview of the active cards with what comes
 // today, Schedule and Done today behind their buttons, and the settings for
@@ -211,60 +202,13 @@ export class NotificationCenterPanel extends LitElement {
     return liveCards(config, state, { statuses, person: personOf(this.hass) });
   }
 
-  private _endOfToday(): number {
-    const end = new Date(this._now);
-    end.setHours(24, 0, 0, 0);
-    return end.getTime();
-  }
-
-  private _when(when: Date): string {
-    return formatWhen(this.hass!, when, this._now);
-  }
-
-  // The scheduled steps still to come, soonest first.
   private _upcoming(): Upcoming[] {
-    const { config, state } = this._store;
-    const hass = this.hass;
-    if (!config || !state || !hass) return [];
-    const person = personOf(hass);
-    const people = Object.keys(state.people ?? {});
-    const result: Upcoming[] = [];
-    for (const notification of config.notifications) {
-      if (!notification.enabled) continue;
-      const entry = state.notifications[notification.id];
-      const category = categoryOf(config, notification);
-      for (const item of entry?.upcoming ?? []) {
-        const step = stepOf(notification, item.step_id);
-        if (!step || !inAudience(category, step, person, people)) continue;
-        // A step with an open card shows that card instead.
-        if (entry.cards.some((card) => card.step_id === step.id && card.status !== "done")) {
-          continue;
-        }
-        const due = new Date(item.due);
-        const message = isTemplate(step.message) ? "" : replacePlaceholders(step.message, {});
-        result.push({
-          key: `${notification.id}|${step.id}`,
-          notificationId: notification.id,
-          stepId: step.id,
-          due,
-          view: {
-            label: notification.name,
-            message,
-            when: this._when(due),
-            icon: notification.icon || category?.icon || "mdi:calendar-clock",
-            color: cssColor(colorCss(config, notification.color ?? category?.color)),
-            muted: true,
-            buttons: [{ key: "done_early", label: "Done", icon: "mdi:check" }],
-          },
-        });
-      }
-    }
-    return result.sort((a, b) => a.due.getTime() - b.due.getTime());
+    return this.hass ? scheduledSteps(this.hass, this._store, this._now) : [];
   }
 
-  private async _doneEarly(item: Upcoming): Promise<void> {
-    await this._run(() => doneEarly(this.hass!, item.notificationId, item.stepId));
-  }
+  private _doneEarly = (item: Upcoming): void => {
+    void this._run(() => doneEarlyOf(this.hass!, item));
+  };
 
   // -- Render --------------------------------------------------------------
 
@@ -340,133 +284,16 @@ export class NotificationCenterPanel extends LitElement {
     );
   }
 
-  // The active cards the Dashboard holds back for the viewer now.
-  private _held(): LiveCard[] {
-    const { config, state } = this._store;
-    if (!config || !state || !this.hass) return [];
-    return liveCards(config, state, {
-      statuses: ["active"],
-      person: personOf(this.hass),
-      withHeld: true,
-    }).filter((live) => live.held);
-  }
-
-  // Why a card is held back, as the line under it says.
-  private _heldText(live: LiveCard): string {
-    const held = live.held!;
-    if (held.reason === "delay" && held.until) {
-      return `Shows ${this._when(new Date(held.until))}`;
-    }
-    const config = this._store.config;
-    if (held.reason === "mode") {
-      // The modes the Dashboard sends this card in, in the table's order.
-      const settings = effectiveChannel(
-        live.category?.channels?.[CHANNEL_DASHBOARD],
-        live.step?.channels?.[CHANNEL_DASHBOARD],
-      );
-      const names = modeColumns(config?.modes)
-        .filter((mode) => settings.modes?.includes(mode.id))
-        .map((mode) => mode.name);
-      return names.length ? `Shows in ${orList(names)} home mode` : "Shows when the home mode changes";
-    }
-    // The audience: what would make the card show (arrive, wake up, ...),
-    // with the names of the people who would have to do it.
-    const states = this._store.state?.people ?? {};
-    const sleepers = sleepersOf(config?.people);
-    const viewer = this.hass ? personOf(this.hass) : undefined;
-    const people = viewer && viewer in states ? [viewer] : Object.keys(states);
-    const audience = audienceOf(live.category, live.step, people);
-    const byChange = new Map<StateChange, string[]>();
-    for (const person of people) {
-      for (const change of stateChanges(states[person], audience[person], sleepers.includes(person))) {
-        byChange.set(change, [...(byChange.get(change) ?? []), person]);
-      }
-    }
-    const list = CHANGE_ORDER.filter((change) => byChange.has(change));
-    if (!list.length) return "Shows when the audience can get it";
-    if (viewer && people.length === 1) return `Shows when you ${orList(list)}`;
-    const involved = new Set([...byChange.values()].flat());
-    if (involved.size > MAX_NAMES) {
-      return `Shows when someone ${orList(list.map((change) => THIRD_PERSON[change]))}`;
-    }
-    const name = (person: string) =>
-      String(this.hass?.states[person]?.attributes.friendly_name ?? person.replace(/^person\./, ""));
-    return `Shows when ${orList(
-      list.map((change) => `${orList(byChange.get(change)!.map(name))} ${THIRD_PERSON[change]}`),
-    )}`;
-  }
-
-  // An active card the Dashboard holds back: neutral, with the reason.
-  private _renderHeld(live: LiveCard) {
-    return html`
-      <notification-center-live-card
-        class="upcoming"
-        .hass=${this.hass}
-        .live=${live}
-        .now=${this._now}
-        .data=${""}
-        .when=${this._heldText(live)}
-        .muted=${true}
-      ></notification-center-live-card>
-    `;
-  }
-
-  // A snoozed card among the upcoming ones: neutral, with its snooze end.
-  private _renderSnoozed(live: LiveCard) {
-    const until = live.card.snoozed_until;
-    return html`
-      <notification-center-live-card
-        class="upcoming"
-        .hass=${this.hass}
-        .live=${live}
-        .now=${this._now}
-        .data=${""}
-        .when=${until ? `Snoozed until ${this._when(new Date(until))}` : "Snoozed"}
-        .muted=${true}
-      ></notification-center-live-card>
-    `;
-  }
-
   private _renderUpcoming(items: Upcoming[]) {
-    return repeat(
-      items,
-      (item) => item.key,
-      (item) => html`
-        <notification-center-view
-          class="upcoming"
-          .hass=${this.hass}
-          .view=${item.view}
-          @nc-button=${() => this._doneEarly(item)}
-        ></notification-center-view>
-      `,
-    );
+    return renderScheduled(this.hass!, items, this._doneEarly);
   }
 
   // The active cards, then Upcoming: what is due today and the snoozed
   // cards, by their time.
   private _renderOverview() {
     const active = this._cards(["active"]);
-    const end = this._endOfToday();
-    const timed: {
-      at: number;
-      key: string;
-      live?: LiveCard;
-      item?: Upcoming;
-    }[] = [
-      ...this._held().map((live) => ({
-        at: live.held?.until ? new Date(live.held.until).getTime() : this._now,
-        key: cardKey(live.card),
-        live,
-      })),
-      ...this._cards(["snoozed"]).map((live) => ({
-        at: live.card.snoozed_until ? new Date(live.card.snoozed_until).getTime() : 0,
-        key: cardKey(live.card),
-        live,
-      })),
-      ...this._upcoming()
-        .filter((item) => item.due.getTime() < end)
-        .map((item) => ({ at: item.due.getTime(), key: item.key, item })),
-    ].sort((a, b) => a.at - b.at);
+    const end = endOfToday(this._now);
+    const timed = this.hass ? upcomingToday(this.hass, this._store, this._now) : [];
     const done = this._cards(["done"]).length;
     const later = this._upcoming().some((item) => item.due.getTime() >= end);
     if (!this._store.config?.notifications.length) {
@@ -485,16 +312,7 @@ export class NotificationCenterPanel extends LitElement {
           </ha-card>`}
       ${timed.length
         ? html`<h2>Upcoming</h2>
-            ${repeat(
-              timed,
-              (entry) => entry.key,
-              (entry) =>
-                entry.live
-                  ? entry.live.held
-                    ? this._renderHeld(entry.live)
-                    : this._renderSnoozed(entry.live)
-                  : this._renderUpcoming([entry.item!]),
-            )}`
+            ${renderUpcoming(this.hass!, this._store, timed, this._now, this._doneEarly)}`
         : nothing}
       ${later || done
         ? html`<div class="pages">
@@ -532,7 +350,7 @@ export class NotificationCenterPanel extends LitElement {
   // week, this month, this year, next year (and later years by number).
   private _renderSchedule() {
     const hass = this.hass!;
-    const end = this._endOfToday();
+    const end = endOfToday(this._now);
     const items = this._upcoming().filter((item) => item.due.getTime() >= end);
     if (!items.length) return this._renderEmpty("Nothing scheduled");
     const today = new Date(this._now);
@@ -822,39 +640,4 @@ declare global {
   interface HTMLElementTagNameMap {
     "notification-center-panel": NotificationCenterPanel;
   }
-}
-
-/** "a", "a or b", "a, b or c". */
-function orList(items: string[]): string {
-  return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
-}
-
-type StateChange = "arrive home" | "wake up" | "go to sleep" | "arrive home and go to sleep" | "leave home";
-
-// The order the changes are listed in, and how they read after a name.
-const CHANGE_ORDER: StateChange[] = ["arrive home", "wake up", "go to sleep", "arrive home and go to sleep", "leave home"];
-const THIRD_PERSON: Record<StateChange, string> = {
-  "arrive home": "arrives home",
-  "wake up": "wakes up",
-  "go to sleep": "goes to sleep",
-  "arrive home and go to sleep": "arrives home and goes to sleep",
-  "leave home": "leaves home",
-};
-
-// With more people than this the Upcoming line says "someone".
-const MAX_NAMES = 3;
-
-/**
- * What a person has to do for a card to show to them: from their state now
- * to a state ticked for them (asleep only with a sleep condition).
- */
-function stateChanges(now: AudienceState | undefined, entry: AudienceEntry | undefined, canSleep: boolean): StateChange[] {
-  if (!now || !entry) return [];
-  const changes: StateChange[] = [];
-  if (entry.home && now !== "home") changes.push(now === "away" ? "arrive home" : "wake up");
-  if (entry.sleep && canSleep && now !== "sleep") {
-    changes.push(now === "away" ? "arrive home and go to sleep" : "go to sleep");
-  }
-  if (entry.away && now !== "away") changes.push("leave home");
-  return changes;
 }

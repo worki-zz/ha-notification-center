@@ -13,7 +13,7 @@ from .common import Center, step
 
 
 async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) -> None:
-    """The Activity log can say why: the state is a child of the cause."""
+    """The Activity log can say why: the state is written in the cause's context."""
     await center.set("binary_sensor.front", "off", device_class="door")
     await center.add(
         "Doors",
@@ -33,10 +33,10 @@ async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) 
     assert cause is not None
     assert state is not None
     assert state.state == "active"
-    assert state.context.parent_id == cause.context.id
+    assert state.context.id == cause.context.id
     summary = hass.states.get("sensor.notification_center")
     assert summary is not None
-    assert summary.context.parent_id == state.context.id
+    assert summary.context.id == state.context.id
 
     context = Context()
     await hass.services.async_call(
@@ -49,7 +49,7 @@ async def test_changes_link_to_their_cause(hass: HomeAssistant, center: Center) 
     state = hass.states.get("sensor.nc_doors")
     assert state is not None
     assert state.state == "done"
-    assert state.context.parent_id == context.id
+    assert state.context.id == context.id
 
 
 async def test_time_driven_change_has_no_cause(
@@ -66,8 +66,8 @@ async def test_time_driven_change_has_no_cause(
     assert state.context.parent_id is None
     summary = hass.states.get("sensor.notification_center")
     assert summary is not None
-    # The summary sensor is still caused by the notification's sensor.
-    assert summary.context.parent_id == state.context.id
+    # The summary sensor follows in the notification's sensor's context.
+    assert summary.context.id == state.context.id
 
 
 async def test_closing_is_caused_and_reopening_does_not_flicker(
@@ -108,7 +108,7 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
     assert state is not None
     # A status goes back to idle, it is not "done today".
     assert state.state == "idle"
-    assert state.context.parent_id == door.context.id
+    assert state.context.id == door.context.id
 
     log.clear()
     await center.set("binary_sensor.front", "on")
@@ -125,7 +125,7 @@ async def test_closing_is_caused_and_reopening_does_not_flicker(
     summary = hass.states.get("sensor.notification_center")
     assert sensor is not None
     assert summary is not None
-    assert summary.context.parent_id == sensor.context.id
+    assert summary.context.id == sensor.context.id
 
 
 async def test_entity_already_matching_has_no_cause(

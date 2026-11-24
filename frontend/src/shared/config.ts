@@ -72,7 +72,7 @@ export interface Category {
   // A system colour by name, or an own colour (the Colors list) by its id.
   color?: string | null;
   // How its cards stand out (none: Normal); any highlight also makes the
-  // lights blink (or show their effect).
+  // lights pulse (or show their effect).
   highlight?: CardHighlight;
   // What the speakers play.
   chime?: string | null;
@@ -99,7 +99,7 @@ export interface ButtonState {
 }
 
 /**
- * The actions of a button. They run in this fixed order: Silence, the
+ * The actions of a button. They run in this fixed order: Mute, the
  * entity action, the notification state, the Home Assistant actions, then
  * the navigation. Left out: not used.
  */
@@ -108,7 +108,7 @@ export interface ButtonActions {
   // Not on the built-in Done, Dismiss and Snooze: they have their own.
   notification_state?: ButtonState;
   // Stop the lights, speakers and sirens; the card stays.
-  silence?: boolean;
+  mute?: boolean;
   ha_actions?: unknown[];
   navigation?: ButtonNavigation;
 }
@@ -263,7 +263,7 @@ export interface Light {
   dim_below?: number | null;
   dim_brightness?: number | null;
   dim_continuously?: boolean;
-  // "blink" or one of the light's effects.
+  // "notification_pulse" (own) or one of the light's effects.
   effect?: string;
   // The light's own RGB of the system and own colours (only what differs).
   colors?: Record<string, number[]>;
@@ -396,7 +396,7 @@ export interface CardState {
   step_id: string;
   entity_id: string | null;
   status: "active" | "hidden" | "snoozed" | "done" | "dismissed" | "expired";
-  silenced?: boolean;
+  muted?: boolean;
   since: string;
   state_since: string;
   // When it last became active (an active card).
@@ -450,5 +450,5 @@ export interface StateMessage {
   notifications: Record<string, NotificationState>;
 }
 
-// "silence" keeps the card open but stops its channels (Keep it silently).
-export type CardAction = "done" | "dismiss" | "snooze" | "silence";
+// "mute" keeps the card open but stops its channels (Mute).
+export type CardAction = "done" | "dismiss" | "snooze" | "mute";

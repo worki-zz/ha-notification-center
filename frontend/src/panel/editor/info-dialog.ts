@@ -219,7 +219,7 @@ export class NcInfoDialog extends LitElement {
   private _renderPeople(card: CardState, channel: ChannelInfo, view: ChannelView): unknown {
     if (channel.kind !== "dashboard" && channel.kind !== "push") return nothing;
     if (view.reason !== null && view.reason !== "audience") return nothing;
-    if (card.silenced && channel.kind === "push") return nothing;
+    if (card.muted && channel.kind === "push") return nothing;
     const people = haPeople(this.hass);
     if (!people.length) return nothing;
     const states = this.state?.people ?? {};
@@ -279,8 +279,8 @@ export class NcInfoDialog extends LitElement {
       default:
         break;
     }
-    if (card.silenced && channel.kind !== "dashboard") {
-      return { text: "Silenced", tone: "off", icon: "mdi:volume-off" };
+    if (card.muted && channel.kind !== "dashboard") {
+      return { text: "Muted", tone: "off", icon: "mdi:volume-off" };
     }
     const to = view.people.map((id) => this._personName(id));
     const verb = channel.kind === "dashboard" ? "Shows" : "Sends";

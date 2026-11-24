@@ -6,23 +6,30 @@ import type { Notification, NotificationState } from "../shared/config";
 
 export interface Status {
   label: string;
-  // green, yellow, purple, red or grey
-  tone: "green" | "yellow" | "purple" | "red" | "grey";
+  // green, yellow, orange, purple, red or grey; "color" uses ``color``.
+  tone: "green" | "yellow" | "orange" | "purple" | "red" | "grey" | "color";
+  // The CSS colour of the "color" tone.
+  color?: string;
 }
 
-/** Active, Upcoming, Snoozed or Disabled; nothing when idle. */
+/**
+ * Active (in the notification's colour), Upcoming (grey), Snoozed (orange)
+ * or Disabled (grey); nothing when idle. The same colours as the
+ * ``icon_color`` attribute of the notification's sensor.
+ */
 export function statusOf(
   notification: Pick<Notification, "enabled">,
   state: NotificationState | undefined,
+  color?: string,
 ): Status | undefined {
   if (!notification.enabled) return { label: "Disabled", tone: "grey" };
   switch (state?.state) {
     case "active":
-      return { label: "Active", tone: "green" };
+      return color ? { label: "Active", tone: "color", color } : { label: "Active", tone: "green" };
     case "snoozed":
-      return { label: "Snoozed", tone: "yellow" };
+      return { label: "Snoozed", tone: "orange" };
     case "upcoming":
-      return { label: "Upcoming", tone: "yellow" };
+      return { label: "Upcoming", tone: "grey" };
     default:
       return undefined;
   }
@@ -30,7 +37,10 @@ export function statusOf(
 
 export function renderStatus(status: Status | undefined) {
   if (!status) return nothing;
-  return html`<span class="status ${status.tone}">${status.label}</span>`;
+  return html`<span
+    class="status ${status.tone}"
+    style=${status.color ? `--status-color: ${status.color}` : ""}
+  >${status.label}</span>`;
 }
 
 // For the styles of the elements that show the chip.
@@ -54,6 +64,14 @@ export const STATUS_STYLES = `
   .status.yellow {
     color: var(--amber-color, #ff9800);
     background-color: rgb(from var(--amber-color, #ff9800) r g b / 0.15);
+  }
+  .status.orange {
+    color: var(--orange-color, #ff9800);
+    background-color: rgb(from var(--orange-color, #ff9800) r g b / 0.15);
+  }
+  .status.color {
+    color: var(--status-color);
+    background-color: rgb(from var(--status-color) r g b / 0.15);
   }
   .status.red {
     color: var(--red-color, #f44336);

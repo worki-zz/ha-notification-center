@@ -34,7 +34,7 @@ const PAGES: Record<string, { title: string; intro: string[] }> = {
   sound: {
     title: "Sound",
     intro: [
-      "The speakers and sirens of the Sound channels. A speaker plays the chime of a notification once when it starts to send, can read the message, and can repeat. A siren (such as a smoke alarm's) sounds while the notification sends. Silence action stops them.",
+      "The speakers and sirens of the Sound channels. A speaker plays the chime of a notification once when it starts to send, can read the message, and can repeat. A siren (such as a smoke alarm's) sounds while the notification sends. Mute action stops them.",
     ],
   },
   chimes: {

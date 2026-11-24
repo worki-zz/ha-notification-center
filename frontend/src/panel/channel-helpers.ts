@@ -8,6 +8,8 @@ import { type ChannelInfo } from "./devices";
 
 export type { ChannelInfo } from "./devices";
 export { channelsOf } from "./devices";
+export { effectiveChannel, modeColumns, sleepersOf } from "../shared/channels";
+import { effectiveChannel } from "../shared/channels";
 
 export const STATE_NAMES: Record<AudienceState, string> = {
   home: "At home",
@@ -33,13 +35,6 @@ export function haPeople(hass: HomeAssistant | undefined): PersonInfo[] {
         (state.attributes.entity_picture as string | undefined) ?? undefined,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** The modes as columns: the unconditional Home first, then the list's order. */
-export function modeColumns(modes: Mode[] | undefined): Mode[] {
-  const list = modes ?? [];
-  const home = list.find((mode) => mode.id === "home" && !mode.condition);
-  return home ? [home, ...list.filter((mode) => mode !== home)] : list;
 }
 
 const EVERY: AudienceEntry = { home: true, sleep: true, away: true };
@@ -81,15 +76,6 @@ export function personStates(person: string, sleepers: string[]): AudienceState[
   return sleepers.includes(person) ? AUDIENCE_STATES : ["home", "away"];
 }
 
-/** The people of the configuration with a sleep condition. */
-export function sleepersOf(
-  people: { person: string; sleep?: unknown }[] | undefined,
-): string[] {
-  return (people ?? [])
-    .filter((person) => person.sleep)
-    .map((person) => person.person);
-}
-
 /** "2/3": the people in at least one state they can be in, of everyone. */
 export function audienceCount(
   hass: HomeAssistant | undefined,
@@ -114,14 +100,6 @@ export function channelCount(
 ): number {
   return channels.filter((channel) => (effectiveChannel(base?.[channel.key], own?.[channel.key]).modes ?? []).length)
     .length;
-}
-
-/** A channel's settings: the category's, then what the step changes. */
-export function effectiveChannel(
-  base: ChannelSettings | undefined,
-  own: ChannelSettings | undefined,
-): ChannelSettings {
-  return { modes: [], delay: null, ...(base ?? {}), ...(own ?? {}) };
 }
 
 /** "5 minutes", "1 hour 30 minutes". */

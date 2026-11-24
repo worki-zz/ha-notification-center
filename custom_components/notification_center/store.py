@@ -25,6 +25,7 @@ from .model import (
     CHANNEL_PUSH,
     COLLECTIONS,
     DEVICE_PREFIXES,
+    EFFECT_PULSE,
     GENERAL_CATEGORY_ID,
     GENERAL_SCHEMA,
     HOME_MODE_ID,
@@ -47,7 +48,8 @@ STORAGE_VERSION: Final = 1
 # 3: a button has a list of actions instead of one action (0.7.1).
 # 4: the unused fields attachments, confirm and the read volume are gone.
 # 5: the Tap behavior is one block, the step's or the category's.
-STORAGE_MINOR_VERSION: Final = 5
+# 6: Silence is Mute, the own light blink is Notification Pulse (0.7.4).
+STORAGE_MINOR_VERSION: Final = 6
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -57,7 +59,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # 2: a button has a list of actions instead of one action (0.7.1).
 # 3: the unused fields attachments, confirm and the read volume are gone.
 # 4: the Tap behavior is one block, the step's or the category's.
-EXPORT_VERSION: Final = 4
+# 5: Silence is Mute, the own light blink is Notification Pulse.
+EXPORT_VERSION: Final = 5
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -81,6 +84,8 @@ class _ConfigStore(Store[ConfigData]):
             drop_unused_fields(old_data)
         if old_major_version == 1 and old_minor_version < 5:
             upgrade_tap_behavior(old_data)
+        if old_major_version == 1 and old_minor_version < 6:
+            rename_mute_and_pulse(old_data)
         return old_data
 
 
@@ -88,7 +93,7 @@ class _ConfigStore(Store[ConfigData]):
 _OLD_ACTIONS: Final[dict[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {
     "ha_action": lambda old: {"ha_actions": list(old.get("actions") or [])},
     "entity_action": lambda old: {"entity_action": True},
-    "silence": lambda old: {"silence": True},
+    "silence": lambda old: {"mute": True},
     "more_info": lambda old: {
         "navigation": {
             "type": "more_info",
@@ -177,6 +182,33 @@ def upgrade_tap_behavior(data: dict[str, Any]) -> None:
                     "navigation": {"type": "more_info"}
                 }:
                     button.pop("actions")
+
+
+def rename_mute_and_pulse(data: dict[str, Any]) -> None:
+    """Rename the Silence action to Mute and the own blink to the pulse.
+
+    A button's ``silence`` action is ``mute``; a light's ``blink`` effect is
+    ``notification_pulse``, so that a light's own ``blink`` effect (Hue)
+    can be picked.
+    """
+    buttons: list[Any] = []
+    for notification in data.get("notifications") or []:
+        steps = notification.get("steps") if isinstance(notification, dict) else None
+        for step in steps or []:
+            if isinstance(step, dict):
+                buttons.extend(step.get("buttons") or [])
+    for category in data.get("categories") or []:
+        if isinstance(category, dict):
+            buttons.extend(category.get("buttons") or [])
+    for button in buttons:
+        actions = button.get("actions") if isinstance(button, dict) else None
+        if isinstance(actions, dict) and "silence" in actions:
+            silence = actions.pop("silence")
+            if silence:
+                actions["mute"] = True
+    for light in data.get("lights") or []:
+        if isinstance(light, dict) and light.get("effect") == "blink":
+            light["effect"] = EFFECT_PULSE
 
 
 def switch_push_off(data: dict[str, Any]) -> None:
@@ -535,7 +567,7 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, 3, EXPORT_VERSION):
+        if version not in (1, 2, 3, 4, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
@@ -543,6 +575,8 @@ class ConfigManager:
             drop_unused_fields(data)
         if version < 4:
             upgrade_tap_behavior(data)
+        if version < 5:
+            rename_mute_and_pulse(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(
