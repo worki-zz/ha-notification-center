@@ -264,15 +264,13 @@ export class NcStepEditor extends LitElement {
         doneCount,
         this._renderDone(step),
       )}
-      ${step.dismiss_when
-        ? this._panel(
-            "dismiss",
-            "mdi:close-circle-outline",
-            "Dismiss when",
-            step.dismiss_when.triggers.length,
-            this._renderDismiss(step),
-          )
-        : nothing}
+      ${this._panel(
+        "dismiss",
+        "mdi:close-circle-outline",
+        "Dismiss when",
+        step.dismiss_when.triggers.length,
+        this._renderDismiss(step),
+      )}
       <div class="group-gap"></div>
       ${this._panel(
         "channels",
@@ -820,7 +818,7 @@ export class NcStepEditor extends LitElement {
       <ha-automation-trigger
         .hass=${this.hass}
         .narrow=${this.narrow}
-        .triggers=${step.dismiss_when?.triggers ?? []}
+        .triggers=${step.dismiss_when.triggers}
         @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
           ev.stopPropagation();
           this._change({ dismiss_when: { triggers: ev.detail.value } });

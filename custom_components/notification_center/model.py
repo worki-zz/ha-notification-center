@@ -644,8 +644,7 @@ DONE_WHEN_SCHEMA = vol.Schema(
     }
 )
 
-# Dismiss when: triggers that close a card as dismissed. Shown in the
-# editor only when the step has it (the step menu's Dismiss when).
+# Dismiss when: triggers that close a card as dismissed.
 DISMISS_WHEN_SCHEMA = vol.Schema({vol.Optional("triggers", default=list): TRIGGERS})
 
 # Where a button takes the user, on the device it was pressed on: the
@@ -1116,7 +1115,7 @@ STEP_SCHEMA = _with_id(
         vol.Optional("activation", default={"type": "triggers"}): ACTIVATION_SCHEMA,
         vol.Optional("conditions", default=dict): STEP_CONDITIONS_SCHEMA,
         vol.Optional("done_when", default=dict): DONE_WHEN_SCHEMA,
-        vol.Optional("dismiss_when"): DISMISS_WHEN_SCHEMA,
+        vol.Optional("dismiss_when", default=dict): DISMISS_WHEN_SCHEMA,
         vol.Optional("buttons", default=list): _buttons,
         # The people whose states differ from the category's audience.
         vol.Optional("audience", default=dict): _audience,
@@ -1455,8 +1454,7 @@ OWN_CONDITION_SCHEMAS: Final[dict[str, vol.Schema]] = {
 
 def _trigger_lists(step: dict[str, Any]) -> list[list[dict[str, Any]]]:
     lists = [step["done_when"]["triggers"]]
-    if "dismiss_when" in step:
-        lists.append(step["dismiss_when"]["triggers"])
+    lists.append(step["dismiss_when"]["triggers"])
     if step["activation"]["type"] == "triggers":
         lists.append(step["activation"]["triggers"])
     return lists
@@ -1530,10 +1528,9 @@ async def _validate_step_automation(
     await _validate_triggers(
         hass, step["done_when"]["triggers"], _path(where, "done when")
     )
-    if "dismiss_when" in step:
-        await _validate_triggers(
-            hass, step["dismiss_when"]["triggers"], _path(where, "dismiss when")
-        )
+    await _validate_triggers(
+        hass, step["dismiss_when"]["triggers"], _path(where, "dismiss when")
+    )
     for button in step["buttons"]:
         if button.get("actions", {}).get("ha_actions"):
             _validate_actions(

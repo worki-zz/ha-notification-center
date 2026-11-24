@@ -105,8 +105,8 @@ suite instead of running everything locally.
   gets it in each state. Both must allow a channel (AND, home mode checked first), so
   Channels comes first in the editors.
 - Step blocks: Message, Interactions, Activation, Conditions (*Activate only while
-  conditions are met*, *Hide while conditions are not met*), Done when, Dismiss when
-  (only when ticked in the step menu), Channels, Audience. Each block opens with a one-line intro (`BLOCK_INTROS` in `editor/block.ts`).
+  conditions are met*, *Hide while conditions are not met*), Done when, Dismiss when,
+  Channels, Audience. Each block opens with a one-line intro (`BLOCK_INTROS` in `editor/block.ts`).
 - **done** is an outcome (the Done button and status), not a block name. Built-in
   buttons: Done, Dismiss, Snooze, Mute; plus Tap behavior. The action that stops the lights,
   speakers and sirens is **Mute** (*muted*), never "Silence".

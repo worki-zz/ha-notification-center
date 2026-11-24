@@ -50,7 +50,7 @@ export const HELP: Record<
     title: "Done when",
     text: [
       "The notification closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
-      "Dismiss when (in the step menu) adds a block of triggers that close the notification as dismissed instead.",
+      "To close it as dismissed instead (not done), use Dismiss when, the next block.",
       "When the activation is no longer true: an entity's notification closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a notification closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
     ],
   },
@@ -58,7 +58,6 @@ export const HELP: Record<
     title: "Dismiss when",
     text: [
       "The notification closes as dismissed by itself when one of these triggers fires: it is not done, so Last done does not change. For example, the cat's notification is dismissed when everyone leaves home.",
-      "The block is shown while Dismiss when is ticked in the step menu; unticking it removes the block and its triggers.",
     ],
   },
 };

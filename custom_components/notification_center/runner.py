@@ -253,12 +253,11 @@ class StepRunner:
             self._done_fired,
             (self._done_listed, self._done_unmatched),
         )
-        if dismiss_when := self.step.get("dismiss_when"):
-            await self._async_setup_triggers(
-                dismiss_when.get("triggers", []),
-                self._dismiss_fired,
-                (self._dismiss_listed, self._done_unmatched),
-            )
+        await self._async_setup_triggers(
+            self.step.get("dismiss_when", {}).get("triggers", []),
+            self._dismiss_fired,
+            (self._dismiss_listed, self._done_unmatched),
+        )
 
     @callback
     def async_stop(self) -> None:
