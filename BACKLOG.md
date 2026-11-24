@@ -108,5 +108,5 @@ Overlaps with the button actions: an action that should run whenever a notificat
 ### Chime per speaker
 *Area: Channels.* Let a speaker channel play another chime than the notification's (for example a softer one in the bedroom). 0.6.5 moved the chime to the category and the notification only. *(Kristóf, 2026-11-22; phase 6.1)*
 
-### Switch system colours on and off
-*Area: Settings.* Under Colours, a switch for each system colour. A colour that is switched off is not offered in the colour pickers or in the channel lists, so the many greys do not crowd them. A colour in use stays usable. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
+### Switch system colors on and off
+*Area: Settings.* Under Colors, a switch for each system color. A color that is switched off is not offered in the color pickers or in the channel lists, so the many greys do not crowd them. A color in use stays usable. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
