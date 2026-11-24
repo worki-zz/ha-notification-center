@@ -25,6 +25,7 @@ from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.util import dt as dt_util
 
+from .const import CLOSED_DISMISSED, CLOSED_DONE
 from .model import WEEKDAYS
 
 SCHEDULE_CALENDAR: Final = "calendar"
@@ -73,25 +74,41 @@ def is_valid_every(hass: HomeAssistant, schedule: Mapping[str, Any]) -> bool:
     return True
 
 
-def expires_at(schedule: Mapping[str, Any], due: datetime) -> datetime | None:
-    """Return when a card of the schedule that was due at a time expires.
+def expires_at(value: Mapping[str, Any] | None, since: datetime) -> datetime | None:
+    """Return when an Expires row closes a card that became active at a time.
 
-    ``expires`` is a duration, or a day after the due day (0 is the same
-    day) at a time; a time on the same day that is not after the due time
-    means the next day.
+    The value is a duration, or a day after the day it became active (0 is
+    the same day) at a time; a time on the same day that is not after
+    ``since`` means the next day.
     """
-    value = schedule.get("expires")
     if not value:
         return None
     if "day" in value:
         at = dt_util.parse_time(str(value["at"])) or time(0)
-        local = dt_util.as_local(due)
+        local = dt_util.as_local(since)
         when = _local(local.date() + timedelta(days=int(value["day"])), at)
-        if when <= due:
+        if when <= since:
             when = _local(local.date() + timedelta(days=int(value["day"]) + 1), at)
         return when
     period: timedelta = cv.positive_time_period_dict(value)
-    return due + period if period else None
+    return since + period if period else None
+
+
+def step_expiry(
+    step: Mapping[str, Any], since: datetime
+) -> tuple[datetime, str] | None:
+    """Return when a card of a step closes by itself, and how.
+
+    The Expires row of Done when closes it as done, the one of Dismiss
+    when as dismissed; the earlier one counts (done when both are equal).
+    """
+    result: tuple[datetime, str] | None = None
+    for key, reason in (("done_when", CLOSED_DONE), ("dismiss_when", CLOSED_DISMISSED)):
+        block = step.get(key) or {}
+        when = expires_at(block.get("expires"), since)
+        if when is not None and (result is None or when < result[0]):
+            result = (when, reason)
+    return result
 
 
 def _at(schedule: Mapping[str, Any]) -> time | None:
@@ -244,7 +261,7 @@ def after_last_done_due(
     """Return when an after-last-done step is due.
 
     Never done: at the next At time, or now without one. After a due time
-    that passed without the step being done (it expired or was dismissed),
+    that passed without the step being done (it was dismissed),
     it is due again a day later.
     """
     at = _at(schedule)

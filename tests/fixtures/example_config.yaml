@@ -381,7 +381,8 @@ notifications:
         every: input_number.garden_watering_interval
         unit: days
         at: '22:00'
-        expires: {hours: 6}
+    dismiss_when:
+      expires: {hours: 6}
     conditions:
       activate_only_while_met: true
       hide_while_not_met: true
@@ -549,7 +550,8 @@ notifications:
         unit: weeks
         weekdays: [wed]
         at: '19:00'
-        expires: {hours: 14}
+    dismiss_when:
+      expires: {hours: 14}
   - message: Bring in the mixed waste bin
     done_when:
       triggers:
@@ -583,7 +585,8 @@ notifications:
         weekdays: [tue]
         at: '19:00'
         starting: '2026-11-03'
-        expires: {hours: 14}
+    dismiss_when:
+      expires: {hours: 14}
   - message: Bring in the recycling bin
     done_when:
       triggers:
@@ -647,7 +650,8 @@ notifications:
         month: 4
         day_of_month: 5
         at: 09:00
-        expires: {days: 5}
+    dismiss_when:
+      expires: {days: 5}
 - id: change_bedding
   name: Change bedding and towels
   category: household
@@ -695,7 +699,8 @@ notifications:
         unit: weeks
         weekdays: [sat]
         at: '10:00'
-        expires: {days: 1, hours: 12}
+    dismiss_when:
+      expires: {days: 1, hours: 12}
     conditions:
       activate_only_while_met: false
       hide_while_not_met: true

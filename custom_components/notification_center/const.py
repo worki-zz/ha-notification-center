@@ -65,14 +65,12 @@ SENSOR_STATES: Final = (
 # Ways a card closes.
 CLOSED_DONE: Final = "done"
 CLOSED_DISMISSED: Final = "dismissed"
-CLOSED_EXPIRED: Final = "expired"
 
 # What the engine reports about a card (for the channels).
 EVENT_ACTIVE: Final = "active"
 EVENT_DONE: Final = "done"
 EVENT_SNOOZED: Final = "snoozed"
 EVENT_DISMISSED: Final = "dismissed"
-EVENT_EXPIRED: Final = "expired"
 
 # What started or closed a card.
 SOURCE_TRIGGER: Final = "trigger"
@@ -82,6 +80,8 @@ SOURCE_BUTTON: Final = "button"
 SOURCE_DONE_WHEN: Final = "done_when"
 SOURCE_DISMISS_WHEN: Final = "dismiss_when"
 SOURCE_SCHEDULE: Final = "schedule"
+# The Expires row of Done when or Dismiss when.
+SOURCE_EXPIRES: Final = "expires"
 SOURCE_SNOOZE_END: Final = "snooze_end"
 
 # Actions

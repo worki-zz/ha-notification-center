@@ -49,7 +49,8 @@ STORAGE_VERSION: Final = 1
 # 4: the unused fields attachments, confirm and the read volume are gone.
 # 5: the Tap behavior is one block, the step's or the category's.
 # 6: Silence is Mute, the own light blink is Notification Pulse (0.7.4).
-STORAGE_MINOR_VERSION: Final = 6
+# 7: a schedule's Expires is the Expires row of Dismiss when (0.7.4).
+STORAGE_MINOR_VERSION: Final = 7
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -60,7 +61,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # 3: the unused fields attachments, confirm and the read volume are gone.
 # 4: the Tap behavior is one block, the step's or the category's.
 # 5: Silence is Mute, the own light blink is Notification Pulse.
-EXPORT_VERSION: Final = 5
+# 6: a schedule's Expires is the Expires row of Dismiss when.
+EXPORT_VERSION: Final = 6
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -86,6 +88,8 @@ class _ConfigStore(Store[ConfigData]):
             upgrade_tap_behavior(old_data)
         if old_major_version == 1 and old_minor_version < 6:
             rename_mute_and_pulse(old_data)
+        if old_major_version == 1 and old_minor_version < 7:
+            move_schedule_expires(old_data)
         return old_data
 
 
@@ -209,6 +213,27 @@ def rename_mute_and_pulse(data: dict[str, Any]) -> None:
     for light in data.get("lights") or []:
         if isinstance(light, dict) and light.get("effect") == "blink":
             light["effect"] = EFFECT_PULSE
+
+
+def move_schedule_expires(data: dict[str, Any]) -> None:
+    """Move a schedule's Expires to the Expires row of Dismiss when.
+
+    An expired card was closed without being done, as a dismissed one is.
+    """
+    for notification in data.get("notifications") or []:
+        steps = notification.get("steps") if isinstance(notification, dict) else None
+        for step in steps or []:
+            start = step.get("activation") if isinstance(step, dict) else None
+            schedule = start.get("schedule") if isinstance(start, dict) else None
+            if not isinstance(schedule, dict) or "expires" not in schedule:
+                continue
+            expires = schedule.pop("expires")
+            if not expires:
+                continue
+            dismiss = step.get("dismiss_when")
+            if not isinstance(dismiss, dict):
+                dismiss = step["dismiss_when"] = {}
+            dismiss.setdefault("expires", expires)
 
 
 def switch_push_off(data: dict[str, Any]) -> None:
@@ -567,7 +592,7 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, 3, 4, EXPORT_VERSION):
+        if version not in (1, 2, 3, 4, 5, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
@@ -577,6 +602,8 @@ class ConfigManager:
             upgrade_tap_behavior(data)
         if version < 5:
             rename_mute_and_pulse(data)
+        if version < 6:
+            move_schedule_expires(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(

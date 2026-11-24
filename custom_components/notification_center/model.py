@@ -563,8 +563,9 @@ CATEGORY_SCHEMA = _with_id(
 # ---------------------------------------------------------------------------
 # Notifications and steps
 
-# A scheduled card expires after a duration, or on a later day at a time
-# (``day: 0`` is the day it appeared, ``day: 1`` the next one, and so on).
+# The Expires row of Done when and Dismiss when: a card closes after a
+# duration from when it became active, or on a later day at a time (``day: 0``
+# is the day it became active, ``day: 1`` the next one, and so on).
 EXPIRES_ON_DAY = vol.Schema(
     {
         vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(0, 366)),
@@ -574,7 +575,7 @@ EXPIRES_ON_DAY = vol.Schema(
 
 
 def EXPIRES(value: Any) -> dict[str, Any]:  # noqa: N802 - used like a schema
-    """Validate when a scheduled card expires."""
+    """Validate when a card closes by itself."""
     if isinstance(value, dict) and "day" in value:
         return cast(dict[str, Any], EXPIRES_ON_DAY(value))
     return DURATION(value)
@@ -593,7 +594,6 @@ SCHEDULE_SCHEMA = vol.Any(
             vol.Optional("month"): vol.All(vol.Coerce(int), vol.Range(1, 12)),
             vol.Required("at"): _time,
             vol.Optional("starting"): _date,
-            vol.Optional("expires"): _optional(EXPIRES),
         }
     ),
     vol.Schema(
@@ -602,7 +602,6 @@ SCHEDULE_SCHEMA = vol.Any(
             vol.Required("every"): _non_negative_or_entity,
             vol.Required("unit"): vol.In(INTERVAL_UNITS),
             vol.Optional("at"): _optional(_time),
-            vol.Optional("expires"): _optional(EXPIRES),
         }
     ),
 )
@@ -641,11 +640,19 @@ DONE_WHEN_SCHEMA = vol.Schema(
         # no longer matches Notification entities, or the Conditions (with
         # Activate only while conditions are met) are no longer met.
         vol.Optional("activation_conditions_no_longer_true", default=False): cv.boolean,
+        # Close a card as done at a time after it became active.
+        vol.Optional("expires"): _optional(EXPIRES),
     }
 )
 
-# Dismiss when: triggers that close a card as dismissed.
-DISMISS_WHEN_SCHEMA = vol.Schema({vol.Optional("triggers", default=list): TRIGGERS})
+# Dismiss when: triggers that close a card as dismissed, and the time after
+# it became active when it is dismissed.
+DISMISS_WHEN_SCHEMA = vol.Schema(
+    {
+        vol.Optional("triggers", default=list): TRIGGERS,
+        vol.Optional("expires"): _optional(EXPIRES),
+    }
+)
 
 # Where a button takes the user, on the device it was pressed on: the
 # entity's more info dialog (empty: the card's entity) or a page.

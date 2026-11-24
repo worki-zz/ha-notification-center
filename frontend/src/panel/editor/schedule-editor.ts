@@ -2,24 +2,16 @@
 //
 // Schedule follows the calendar: every N days, weeks (on weekdays), months
 // (on a day) or years, at a time. Repeat comes N days, weeks, months or
-// years after the step was last done. Both can expire, and both show when
-// they come next.
+// years after the step was last done. Both show when they come next.
 
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { DOMAIN, type Duration } from "../../shared/config";
+import { DOMAIN } from "../../shared/config";
 import { errorText } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { field } from "../fields";
-import type { ExpiresOnDay, Schedule, Unit } from "./model";
-
-// After a duration is shown in hours: days count as 24 hours each.
-function inHours(expires: Duration): Duration {
-  if (!expires.days) return expires;
-  const { days, ...rest } = expires;
-  return { ...rest, hours: (rest.hours ?? 0) + days * 24 };
-}
+import type { Schedule, Unit } from "./model";
 
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const UNITS: Unit[] = ["days", "weeks", "months", "years"];
@@ -183,7 +175,6 @@ export class NcScheduleEditor extends LitElement {
             )
           : nothing}
       </div>
-      ${this._renderExpires(schedule)}
       ${this._renderNext(schedule)}
       ${this._editNext ? this._renderNextDialog(schedule) : nothing}
     `;
@@ -294,75 +285,6 @@ export class NcScheduleEditor extends LitElement {
       )}
       ${day}
     `;
-  }
-
-  private _renderExpires(schedule: Schedule) {
-    const expires = schedule.expires;
-    const kind = !expires ? "never" : "day" in expires ? "on" : "after";
-    const days = [
-      { value: "0", label: "Same day" },
-      { value: "1", label: "Next day" },
-    ];
-    // Older settings may hold a later day: keep it choosable.
-    const later = kind === "on" ? (expires as ExpiresOnDay).day : 0;
-    if (later > 1) days.push({ value: String(later), label: `${later} days later` });
-    return html`<div class="row">
-      ${this._selector(
-        {
-          select: {
-            mode: "dropdown",
-            options: [
-              { value: "never", label: "Never" },
-              { value: "after", label: "After" },
-              { value: "on", label: "On" },
-            ],
-          },
-        },
-        kind,
-        "Expires",
-        (value) => {
-          if (value === kind) return;
-          this._change({
-            expires:
-              value === "after"
-                ? { hours: 6 }
-                : value === "on"
-                  ? { day: 0, at: "23:59" }
-                  : undefined,
-          });
-        },
-        "mode",
-      )}
-      ${kind === "after"
-        ? this._selector(
-            { duration: {} },
-            inHours(expires as Duration),
-            "",
-            (value) => this._change({ expires: (value as Schedule["expires"]) || { hours: 6 } }),
-            "grow",
-          )
-        : nothing}
-      ${kind === "on"
-        ? html`${this._selector(
-            { select: { mode: "dropdown", options: days } },
-            String((expires as ExpiresOnDay).day),
-            "Day",
-            (value) =>
-              this._change({ expires: { ...(expires as ExpiresOnDay), day: Number(value) || 0 } }),
-            "grow",
-          )}
-          ${this._selector(
-            { time: { no_second: true } },
-            (expires as ExpiresOnDay).at,
-            "",
-            (value) =>
-              this._change({
-                expires: { ...(expires as ExpiresOnDay), at: (value as string) || "23:59" },
-              }),
-            "grow",
-          )}`
-        : nothing}
-    </div>`;
   }
 
   private _format(value: string, withWeekday: boolean, withTime: boolean): string {

@@ -276,6 +276,35 @@ async def test_retrigger_keeps_the_card(
     assert center.kinds() == ["active", "snoozed", "active"]
 
 
+async def test_expires_rows(
+    hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
+) -> None:
+    """The Expires rows close any card: the earlier one decides how."""
+    await center.add(
+        "Plants",
+        step(
+            done_when={"expires": {"hours": 2}},
+            dismiss_when={"expires": {"hours": 3}},
+        ),
+    )
+    await center.call("trigger", "sensor.nc_plants")
+    await tick(hass, freezer, timedelta(minutes=119))
+    assert center.state("sensor.nc_plants") == "active"
+    await tick(hass, freezer, timedelta(minutes=2))
+    assert center.state("sensor.nc_plants") == "done"
+    assert center.events[-1][1]["source"] == "expires"
+    assert center.attrs("sensor.nc_plants")["last_done"] is not None
+
+    await center.add("Mail", step(dismiss_when={"expires": {"minutes": 30}}))
+    await center.call("trigger", "sensor.nc_mail")
+    # A snooze does not stop it.
+    await center.call("snooze", "sensor.nc_mail", duration={"hours": 1})
+    await tick(hass, freezer, timedelta(minutes=31))
+    assert center.state("sensor.nc_mail") == "idle"
+    assert center.kinds()[-1] == "dismissed"
+    assert center.attrs("sensor.nc_mail")["last_done"] is None
+
+
 async def test_snooze_comes_back(
     hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
 ) -> None:

@@ -16,6 +16,7 @@ from custom_components.notification_center.model import (
     effective_buttons,
 )
 from custom_components.notification_center.store import (
+    move_schedule_expires,
     rename_mute_and_pulse,
     upgrade_tap_behavior,
 )
@@ -119,15 +120,16 @@ async def test_durations_times_and_dates_stay_plain(hass: HomeAssistant) -> None
                     "weekdays": ["sat"],
                     "at": "10:00:00",
                     "starting": "2026-11-01",
-                    "expires": "36:00:00",
                 },
-            }
+            },
+            dismiss_when={"expires": "36:00:00"},
         ),
     )
-    schedule = config["notifications"][0]["steps"][0]["activation"]["schedule"]
+    step = config["notifications"][0]["steps"][0]
+    schedule = step["activation"]["schedule"]
     assert schedule["at"] == "10:00"
     assert schedule["starting"] == "2026-11-01"
-    assert schedule["expires"] == {"days": 1, "hours": 12}
+    assert step["dismiss_when"]["expires"] == {"days": 1, "hours": 12}
 
 
 async def test_interval_zero_and_entity(hass: HomeAssistant) -> None:
@@ -406,3 +408,36 @@ def test_rename_mute_and_pulse() -> None:
         "notification_pulse",
         "rainbow",
     ]
+
+
+def test_move_schedule_expires() -> None:
+    """A schedule's Expires becomes the Expires row of Dismiss when."""
+    value: dict[str, Any] = {
+        "notifications": [
+            {
+                "steps": [
+                    {
+                        "activation": {
+                            "type": "schedule",
+                            "schedule": {"type": "calendar", "expires": {"hours": 6}},
+                        }
+                    },
+                    {
+                        "activation": {
+                            "type": "schedule",
+                            "schedule": {"type": "calendar", "expires": None},
+                        },
+                        "dismiss_when": {"triggers": []},
+                    },
+                    {"activation": {"type": "triggers", "triggers": []}},
+                ]
+            }
+        ]
+    }
+    move_schedule_expires(value)
+    first, second, third = value["notifications"][0]["steps"]
+    assert first["activation"]["schedule"] == {"type": "calendar"}
+    assert first["dismiss_when"] == {"expires": {"hours": 6}}
+    assert second["activation"]["schedule"] == {"type": "calendar"}
+    assert second["dismiss_when"] == {"triggers": []}
+    assert "dismiss_when" not in third

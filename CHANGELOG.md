@@ -9,7 +9,10 @@
 - *More info* in the ... menu of a notification (the Notifications list and the editor's header) opens the sensor's dialog.
 - A built-in **Mute** button beside Done, Dismiss and Snooze (off by default in every category): it keeps the notification and stops its lights, speakers and sirens. In its dialog Mute is its own row with a switch that is always on. On a dashboard notification it comes after Snooze.
 - **Dismiss when**: a step block right after Done when, with Home Assistant's trigger editor. One of its triggers closes the notification as dismissed (not done, so the last done time stays); the event's source is `dismiss_when`. Stored as the step's `dismiss_when: {triggers: [...]}`.
-- The notification sensor has an `icon_color` attribute: active, the notification's colour (a system colour's name or `#rrggbb`); snoozed `orange`; done `green`; upcoming, dismissed, expired, idle and disabled `grey`. Home Assistant does not colour the icon by it, but cards and templates can use it. The status chips use the same colours: *Active* in the notification's colour, *Snoozed* orange, *Upcoming* and *Disabled* grey.
+- The notification sensor has an `icon_color` attribute: active, the notification's colour (a system colour's name or `#rrggbb`); snoozed `orange`; done `green`; upcoming, dismissed, idle and disabled `grey`. Home Assistant does not colour the icon by it, but cards and templates can use it. The status chips use the same colours: *Active* in the notification's colour, *Snoozed* orange, *Upcoming* and *Disabled* grey.
+
+- **Expires** at the top of Done when and of Dismiss when (default *Not in use*): *After* a duration from when the notification became active, or *On day* (the same day or up to 7 days later) at a time. It works whatever activated the notification (triggers, Schedule, Repeat, Run now). Done when's closes it as done (source `expires`, the last done time changes), Dismiss when's as dismissed; when both are set, the earlier one counts. Stored as `done_when: {expires: ...}` and `dismiss_when: {expires: ...}`.
+- **Notification state** at the top of Activation and of Conditions from step 2, like Notification entities (*Not in use* or *Set*): *Step* (the previous one at first, any other step can be picked), *State* (Active, Done, Dismissed, Snoozed) and *For*. It is an ordinary Notification state trigger (or condition) on this notification, stored as the first one (after Notification entities).
 
 ### Changed
 
@@ -18,6 +21,8 @@
 - The ... menu is the same in the Notifications list and the editor's header: *More info*, *Status*, *Run now for me*, *Run now for everyone*, *Dismiss notifications* (was *Clear notifications*), *Duplicate*, (the editor's *Edit in YAML*), then *Disable* and *Delete*. The list gains *Status*, *Run now for me* and *Dismiss notifications*. In the step menu *Run this step for me* comes before *Run this step for everyone*.
 - The lights' own highlight effect is called **Notification Pulse** (stored as `notification_pulse`, upgraded from `blink`), so a light's own effect named *blink* (Hue) can be chosen. A dimmable light (RGB too) now pulses between its brightness and half of it instead of turning off; a switch still turns on and off.
 - In the button dialog the built-in Done, Dismiss and Snooze state rows are titled by their type with their own icon and a switch that is always on, like the Entity action row: *Closes the notification as done.*, *Closes the notification without marking it done.*, and Snooze with its times under the title. The Mute row is laid out like the Entity action row, with its delete button at the end.
+
+- The Schedule's and Repeat's own *Expires* is gone, and with it the **expired** status: a schedule's Expires is upgraded into the Expires row of Dismiss when (saved settings, open notifications and older YAML exports; export version 6). An expiring notification now closes as dismissed (or as done, from Done when) with source `expires`, and fires the dismissed (or done) event instead of `expired`.
 
 ### Fixed
 

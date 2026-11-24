@@ -2,7 +2,8 @@
 
 The time a step was last due is kept with the engine's history (state
 ``scheduled``), so a restart neither repeats an occurrence nor loses one
-that fell while Home Assistant was stopped (unless it already expired).
+that fell while Home Assistant was stopped (unless its Expires row
+already closed it).
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from .schedule import (
     calendar_before,
     every,
     every_entity,
-    expires_at,
+    step_expiry,
 )
 
 if TYPE_CHECKING:
@@ -57,14 +58,14 @@ class StepSchedule:
         """Return whether the schedule follows the calendar."""
         return bool(self.config["type"] == SCHEDULE_CALENDAR)
 
-    def expires_at(self, due: datetime) -> datetime | None:
-        """Return when a card due at a time expires, if it does."""
-        return expires_at(self.config, due)
+    def expiry(self, due: datetime) -> tuple[datetime, str] | None:
+        """Return when a card due at a time closes by itself, and how."""
+        return step_expiry(self.step.step, due)
 
     def _still_open(self, due: datetime, now: datetime) -> bool:
         """Return whether a card due at a time would still be open now."""
-        until = self.expires_at(due)
-        return until is None or until > now
+        expiry = self.expiry(due)
+        return expiry is None or expiry[0] > now
 
     @property
     def n(self) -> int:
@@ -180,7 +181,7 @@ class StepSchedule:
             elif due is not None and self._still_open(due, now):
                 self._due(due)
             elif due is not None:
-                self._record(due)
+                self._closed_while_stopped(due)
             else:
                 self._reopen(last, now)
             return
@@ -193,8 +194,8 @@ class StepSchedule:
             if self._still_open(due, now):
                 self._due(due)
                 return
-            # Expired while stopped: the next day is tried.
-            self._record(due)
+            # Closed by its Expires row while stopped: the next day is tried.
+            last_done = self._closed_while_stopped(due) or last_done
             last = due
 
     def _reopen(self, last: datetime | None, now: datetime) -> None:
@@ -215,6 +216,20 @@ class StepSchedule:
                 return
         self._due(last)
 
+    def _closed_while_stopped(self, due: datetime) -> datetime | None:
+        """Record an occurrence that its Expires row closed while stopped.
+
+        Closed as done, it counts as done at that time, which is returned.
+        """
+        self._record(due)
+        expiry = self.expiry(due)
+        if expiry is None or expiry[1] != CLOSED_DONE:
+            return None
+        self.engine.record(
+            self.step.notification.id, self.step.step_id, CLOSED_DONE, expiry[0]
+        )
+        return expiry[0]
+
     def _record(self, due: datetime) -> None:
         self.engine.record(
             self.step.notification.id, self.step.step_id, HISTORY_SCHEDULED, due
@@ -228,5 +243,4 @@ class StepSchedule:
             {"platform": "schedule", "due": due.isoformat()},
             SOURCE_SCHEDULE,
             since=due,
-            expires_at=self.expires_at(due),
         )

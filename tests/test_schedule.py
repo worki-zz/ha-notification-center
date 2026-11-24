@@ -49,6 +49,10 @@ async def _move(hass: HomeAssistant, freezer: FrozenDateTimeFactory, when: str) 
 
 
 def _scheduled(schedule: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    # A test schedule's expires is the Expires row of Dismiss when.
+    schedule = dict(schedule)
+    if (expires := schedule.pop("expires", None)) is not None:
+        extra.setdefault("dismiss_when", {"expires": expires})
     return {
         "message": extra.pop("message", "Do it"),
         "activation": {"type": "schedule", "schedule": schedule},
@@ -193,13 +197,13 @@ def test_after_last_done(budapest: None) -> None:
 # -- The engine ------------------------------------------------------------------
 
 
-async def test_calendar_step_upcoming_active_expired(
+async def test_calendar_step_upcoming_active_dismissed(
     hass: HomeAssistant,
     config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
     budapest: None,
 ) -> None:
-    """A weekly step is idle, upcoming on the day, active, then expired."""
+    """A weekly step is idle, upcoming on the day, active, then dismissed."""
     center = await load(hass, config_entry)
     await center.add("Mixed waste", _scheduled(WEEKLY_WASTE))
     assert center.state("sensor.nc_mixed_waste") == "idle"
@@ -222,7 +226,8 @@ async def test_calendar_step_upcoming_active_expired(
 
     await _move(hass, freezer, "2026-11-19 09:00")
     assert center.state("sensor.nc_mixed_waste") == "idle"
-    assert center.kinds() == ["active", "expired"]
+    assert center.kinds() == ["active", "dismissed"]
+    assert center.events[-1][1]["source"] == "expires"
     assert center.attrs("sensor.nc_mixed_waste")["last_done"] is None
 
 
@@ -296,11 +301,11 @@ async def test_after_last_donestep(
     assert center.attrs("sensor.nc_watering")["next_due"] is None
     await center.set("input_number.interval", "1")
 
-    # Not done: it expires, and it is due again the next evening.
+    # Not done: it is dismissed, and it is due again the next evening.
     await _move(hass, freezer, "2026-11-17 22:00")
     assert center.state("sensor.nc_watering") == "active"
     await _move(hass, freezer, "2026-11-18 04:00")
-    assert center.events[-1][0] == "expired"
+    assert center.events[-1][0] == "dismissed"
     assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == (
         "2026-11-18 Wed 22:00"
     )
@@ -331,7 +336,7 @@ async def test_missed_while_stopped(
     await hass.async_block_till_done()
     assert Center(hass, config_entry).state("sensor.nc_mixed_waste") == "done"
 
-    # An occurrence that already expired while stopped does not show.
+    # An occurrence already dismissed by Expires while stopped does not show.
     assert await hass.config_entries.async_unload(config_entry.entry_id)
     freezer.move_to(_local("2026-11-26 10:00"))
     assert await hass.config_entries.async_setup(config_entry.entry_id)
@@ -345,7 +350,7 @@ async def test_expiry_survives_a_restart(
     freezer: FrozenDateTimeFactory,
     budapest: None,
 ) -> None:
-    """A snoozed scheduled card still expires at its time after a restart."""
+    """A snoozed scheduled card still closes at its Expires after a restart."""
     center = await load(hass, config_entry)
     await center.add("Mixed waste", _scheduled(WEEKLY_WASTE))
     await _move(hass, freezer, "2026-11-18 19:00")
@@ -359,7 +364,7 @@ async def test_expiry_survives_a_restart(
     center = Center(hass, config_entry)
     await _move(hass, freezer, "2026-11-19 09:00")
     assert center.state("sensor.nc_mixed_waste") == "idle"
-    assert center.kinds() == ["expired"]
+    assert center.kinds() == ["dismissed"]
 
 
 async def test_calendar_entity(
