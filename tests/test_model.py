@@ -441,3 +441,33 @@ def test_move_schedule_expires() -> None:
     assert second["activation"]["schedule"] == {"type": "calendar"}
     assert second["dismiss_when"] == {"triggers": []}
     assert "dismiss_when" not in third
+
+
+async def test_button_actions_follow_the_category(hass: HomeAssistant) -> None:
+    """A category's button actions apply until the step sets its own."""
+    actions = {"mute": True, "entity_action": True}
+    config = _with_notification()
+    config["categories"][0]["buttons"] = [
+        {"type": "done", "enabled": True, "actions": actions}
+    ]
+    validated = await async_validate_config(hass, config)
+    done = next(b for b in _effective(validated) if b["type"] == "done")
+    assert done["actions"] == actions
+
+    own = {"ha_actions": [{"action": "light.turn_on"}]}
+    config = _with_notification(buttons=[{"type": "done", "actions": own}])
+    config["categories"][0]["buttons"] = [
+        {"type": "done", "enabled": True, "actions": actions}
+    ]
+    validated = await async_validate_config(hass, config)
+    done = next(b for b in _effective(validated) if b["type"] == "done")
+    assert done["actions"] == own
+
+    # Empty actions of a category's button are not kept.
+    config = _with_notification()
+    config["categories"][0]["buttons"] = [{"type": "done", "actions": {}}]
+    validated = await async_validate_config(hass, config)
+    category_done = next(
+        b for b in validated["categories"][0]["buttons"] if b["type"] == "done"
+    )
+    assert "actions" not in category_done

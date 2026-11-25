@@ -207,7 +207,11 @@ export function inheritedEntry(entry: Button, base: CategoryButton | undefined):
   if (copy.show_in_push === undefined || copy.show_in_push === null) delete copy.show_in_push;
   if (!copy.snooze?.length || copy.snooze.join() === (base?.snooze ?? []).join()) delete copy.snooze;
   if (!copy.open_on_tap) delete copy.open_on_tap;
-  if (copy.type !== "tap" && copy.actions && !Object.keys(copy.actions).length) delete copy.actions;
+  // Actions equal to the category's (or none where it has none) follow it.
+  if (copy.type !== "tap" && copy.actions) {
+    const same = JSON.stringify(copy.actions) === JSON.stringify(base?.actions ?? {});
+    if (same) delete copy.actions;
+  }
   return copy as Button;
 }
 

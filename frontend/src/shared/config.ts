@@ -18,7 +18,7 @@ export interface Duration {
   seconds?: number;
 }
 
-/** A button of a category: what its notifications inherit (no action). */
+/** A button of a category: what its notifications inherit. */
 export interface CategoryButton {
   id: string;
   type: ButtonType;
@@ -28,7 +28,9 @@ export interface CategoryButton {
   snooze?: string[] | null;
   show_in_push?: boolean;
   open_on_tap?: string | null;
-  // Tap: the actions of its notifications' Tap (left out: more info).
+  // The actions its notifications' button runs until they set their own
+  // (left out: the built-in default; the Tap shows more info). An Entity
+  // action means each notification's own entities.
   actions?: ButtonActions;
   // Tap: the button its notifications' Tap runs (a built-in one by its
   // type, a custom one by its id; empty: their own actions).

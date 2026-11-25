@@ -731,11 +731,12 @@ BUTTON_SCHEMA = _with_id(
         vol.Required("type"): vol.In(BUTTON_TYPES),
         # Left out: the category's setting.
         vol.Optional("enabled"): cv.boolean,
-        # A category button's label is changed in YAML only.
+        # Left out on a category's button: the category's label.
         vol.Optional("label"): _optional(cv.string),
         vol.Optional("icon"): _optional(cv.icon),
-        # Left out on a category's button: the built-in button's default
-        # (the Tap shows more info; the others do only what they are).
+        # Left out on a category's button: the category's actions, else the
+        # built-in button's default (the Tap shows more info; the others do
+        # only what they are).
         vol.Optional("actions"): BUTTON_ACTIONS_SCHEMA,
         # The Snooze button's times: one snoozes at once, more are offered.
         vol.Optional("snooze"): _optional(
@@ -753,9 +754,10 @@ BUTTON_SCHEMA = _with_id(
     }
 )
 
-# A button of a category: what its notifications inherit. No action (that
-# belongs to each notification), except the Tap behavior: the Tap's actions
-# or the button it runs, inherited by a notification as one block.
+# A button of a category: what its notifications inherit, its actions too
+# (an Entity action means each notification's own entities). The Tap
+# behavior is the Tap's actions or the button it runs, inherited by a
+# notification as one block.
 CATEGORY_BUTTON_SCHEMA = _with_id(
     {
         vol.Required("type"): vol.In(BUTTON_TYPES),
@@ -767,7 +769,8 @@ CATEGORY_BUTTON_SCHEMA = _with_id(
         ),
         vol.Optional("show_in_push"): _optional(cv.boolean),
         vol.Optional("open_on_tap"): _optional(cv.string),
-        # Tap: the actions of its notifications' Tap (left out: more info).
+        # The actions its notifications' button runs until they set their
+        # own (left out: the built-in default; the Tap shows more info).
         vol.Optional("actions"): BUTTON_ACTIONS_SCHEMA,
         # Tap: the button the Tap of its notifications runs instead (empty:
         # the actions).
@@ -894,7 +897,10 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
         else:
             button.pop("open_on_tap", None)
             button.pop("run_button", None)
-            button.pop("actions", None)
+            if "actions" in button:
+                button["actions"] = _clean_actions(kind, button["actions"])
+                if not button["actions"]:
+                    button.pop("actions")
             if button.get("show_in_push") is None:
                 button["show_in_push"] = True
     return buttons
@@ -1026,10 +1032,14 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
         "enabled": entry.get("enabled", base.get("enabled", True)),
         "label": entry.get("label") or base.get("label"),
         "icon": entry.get("icon") or base.get("icon"),
-        # Not stored: the built-in button's default (the Tap shows more info).
+        # Left out: the category's, else the built-in button's default (the
+        # Tap shows more info).
         "actions": entry["actions"]
         if "actions" in entry
-        else dict(BUILTIN_ACTION_DEFAULTS.get(kind, {})),
+        else dict(
+            (base.get("actions") if kind != "tap" else None)
+            or BUILTIN_ACTION_DEFAULTS.get(kind, {})
+        ),
         "category": True,
     }
     own_tap = kind == "tap" and tap_behavior_own(entry)
@@ -1606,6 +1616,17 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
                     _validate_actions(actions, _path(where, entity_id, button))
     for category in config["categories"]:
         _check_category_channels_complete(category)
+        for button in category["buttons"]:
+            if button.get("actions", {}).get("ha_actions"):
+                _validate_actions(
+                    button["actions"]["ha_actions"],
+                    _path(
+                        "categories",
+                        category["name"],
+                        "buttons",
+                        button.get("label") or button["type"],
+                    ),
+                )
     order_modes(config["modes"])
     _check_references(config)
     return config
