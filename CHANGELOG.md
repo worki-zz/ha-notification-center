@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The *Active* status chip in the Notifications list and the notification editor is green; the notification's own colour stays for the sensor's `icon_color`, the badge and the cards.
+
+### Fixed
+
+- While Home Assistant restarts, the dashboard cards, badges and the Overview no longer show *Unknown command*: they wait until Notification Center is loaded again and then follow it without a reload. A card or badge shows nothing while it loads (the Notification Center card shows its empty state if it is turned on).
+- A push sent with *Test* in a step's Channels showed its placeholders (`{Device}`, ...) and templates as written: it now reads them as the preview does, from the notification's first entity.
+- Placeholders of a notification started by a trigger (not by Notification entities) read the entity that triggered it, on the dashboard and in the push (they were empty).
+
 ## 0.7.7
 
 ### Fixed
