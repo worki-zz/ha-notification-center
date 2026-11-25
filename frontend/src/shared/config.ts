@@ -245,13 +245,15 @@ export interface OwnColor {
 export const CHIME_NONE = "none";
 /** What a category without a chime of its own plays. */
 export const CHIME_DEFAULT = "nc_chime";
+/** The colour of a category without a colour of its own. */
+export const DEFAULT_COLOR = "amber";
 
 /**
  * The CSS colour of a category's or notification's colour: a system colour
  * by name, or an own colour by its id.
  */
-export function colorCss(config: { colors?: OwnColor[] } | undefined, color: string | null | undefined): string | undefined {
-  if (!color) return undefined;
+export function colorCss(config: { colors?: OwnColor[] } | undefined, color: string | null | undefined): string {
+  if (!color) return DEFAULT_COLOR;
   const own = config?.colors?.find((item) => item.id === color);
   return own ? `rgb(${own.rgb.join(", ")})` : color;
 }
@@ -259,7 +261,7 @@ export function colorCss(config: { colors?: OwnColor[] } | undefined, color: str
 /** The RGB of a colour: a system colour's or an own colour's. */
 export function colorRgb(config: { colors?: OwnColor[] } | undefined, color: string | null | undefined): number[] {
   const own = config?.colors?.find((item) => item.id === color);
-  return own?.rgb ?? SYSTEM_COLORS[color ?? "primary"] ?? SYSTEM_COLORS.primary;
+  return own?.rgb ?? SYSTEM_COLORS[color || DEFAULT_COLOR] ?? SYSTEM_COLORS[DEFAULT_COLOR];
 }
 
 /** A light (or a switch) of the Light channel. */

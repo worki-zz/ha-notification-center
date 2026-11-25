@@ -147,6 +147,11 @@ export const STEP_EDITOR_STYLES = css`
     .interaction ha-icon {
       flex: none;
     }
+    /* The restore button sits next to the pencil, as in the tables. */
+    .interaction .restore {
+      margin-inline-end: -16px;
+      color: var(--secondary-text-color);
+    }
     .own-row {
       display: flex;
       align-items: center;

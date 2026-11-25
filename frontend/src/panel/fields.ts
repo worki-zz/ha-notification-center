@@ -62,6 +62,77 @@ export function field(
   ></ha-selector>`;
 }
 
+/** The value of the Default option of an inheriting choice. */
+export const DEFAULT_OPTION = "__default__";
+
+/**
+ * A choice that inherits: its first option is "Default (value)", which
+ * means no own value; an own value has Home Assistant's clear X. Choosing
+ * the Default option, or clearing, gives undefined.
+ */
+export function inheritField(
+  hass: HomeAssistant | undefined,
+  options: { value: string; label: string }[],
+  own: string | undefined,
+  inherited: string,
+  label: string,
+  changed: (value: string | undefined) => void,
+  helper?: string,
+) {
+  return field(
+    hass,
+    {
+      select: {
+        mode: "dropdown",
+        options: [{ value: DEFAULT_OPTION, label: `Default (${inherited})` }, ...options],
+      },
+    },
+    own ?? DEFAULT_OPTION,
+    label,
+    (value) => changed(value === undefined || value === DEFAULT_OPTION ? undefined : String(value)),
+    { clearable: own !== undefined, helper },
+  );
+}
+
+/**
+ * The icon-only button that brings back what is inherited (mdi:restore),
+ * shown only where there is an own value; no confirmation.
+ */
+export function restoreButton(
+  label: string,
+  restore: () => void,
+  className = "restore",
+  slot?: string,
+) {
+  return html`<ha-icon-button
+    class=${className}
+    slot=${slot ?? nothing}
+    .label=${label}
+    @click=${(ev: Event) => {
+      ev.stopPropagation();
+      restore();
+    }}
+  >
+    <ha-icon icon="mdi:restore"></ha-icon>
+  </ha-icon-button>`;
+}
+
+/**
+ * The name of a page, as the navigation picker shows it: a panel's or
+ * dashboard's title, else the path itself. Empty: the Overview.
+ */
+export function pageName(hass: HomeAssistant | undefined, path: string | null | undefined): string {
+  if (!path) return "Overview";
+  const panels = (hass as { panels?: Record<string, { url_path?: string; title?: string | null }> } | undefined)
+    ?.panels;
+  const key = path.replace(/^\/+/, "").split(/[/?#]/)[0];
+  const title = panels?.[key]?.title;
+  if (!title) return path;
+  // Built-in panels have a translation key as their title.
+  const localize = (hass as { localize?: (key: string) => string } | undefined)?.localize;
+  return localize?.(`panel.${title}`) || title;
+}
+
 export interface IconOption {
   value: string;
   label: string;

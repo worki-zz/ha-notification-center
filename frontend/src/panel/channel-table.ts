@@ -6,14 +6,30 @@ import { customElement, property, state } from "lit/decorators.js";
 import { PUSH_PRIORITIES, PUSH_PRIORITY_DEFAULT, type PushPriority, type ChannelSettings, type Duration, type Mode, type NotificationCenterConfig } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
-import { confirmDialog } from "./confirm";
 import { type ChannelInfo, channelIcon, testButton, testChannel } from "./devices";
 import { entityDisplay } from "./editor/model";
-import { field } from "./fields";
+import { field, inheritField, restoreButton } from "./fields";
 import { STATUS_STYLES, renderStatus } from "./status";
 
 import { CHANNEL_PAGE_STYLES, TABLE_STYLES } from "./table-styles";
-import { type LiveTone, PUSH_PRIORITY_INFO, channelSummary, effectiveChannel, hasDelay, liveBadge, modeColumns, whenText } from "./channel-helpers";
+import { type LiveTone, PUSH_PRIORITY_INFO, channelSummary, durationText, effectiveChannel, hasDelay, liveBadge, modeColumns, whenText } from "./channel-helpers";
+
+// The switches and ticks of a channel: without a Default choice, a value
+// equal to the inherited one is not stored. Their built-in values.
+const SWITCH_DEFAULTS: Record<string, boolean> = {
+  play_chime: true,
+  read_the_message: false,
+  read_name: false,
+  read_info: false,
+};
+
+type Repeat = { type: string; every?: Duration; times?: number };
+
+const REPEAT_NAMES: Record<string, string> = {
+  once: "Once",
+  loop: "Loop",
+  recurring: "Recurring",
+};
 
 // -- Channels ------------------------------------------------------------------
 
@@ -66,11 +82,47 @@ export class NcChannelTable extends LitElement {
     return this.value[key] ?? {};
   }
 
+  /**
+   * What a channel follows: in a step the category's settings, in a
+   * category the built-in ones; a speaker's volume falls back to the one
+   * set for it under General, Sound.
+   */
+  private _inherited(key: string): ChannelSettings {
+    const settings = this._isStep
+      ? effectiveChannel(this.base?.[key], undefined)
+      : effectiveChannel(undefined, undefined);
+    if (settings.volume === undefined || settings.volume === null) {
+      const speaker = this.config?.speakers.find((item) => `speaker:${item.id}` === key);
+      if (speaker?.volume !== undefined && speaker.volume !== null) {
+        return { ...settings, volume: speaker.volume };
+      }
+    }
+    return settings;
+  }
+
   private _store(key: string, settings: ChannelSettings): void {
+    const own = { ...settings };
+    const inherited = this._inherited(key);
+    for (const [name, fallback] of Object.entries(SWITCH_DEFAULTS)) {
+      if (own[name] === undefined) continue;
+      if (own[name] === ((inherited[name] as boolean | undefined) ?? fallback)) delete own[name];
+    }
+    // A step's home modes equal to the category's follow it again.
+    if (this._isStep && own.modes) {
+      const same = (a: string[], b: string[]) =>
+        a.length === b.length && a.every((id) => b.includes(id));
+      if (same(own.modes, inherited.modes ?? [])) delete own.modes;
+    }
     const value = { ...this.value };
-    if (Object.keys(settings).length) value[key] = settings;
+    if (Object.keys(own).length) value[key] = own;
     else delete value[key];
     this.dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
+  }
+
+  private _set(key: string, changes: ChannelSettings): void {
+    const own: ChannelSettings = { ...this._own(key), ...changes };
+    for (const name of Object.keys(changes)) if (own[name] === undefined) delete own[name];
+    this._store(key, own);
   }
 
   private _setModes(key: string, modes: string[]): void {
@@ -90,26 +142,17 @@ export class NcChannelTable extends LitElement {
     );
   }
 
-  private _resetPart(key: string, part: "modes" | "settings"): void {
-    const own = { ...this._own(key) };
-    if (part === "modes") delete own.modes;
-    else
-      for (const name of Object.keys(own))
-        if (name !== "modes") delete own[name];
-    this._store(key, own);
+  // Whether the channel has own settings the restore button brings back:
+  // in a step anything, in a category anything but its home modes (they
+  // have no default).
+  private _hasOwn(key: string): boolean {
+    return Object.keys(this._own(key)).some((name) => this._isStep || name !== "modes");
   }
 
-  private async _resetRow(channel: ChannelInfo): Promise<void> {
-    if (
-      !(await confirmDialog(this, {
-        title: `Reset the home modes of ${channel.name}?`,
-        text: "The home modes go back to the category's settings.",
-        confirm: "Reset",
-      }))
-    ) {
-      return;
-    }
-    this._resetPart(channel.key, "modes");
+  // The whole channel as it inherits again (a category keeps its modes).
+  private _reset(key: string): void {
+    const modes = this._own(key).modes;
+    this._store(key, !this._isStep && modes ? { modes } : {});
   }
 
   /** A device's name as the Entities dialogs show it: name, then area ▸ device. */
@@ -151,10 +194,6 @@ export class NcChannelTable extends LitElement {
   /** Whether a channel is ticked in the home mode now. */
   private _sendsNow(settings: ChannelSettings): boolean {
     return !!this.currentMode && (settings.modes ?? []).includes(this.currentMode);
-  }
-
-  private _hasOwnSettings(key: string): boolean {
-    return Object.keys(this._own(key)).some((name) => name !== "modes");
   }
 
   protected override render() {
@@ -201,7 +240,7 @@ export class NcChannelTable extends LitElement {
       </div>
       ${this.channels.map((channel) => {
         const settings = this._effective(channel.key);
-        const own = this._isStep && this._own(channel.key).modes !== undefined;
+        const own = this._isStep && this._hasOwn(channel.key);
         const delay = whenText(settings);
         return html`<div class="row">
           <div class="cell name">
@@ -231,13 +270,7 @@ export class NcChannelTable extends LitElement {
           )}
           <div class="cell end">
             ${own
-              ? html`<ha-icon-button
-                  class="reset"
-                  .label=${"Reset the home modes to the category's settings"}
-                  @click=${() => void this._resetRow(channel)}
-                >
-                  <ha-icon icon="mdi:restore"></ha-icon>
-                </ha-icon-button>`
+              ? restoreButton("Restore the category's settings", () => this._reset(channel.key), "reset")
               : nothing}
             <ha-icon-button
               .label=${"Edit"}
@@ -255,8 +288,7 @@ export class NcChannelTable extends LitElement {
     return html`<div class="list">
       ${this.channels.map((channel) => {
         const settings = this._effective(channel.key);
-        const own =
-          this._isStep && Object.keys(this._own(channel.key)).length > 0;
+        const own = this._isStep && this._hasOwn(channel.key);
         const open = () => (this._open = channel.key);
         return html`<div
           class="list-row"
@@ -274,14 +306,14 @@ export class NcChannelTable extends LitElement {
               ${channelSummary(settings, modes)}
             </div>
           </div>
-          ${own
-            ? html`<ha-icon
-                class="reset"
-                icon="mdi:restore"
-                title="Changed in this step"
-              ></ha-icon>`
-            : nothing}
-          <ha-icon class="chevron" icon="mdi:chevron-right"></ha-icon>
+          <div class="list-end">
+            ${own
+              ? restoreButton("Restore the category's settings", () => this._reset(channel.key), "reset")
+              : nothing}
+            <ha-icon-button .label=${"Edit"}>
+              <ha-icon icon="mdi:pencil"></ha-icon>
+            </ha-icon-button>
+          </div>
         </div>`;
       })}
     </div>`;
@@ -293,22 +325,10 @@ export class NcChannelTable extends LitElement {
     const key = channel.key;
     const settings = this._effective(key);
     const ownModes = this._isStep && this._own(key).modes !== undefined;
-    const ownSettings = this._isStep && this._hasOwnSettings(key);
-    const after = hasDelay(settings.delay);
-    const section = (title: string, own: boolean, part: "modes" | "settings") =>
-      html`<div class="section-head">
-        <span>${title}</span>
-        ${own
-          ? html`<ha-button
-              appearance="plain"
-              size="s"
-              @click=${() => this._resetPart(key, part)}
-            >
-              <ha-icon slot="start" icon="mdi:restore"></ha-icon>
-              Reset
-            </ha-button>`
-          : nothing}
-      </div>`;
+    const inherited = this._inherited(key);
+    const ownDelay = this._own(key).delay;
+    const when =
+      ownDelay === undefined ? undefined : hasDelay(ownDelay) ? "after" : "now";
     const device = channel.kind && channel.kind !== "dashboard";
     return html`<ha-dialog
       open
@@ -322,6 +342,14 @@ export class NcChannelTable extends LitElement {
         this._testError = undefined;
       }}
     >
+      ${this._hasOwn(key)
+        ? restoreButton(
+            this._isStep ? "Restore the category's settings" : "Restore the defaults",
+            () => this._reset(key),
+            "",
+            "headerActionItems",
+          )
+        : nothing}
       ${channel.kind === "push"
         ? html`${testButton("Test on my phone", () => void this._test(key, settings, "me"))}
           ${testButton(
@@ -334,7 +362,14 @@ export class NcChannelTable extends LitElement {
           ? testButton("Test", () => void this._test(key, settings))
           : nothing}
       ${this._testError ? html`<ha-alert alert-type="error">${this._testError}</ha-alert>` : nothing}
-      ${section("Home modes", ownModes, "modes")}
+      <div class="section-head">
+        <span>Home modes</span>
+        ${ownModes
+          ? restoreButton("Restore the category's home modes", () =>
+              this._set(key, { modes: undefined }),
+            )
+          : nothing}
+      </div>
       <p class="hint secondary">
         The modes the channel sends in. With no tick the channel is off.
       </p>
@@ -360,48 +395,51 @@ export class NcChannelTable extends LitElement {
         )}
       </ha-card>
       <div class="separator"></div>
-      ${section("Settings", ownSettings, "settings")}
+      <div class="section-head"><span>Settings</span></div>
       <div class="fields">
         <div class="columns">
           <div class="column">
-            ${field(
+            ${inheritField(
               this.hass,
-              {
-                select: {
-                  mode: "dropdown",
-                  options: [
-                    { value: "now", label: "Immediately" },
-                    { value: "after", label: "Delayed" },
-                  ],
-                },
-              },
-              after ? "after" : "now",
+              [
+                { value: "now", label: "Immediately" },
+                { value: "after", label: "Delayed" },
+              ],
+              when,
+              hasDelay(inherited.delay)
+                ? `Delayed, ${durationText(inherited.delay)}`
+                : "Immediately",
               "When",
               (value) =>
-                this._store(key, {
-                  ...this._own(key),
-                  delay: value === "after" ? { hours: 1 } : null,
+                this._set(key, {
+                  delay:
+                    value === undefined
+                      ? undefined
+                      : value === "after"
+                        ? hasDelay(inherited.delay)
+                          ? inherited.delay
+                          : { hours: 1 }
+                        : null,
                 }),
-              { helper: "After the notification becomes active." },
+              "After the notification becomes active.",
             )}
           </div>
-          ${after
+          ${when === "after"
             ? html`<div class="column">
-            ${field(
+                ${field(
                   this.hass,
                   { duration: {} },
                   settings.delay,
-                  "",
+                  "Delay",
                   (value) =>
-                    this._store(key, {
-                      ...this._own(key),
-                      delay: (value as Duration | undefined) ?? null,
+                    this._set(key, {
+                      delay: hasDelay(value as Duration | undefined) ? (value as Duration) : { hours: 1 },
                     }),
                 )}
               </div>`
             : nothing}
         </div>
-        ${channel.kind === "speaker" ? this._renderRepeat(key, settings) : nothing}
+        ${channel.kind === "speaker" ? this._renderRepeat(key) : nothing}
         ${channel.kind === "speaker" ? this._renderSpeaker(key, settings) : nothing}
         ${channel.kind === "push" ? this._renderPriority(key, settings) : nothing}
       </div>
@@ -433,22 +471,16 @@ export class NcChannelTable extends LitElement {
   // A push: how it arrives on the phone.
   private _renderPriority(key: string, settings: ChannelSettings) {
     const priority = (settings.priority as PushPriority | undefined) ?? PUSH_PRIORITY_DEFAULT;
-    return field(
+    const inherited =
+      (this._inherited(key).priority as PushPriority | undefined) ?? PUSH_PRIORITY_DEFAULT;
+    return inheritField(
       this.hass,
-      {
-        select: {
-          mode: "dropdown",
-          options: PUSH_PRIORITIES.map((value) => ({
-            value,
-            label: PUSH_PRIORITY_INFO[value].name,
-          })),
-        },
-      },
-      priority,
+      PUSH_PRIORITIES.map((value) => ({ value, label: PUSH_PRIORITY_INFO[value].name })),
+      this._own(key).priority as string | undefined,
+      PUSH_PRIORITY_INFO[inherited].name,
       "Priority",
-      (value) =>
-        this._store(key, { ...this._own(key), priority: (value as PushPriority | undefined) ?? PUSH_PRIORITY_DEFAULT }),
-      { helper: PUSH_PRIORITY_INFO[priority].help },
+      (value) => this._set(key, { priority: value }),
+      PUSH_PRIORITY_INFO[priority].help,
     );
   }
 
@@ -456,7 +488,7 @@ export class NcChannelTable extends LitElement {
   // is read out (with the name and the Info line). The chime is the
   // notification's or its category's.
   private _renderSpeaker(key: string, settings: ChannelSettings) {
-    const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
+    const set = (changes: ChannelSettings) => this._set(key, changes);
     const reading = !!settings.read_the_message;
     const check = (label: string, name: "read_name" | "read_info") =>
       html`<label class="check">
@@ -467,7 +499,7 @@ export class NcChannelTable extends LitElement {
         ${label}
       </label>`;
     return html`
-      ${this._renderVolume(key, settings)}
+      ${this._renderVolume(key)}
       <div class="switch-row">
         <div>Play chime</div>
         <ha-switch
@@ -495,86 +527,73 @@ export class NcChannelTable extends LitElement {
     `;
   }
 
-  // A speaker's volume for these notifications, with an X that empties it:
-  // the category's (in a notification) or the speaker's own.
-  private _renderVolume(key: string, settings: ChannelSettings) {
-    const volume = settings.volume as number | null | undefined;
-    const own = this._own(key).volume;
-    const clear = () => {
-      const copy = { ...this._own(key) };
-      delete copy.volume;
-      this._store(key, copy);
-    };
-    return html`<div class="clearable">
-      ${field(
-        this.hass,
-        { number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" } },
-        volume === undefined || volume === null ? undefined : Math.round(volume * 100),
-        "Volume",
-        (value) => {
-          if (value === undefined || value === null || value === "") clear();
-          else this._store(key, { ...this._own(key), volume: Number(value) / 100 });
-        },
-        { helper: "Empty: the speaker's own volume." },
-      )}
-      ${own !== undefined && own !== null
-        ? html`<ha-icon-button class="clear" .label=${"Clear"} @click=${clear}>
-            <ha-icon icon="mdi:close"></ha-icon>
-          </ha-icon-button>`
-        : nothing}
-    </div>`;
+  // A speaker's volume for these notifications; empty: the inherited one,
+  // which the placeholder shows (the category's, or the one under General,
+  // Sound; "Default" when the speaker keeps its own).
+  private _renderVolume(key: string) {
+    const own = this._own(key).volume as number | null | undefined;
+    const inherited = this._inherited(key).volume as number | null | undefined;
+    return field(
+      this.hass,
+      { number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" } },
+      own === undefined || own === null ? undefined : Math.round(own * 100),
+      "Volume",
+      (value) =>
+        this._set(key, {
+          volume: value === undefined || value === null || value === "" ? undefined : Number(value) / 100,
+        }),
+      {
+        placeholder:
+          inherited === undefined || inherited === null ? "Default" : String(Math.round(inherited * 100)),
+      },
+    );
   }
 
   // A speaker's repeat until done or muted: Once; Loop, again and again
   // without a pause; or Recurring, every so often. Times limits how many
   // times it plays in all. Repeat, Every and Times share a row.
-  private _renderRepeat(key: string, settings: ChannelSettings) {
-    const set = (changes: ChannelSettings) => this._store(key, { ...this._own(key), ...changes });
-    const repeat = (settings.repeat as
-      | { type: string; every?: Duration; times?: number }
-      | undefined) ?? { type: "once" };
-    const every = repeat.every ?? { hours: 1 };
-    const times = repeat.times;
+  private _renderRepeat(key: string) {
+    const own = this._own(key).repeat as Repeat | undefined;
+    const inherited = (this._inherited(key).repeat as Repeat | undefined) ?? { type: "once" };
+    const every = own?.every ?? { hours: 1 };
+    const times = own?.times;
     const keep = times ? { times } : {};
     const setRepeat = (changes: Record<string, unknown>) => {
-      const next: Record<string, unknown> = { ...repeat, ...changes };
+      const next: Record<string, unknown> = { ...own, ...changes };
       if (next.times === undefined) delete next.times;
-      set({ repeat: next });
+      this._set(key, { repeat: next });
     };
+    const inheritedText =
+      inherited.type === "recurring" && inherited.every
+        ? `Recurring, every ${durationText(inherited.every)}`
+        : (REPEAT_NAMES[inherited.type] ?? inherited.type);
     return html`<div>
       <div class="repeat-row">
-        ${field(
+        ${inheritField(
           this.hass,
-          {
-            select: {
-              mode: "dropdown",
-              options: [
-                { value: "once", label: "Once" },
-                { value: "loop", label: "Loop" },
-                { value: "recurring", label: "Recurring" },
-              ],
-            },
-          },
-          repeat.type,
+          Object.entries(REPEAT_NAMES).map(([value, label]) => ({ value, label })),
+          own?.type,
+          inheritedText,
           "Repeat",
           (value) =>
-            set({
+            this._set(key, {
               repeat:
-                value === "recurring"
-                  ? { type: "recurring", every: { hours: 1 }, ...keep }
-                  : value === "loop"
-                    ? { type: "loop", ...keep }
-                    : { type: "once" },
+                value === undefined
+                  ? undefined
+                  : value === "recurring"
+                    ? { type: "recurring", every: { hours: 1 }, ...keep }
+                    : value === "loop"
+                      ? { type: "loop", ...keep }
+                      : { type: "once" },
             }),
         )}
-        ${repeat.type === "recurring"
+        ${own?.type === "recurring"
           ? field(this.hass, { duration: {} }, every, "Every", (value) =>
               setRepeat({ every: (value as Duration | undefined) ?? { hours: 1 } }),
             )
           : nothing}
-        ${repeat.type === "once"
-          ? nothing
-          : field(
+        ${own && own.type !== "once"
+          ? field(
               this.hass,
               { number: { min: 1, max: 1000, step: 1, mode: "box" } },
               times,
@@ -583,9 +602,10 @@ export class NcChannelTable extends LitElement {
                 setRepeat({
                   times: value === undefined || value === null || value === "" ? undefined : Number(value),
                 }),
-            )}
+            )
+          : nothing}
       </div>
-      ${repeat.type === "once"
+      ${(own?.type ?? inherited.type) === "once"
         ? nothing
         : html`<div class="repeat-helper">Until done or muted.</div>`}
     </div>`;
@@ -605,6 +625,17 @@ export class NcChannelTable extends LitElement {
       .repeat-row > * {
         flex: 1 1 140px;
         min-width: 0;
+      }
+      .list-end {
+        display: flex;
+        align-items: center;
+        margin-inline-end: -8px;
+      }
+      .list-end .reset {
+        margin-inline-end: -8px;
+      }
+      .section-head .restore {
+        color: var(--secondary-text-color);
       }
       .repeat-helper {
         margin: 4px 16px 0;

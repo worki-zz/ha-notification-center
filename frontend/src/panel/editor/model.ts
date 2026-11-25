@@ -6,11 +6,12 @@ import type {
   Button,
   CardHighlight,
   Category,
+  CategoryButton,
   ChannelSettings,
   Duration,
   NotificationState,
 } from "../../shared/config";
-import { categoryButtons, effectiveButtons } from "../../shared/live";
+import { BUILTIN_ORDER, categoryButtons, effectiveButtons } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
 
@@ -171,17 +172,15 @@ export function newNotification(category?: Category): EditorNotification {
     enabled: true,
     entities: [],
     entity_groups: [],
-    steps: [newStep(category)],
+    steps: [newStep()],
   };
 }
 
 /**
- * A new step: the built-in buttons switched on as in the category (only
- * Done in a new category). Their other settings stay inherited.
+ * A new step: every built-in button is listed (so an entity action can
+ * point to it) and follows the category: nothing of it is stored.
  */
-export function newStep(category?: Category): EditorStep {
-  const enabled = (type: Button["type"]) =>
-    categoryButtons(category).find((button) => button.type === type)?.enabled ?? type === "done";
+export function newStep(): EditorStep {
   return {
     enabled: true,
     message: "",
@@ -189,40 +188,32 @@ export function newStep(category?: Category): EditorStep {
     conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
     done_when: { triggers: [], activation_conditions_no_longer_true: false },
     dismiss_when: { triggers: [] },
-    buttons: [
-      // The Tap follows the category's Tap behavior: no actions stored.
-      { id: newId(), type: "tap", enabled: enabled("tap") } as Button,
-      builtin("done", enabled("done")),
-      builtin("dismiss", enabled("dismiss")),
-      builtin("snooze", enabled("snooze")),
-      builtin("mute", enabled("mute")),
-    ],
+    buttons: BUILTIN_ORDER.map((type) => ({ id: newId(), type }) as Button),
     audience: {},
     channels: {},
   };
 }
 
-function builtin(
-  type: Button["type"],
-  enabled: boolean,
-  actions: Button["actions"] = {},
-): Button {
-  return { id: newId(), type, enabled, actions } as Button;
+/**
+ * A step's entry of a category's button, with what equals the category's
+ * left out (it follows the category again). The entry itself stays, so an
+ * entity action can keep pointing to its id.
+ */
+export function inheritedEntry(entry: Button, base: CategoryButton | undefined): Button {
+  const copy: Partial<Button> = { ...entry };
+  if (copy.enabled === undefined || copy.enabled === base?.enabled) delete copy.enabled;
+  if (!copy.label) delete copy.label;
+  if (!copy.icon) delete copy.icon;
+  if (copy.show_in_push === undefined || copy.show_in_push === null) delete copy.show_in_push;
+  if (!copy.snooze?.length || copy.snooze.join() === (base?.snooze ?? []).join()) delete copy.snooze;
+  if (!copy.open_on_tap) delete copy.open_on_tap;
+  if (copy.type !== "tap" && copy.actions && !Object.keys(copy.actions).length) delete copy.actions;
+  return copy as Button;
 }
 
-/**
- * Switch the built-in buttons of a new notification's steps as the newly
- * chosen category has them.
- */
-export function applyCategoryDefaults(draft: EditorNotification, category?: Category): void {
-  const bases = categoryButtons(category);
-  for (const step of draft.steps) {
-    for (const button of step.buttons) {
-      if (button.type === "custom") continue;
-      const base = bases.find((item) => item.type === button.type);
-      if (base) button.enabled = base.enabled;
-    }
-  }
+/** Whether a step's entry of a category's button has anything of its own. */
+export function entryHasOwn(entry: Button | undefined): boolean {
+  return !!entry && Object.keys(entry).some((key) => key !== "id" && key !== "type");
 }
 
 /**

@@ -10,7 +10,7 @@ import { DOMAIN, type NotificationCenterConfig } from "../shared/config";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { VERSION } from "../shared/version";
-import { field } from "./fields";
+import { field, pageName } from "./fields";
 
 interface GeneralPage {
   key: string;
@@ -18,20 +18,6 @@ interface GeneralPage {
   description: string;
   icon: string;
   color: string;
-}
-
-// The name of a page, as the navigation picker shows it: a panel's or
-// dashboard's title, else the path itself. Empty: the Overview.
-function pageName(hass: HomeAssistant | undefined, path: string | null | undefined): string {
-  if (!path) return "Overview";
-  const panels = (hass as { panels?: Record<string, { url_path?: string; title?: string | null }> } | undefined)
-    ?.panels;
-  const key = path.replace(/^\/+/, "").split(/[/?#]/)[0];
-  const title = panels?.[key]?.title;
-  if (!title) return path;
-  // Built-in panels have a translation key as their title.
-  const localize = (hass as { localize?: (key: string) => string } | undefined)?.localize;
-  return localize?.(`panel.${title}`) || title;
 }
 
 const count = (amount: number, one: string, more: string) => `${amount} ${amount === 1 ? one : more}`;

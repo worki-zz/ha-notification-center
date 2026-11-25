@@ -1,14 +1,13 @@
 // The dialog of an interaction (a button of the card, or the tap on it):
-// whether it is in the push notification, the Snooze button's times, the
-// action, and for an own button its label and icon (the built-in buttons
-// have only an icon here; their label is set in YAML).
+// whether it is switched on, its label and icon, whether it is in the push
+// notification, the Snooze button's times and the action.
 //
 // In a category it sets what the notifications inherit: the label of every
 // button, its icon, push and times, and the Tap behavior, but no other
-// action. In a notification, a
-// category's button shows the category's settings: the icon and times are
-// changed for this notification only, and Push is a choice that, left
-// empty, follows the category.
+// action. In a notification, a category's button follows the category: a
+// field left empty (or on Default) shows the category's value, and the
+// restore button in the header brings the whole button back to it. The
+// same button in a category brings a built-in button back to its defaults.
 //
 // In a notification, a button has a list of Actions in a fixed order (the
 // order they run in): the Entity action (a switch, always there), Mute
@@ -16,13 +15,12 @@
 // Snooze, which shows its times there; one can be added to the Tap and the
 // own buttons), any number
 // of Home Assistant actions (Home Assistant's own rows, in their own order),
-// and the Navigation last. Reset beside Actions brings back the default (a
-// category's button).
+// and the Navigation last. The restore button beside Actions brings back
+// the default.
 //
 // The Tap behavior is one block: Action (the same Actions list, with the
 // Navigation always in it) or Button action (runs another button). Set in
-// the category; a notification follows it, or has its own (Reset brings the
-// category's back).
+// the category; a notification follows it, or has its own.
 
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -38,12 +36,13 @@ import {
   DEFAULT_SNOOZE,
   SNOOZE_CHOICES,
   buttonRef,
+  categoryButtons,
   snoozeChoices,
   tapBehaviorOwn,
 } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { actionAddAvailable } from "../ha-elements";
-import { field } from "../fields";
+import { field, inheritField, pageName, restoreButton } from "../fields";
 
 /** The default label and icon of an interaction. */
 export const INTERACTION_DEFAULTS: Record<
@@ -201,6 +200,10 @@ export class NcInteractionDialog extends LitElement {
   // The Tap: the buttons it can run (Button action), by their key.
   @property({ attribute: false }) public runChoices: RunChoice[] = [];
 
+  // The Tap: the page the push opens set under General, Push (empty: the
+  // Overview).
+  @property({ attribute: false }) public generalOpenOnTap?: string | null;
+
   @state() private _button?: Button;
 
   @state() private _open = true;
@@ -243,6 +246,47 @@ export class NcInteractionDialog extends LitElement {
     return (own ? button.run_button : this.inherited?.run_button) || "";
   }
 
+  // What the button follows: in a notification the category's button, in
+  // a category a built-in button's defaults. Nothing for an own button.
+  private get _base(): CategoryButton | undefined {
+    if (this.mode === "step") return this.inherited;
+    const type = this._button?.type;
+    if (!type || type === "custom") return undefined;
+    return categoryButtons(undefined).find((item) => item.type === type);
+  }
+
+  // Whether the button has anything of its own the header's restore
+  // button would bring back.
+  private _hasOwn(button: Button): boolean {
+    const base = this._base;
+    if (!base) return false;
+    const step = this.mode === "step";
+    if (button.enabled !== undefined && button.enabled !== base.enabled) return true;
+    if (button.label || button.icon) return true;
+    if (button.type === "snooze" && button.snooze?.length) {
+      if (step || button.snooze.join() !== DEFAULT_SNOOZE.join()) return true;
+    }
+    if (button.type === "tap") {
+      if (button.open_on_tap) return true;
+      return step ? tapBehaviorOwn(button) : !!button.run_button || !!button.actions;
+    }
+    if (step) {
+      if (button.show_in_push !== undefined && button.show_in_push !== null) return true;
+      return !!button.actions && Object.keys(button.actions).length > 0;
+    }
+    return button.show_in_push === false;
+  }
+
+  // The header's restore button: the whole button as its base again.
+  private _resetAll(): void {
+    const button = this._button!;
+    this._button = (
+      this.mode === "step"
+        ? { id: button.id, type: button.type }
+        : { id: button.id, type: button.type, enabled: this._base?.enabled ?? true }
+    ) as Button;
+  }
+
   protected override render() {
     const button = this._button;
     const hass = this.hass;
@@ -250,22 +294,24 @@ export class NcInteractionDialog extends LitElement {
     const defaults = INTERACTION_DEFAULTS[button.type];
     const category = this.mode === "category";
     const inherited = this.inherited;
-    // In a notification, the built-in buttons' labels are set in YAML only.
     const title =
       button.type === "tap"
         ? defaults.label
         : button.label || inherited?.label || defaults.label;
-    // The label: every button of a category (a built-in one can be changed
-    // and cleared again with X), and a notification's own custom buttons.
-    // A label from the category is changed in a notification in YAML only.
-    const labelled =
-      button.type !== "tap" && (category || (button.type === "custom" && !inherited));
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
       header-title=${this.isNew ? "Add button" : title}
       @closed=${this._closed}
     >
+      ${this._hasOwn(button)
+        ? restoreButton(
+            category ? "Restore the defaults" : "Restore the category's settings",
+            () => this._resetAll(),
+            "",
+            "headerActionItems",
+          )
+        : nothing}
       ${button.type === "custom" && !this.isNew && !inherited
         ? html`<ha-icon-button
             slot="headerActionItems"
@@ -276,13 +322,12 @@ export class NcInteractionDialog extends LitElement {
           </ha-icon-button>`
         : nothing}
       <div class="form">
-        ${labelled
-          ? html`<div class="row">
+        ${this.isNew ? nothing : this._enabledRow(button)}
+        ${button.type === "tap"
+          ? nothing
+          : html`<div class="row">
               ${this._labelField(button)} ${this._iconField(button)}
-            </div>`
-          : button.type === "tap"
-            ? nothing
-            : this._iconField(button)}
+            </div>`}
         ${button.type === "tap"
           ? nothing
           : inherited
@@ -318,10 +363,8 @@ export class NcInteractionDialog extends LitElement {
   }
 
   // Changed from the category's (or the built-in) default.
-  // A Snooze's own times count too: they are in its Actions.
   private _actionsChanged(button: Button): boolean {
     if (!this.inherited) return false;
-    if (button.snooze?.length) return true;
     return button.actions !== undefined && Object.keys(button.actions).length > 0;
   }
 
@@ -329,16 +372,26 @@ export class NcInteractionDialog extends LitElement {
     const copy = { ...this._button! } as Partial<Button>;
     delete copy.actions;
     delete copy.run_button;
-    // A Snooze's times are the category's again.
-    if (this.inherited && copy.type === "snooze") copy.snooze = null;
     this._button = copy as Button;
   }
 
-  private _resetButton() {
-    return html`<ha-button appearance="plain" size="s" @click=${() => this._resetActions()}>
-      <ha-icon slot="start" icon="mdi:restore"></ha-icon>
-      Reset
-    </ha-button>`;
+  // The switch that turns the button on, as the switch of its row. In a
+  // notification the category's value is not stored.
+  private _enabledRow(button: Button) {
+    const base = this.mode === "step" ? this.inherited : undefined;
+    const on = button.enabled ?? base?.enabled ?? true;
+    return html`<label class="switch-row">
+      <ha-switch
+        .checked=${on}
+        @change=${(ev: Event) => {
+          const checked = (ev.target as HTMLInputElement).checked;
+          const copy: Partial<Button> = { ...this._button!, enabled: checked };
+          if (base && checked === base.enabled) delete copy.enabled;
+          this._button = copy as Button;
+        }}
+      ></ha-switch>
+      <span>Enabled</span>
+    </label>`;
   }
 
   // The Tap behavior, one block: Action (its actions) or Button action
@@ -347,8 +400,6 @@ export class NcInteractionDialog extends LitElement {
   private _tapBehavior(button: Button) {
     const hass = this.hass!;
     const run = this._runOf(button);
-    const step = this.mode === "step";
-    const own = step && tapBehaviorOwn(button);
     const choices = this.runChoices;
     const setRun = (value: string) => {
       const copy = { ...this._button! };
@@ -364,7 +415,6 @@ export class NcInteractionDialog extends LitElement {
     return html`<div class="divider"></div>
       <div class="section-head">
         <span class="title">Tap behavior</span>
-        ${own ? this._resetButton() : nothing}
       </div>
       <div class="row">
         ${field(
@@ -380,7 +430,7 @@ export class NcInteractionDialog extends LitElement {
             },
           },
           run ? "button" : "action",
-          step && !own ? "Type (category)" : "Type",
+          "Type",
           (value) => {
             if (value === "button") {
               if (!run) setRun(choices[0]?.value ?? "");
@@ -415,12 +465,14 @@ export class NcInteractionDialog extends LitElement {
       ${run ? nothing : this._actionList(button)}`;
   }
 
-  // A button's Actions, with Reset beside them.
+  // A button's Actions, with the restore button beside them.
   private _renderActions(button: Button) {
     return html`<div class="divider"></div>
       <div class="section-head">
         <span class="title">Actions</span>
-        ${this._actionsChanged(button) ? this._resetButton() : nothing}
+        ${this._actionsChanged(button)
+          ? restoreButton("Restore the default actions", () => this._resetActions())
+          : nothing}
       </div>
       ${this._actionList(button)}`;
   }
@@ -700,25 +752,19 @@ export class NcInteractionDialog extends LitElement {
   }
 
   // Required for a custom button defined here (in the category, or a
-  // notification's own); else empty means the default or the category's.
+  // notification's own); else empty means the default or the category's,
+  // which the placeholder shows.
   private _labelField(button: Button) {
     const own = button.type === "custom" && !this.inherited;
     const fallback = this.inherited?.label || INTERACTION_DEFAULTS[button.type].label;
-    const field_ = field(
+    return field(
       this.hass,
       { text: {} },
       button.label ?? "",
       "Label",
-      (value) => this._set({ label: (value as string) || null }),
+      (value) => this._set({ label: (value as string)?.trim() ? (value as string) : null }),
       own ? { required: true } : { placeholder: fallback },
     );
-    if (own || !button.label) return field_;
-    return html`<div class="clearable">
-      ${field_}
-      <ha-icon-button class="clear" .label=${"Clear"} @click=${() => this._set({ label: null })}>
-        <ha-icon icon="mdi:close"></ha-icon>
-      </ha-icon-button>
-    </div>`;
   }
 
   private _iconField(button: Button) {
@@ -737,6 +783,8 @@ export class NcInteractionDialog extends LitElement {
       ? this.inherited.snooze
       : DEFAULT_SNOOZE;
     const chosen = button.snooze?.length ? button.snooze : base;
+    // A custom button's own times do not inherit.
+    const inherits = !!this.inherited || this.mode === "category";
     const toggle = (key: string, on: boolean) => {
       const keys = on ? [...chosen, key] : chosen.filter((k) => k !== key);
       // At least one time.
@@ -744,13 +792,16 @@ export class NcInteractionDialog extends LitElement {
       const snooze = SNOOZE_CHOICES.map((c) => c.key).filter((k) =>
         keys.includes(k),
       );
-      // The category's times again: inherited, not stored.
-      const same =
-        !!this.inherited && snooze.join() === [...base].join();
+      // The category's (or the default) times again: inherited, not stored.
+      const same = inherits && snooze.join() === [...base].join();
       this._set({ snooze: same ? null : snooze });
     };
+    const own = inherits && !!button.snooze?.length && button.snooze.join() !== [...base].join();
     return html`<div class="snooze">
-      <div class="title">Times</div>
+      <div class="section-head">
+        <span class="title">Times</span>
+        ${own ? restoreButton("Restore the default times", () => this._set({ snooze: null })) : nothing}
+      </div>
       <div class="times">
         ${SNOOZE_CHOICES.map(
           (choice) =>
@@ -830,7 +881,10 @@ export class NcInteractionDialog extends LitElement {
   // Tap: the page the app opens when the push is tapped (More info opens
   // on top of it).
   private _renderOpenOnTap(button: Button, moreInfo: boolean) {
-    const base = this.inherited?.open_on_tap;
+    const base = pageName(
+      this.hass,
+      (this.mode === "step" ? this.inherited?.open_on_tap : undefined) || this.generalOpenOnTap,
+    );
     const top = moreInfo ? " More info opens on top of it." : "";
     return field(
       this.hass,
@@ -843,37 +897,32 @@ export class NcInteractionDialog extends LitElement {
         else delete copy.open_on_tap;
         this._button = copy;
       },
-      {
-        helper: base
-          ? `The page the push opens. Empty: ${base} (category).${top}`
-          : `The page the push opens. Empty: the default under General, Push.${top}`,
-      },
+      { helper: `Default: ${base}.${top}` },
     );
   }
 
-  // A category's button in a notification: Push follows the category unless
-  // chosen here.
+  // A category's button in a notification: Show in push follows the
+  // category unless chosen here.
   private _renderPushChoice(button: Button, inherited: CategoryButton) {
     const own = button.show_in_push;
     const base = inherited.show_in_push ?? true;
     const times = button.type === "snooze" ? snoozeChoices(button) : [];
     const options = [
-      { value: "on", label: "Shown in the push" },
-      { value: "off", label: "Not in the push" },
+      { value: "on", label: "On" },
+      { value: "off", label: "Off" },
     ];
-    return html`${field(
+    return html`${inheritField(
         this.hass,
-        { select: { mode: "dropdown", options } },
-        own === undefined || own === null ? "" : own ? "on" : "off",
-        `Push (category: ${base ? "on" : "off"})`,
+        options,
+        own === undefined || own === null ? undefined : own ? "on" : "off",
+        base ? "On" : "Off",
+        "Show in push",
         (value) => {
-          const chosen = value === "on" ? true : value === "off" ? false : undefined;
           const copy = { ...this._button! };
-          if (chosen === undefined) delete copy.show_in_push;
-          else copy.show_in_push = chosen;
+          if (value === undefined) delete copy.show_in_push;
+          else copy.show_in_push = value === "on";
           this._button = copy;
         },
-        { clearable: true },
       )}
       ${times.length
         ? html`<div class="secondary">The push snoozes for ${times[0].label.toLowerCase()}.</div>`
@@ -937,14 +986,9 @@ export class NcInteractionDialog extends LitElement {
       min-height: 40px;
       cursor: pointer;
     }
-    .clearable {
-      position: relative;
-    }
-    .clearable .clear {
-      position: absolute;
-      top: 50%;
-      inset-inline-end: 4px;
-      transform: translateY(-50%);
+    /* The restore button beside a title. */
+    .section-head .restore {
+      margin: -8px 0;
       color: var(--secondary-text-color);
     }
     .divider {

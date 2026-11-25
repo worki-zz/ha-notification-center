@@ -68,7 +68,7 @@ QUERY_THEN: Final = "nc_then"
 
 PANEL_PATH: Final = f"/{PANEL_URL_PATH}"
 DEFAULT_ICON: Final = "mdi:bell"
-DEFAULT_COLOR_HEX: Final = "#03A9F4"
+DEFAULT_COLOR_HEX: Final = "#FFC107"
 # Android shows at most three buttons.
 ANDROID_BUTTONS: Final = 3
 # Android's own channel for alarms: it rings at the alarm volume, through

@@ -23,7 +23,7 @@ LIGHT_DEFAULTS: Final[dict[str, tuple[int, int, int]]] = {
     "grey": (255, 255, 255),
     "dark-grey": (255, 255, 255),
 }
-DEFAULT_COLOR: Final = "primary"
+DEFAULT_COLOR: Final = "amber"
 DEFAULT_BRIGHTNESS: Final = 70
 
 # The settings of a light, as a light takes them from a colour.

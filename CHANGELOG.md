@@ -6,11 +6,19 @@
 
 - **Schedule** on the Overview has *Next week* and *Next month* sections (beside This week, This month, This year and Next year; an empty one does not show), and a step due tomorrow reads *Tomorrow* with its time.
 - The *Active* status chip in the Notifications list and the notification editor is green; the notification's own colour stays for the sensor's `icon_color`, the badge and the cards.
+- **Inheritance looks the same everywhere.** Every choice that inherits (Color, Highlight, Chime, Show in push, When, Repeat, Priority) starts with *Default (value)*, the category's in a notification and the built-in one in a category (Color with its swatch), and an own value has Home Assistant's X. Text and number fields show the inherited value as their placeholder (a button's label, Volume, Color temperature). The helper texts about the category, *(category)* and *(default)* are gone.
+- **Restore icon** instead of the *Reset* buttons: in the header of a button's and a channel's dialog (the whole button or channel, with its switch), beside a button's Actions and Snooze *Times*, a channel's *Home modes* and an entity's action in a group; and on the rows of a step's Interactions, Channels and Audience with own settings, beside the pencil. None asks for a confirmation; the channel's Settings block has no reset of its own any more (each setting has its Default).
+- A notification can change the **label** of its category's buttons (the placeholder shows the category's). The button dialog has an *Enabled* switch at the top.
+- The **default colour** of a category is **Amber** (was the primary colour): categories and notifications without a colour of their own, their lights and pushes turn amber.
+- A **new notification follows its category's button switches** instead of copying them, and a switch, home mode tick or Audience row set back to the category's value is no longer stored: it follows the category again.
+- On a phone, each row of the Channels list has a pencil (was an arrow) and, when changed, the restore icon.
 
 ### Fixed
 
 - While Home Assistant restarts, the dashboard cards, badges and the Overview no longer show *Unknown command*: they wait until Notification Center is loaded again and then follow it without a reload. A card or badge shows nothing while it loads (the Notification Center card shows its empty state if it is turned on).
 - A push sent with *Test* in a step's Channels showed its placeholders (`{Device}`, ...) and templates as written: it now reads them as the preview does, from the notification's first entity.
+- The channel dialog's *When* and the delay beside it looked like one field on a wide screen: the delay is labelled *Delay*.
+- The Volume of a step's speaker channel said that empty is the speaker's own volume; it is the category's (now shown as the placeholder).
 - Placeholders of a notification started by a trigger (not by Notification entities) read the entity that triggered it, on the dashboard and in the push (they were empty).
 
 ## 0.7.7

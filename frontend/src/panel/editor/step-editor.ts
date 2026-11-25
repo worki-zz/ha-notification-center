@@ -5,7 +5,7 @@
 import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { field } from "../fields";
+import { field, restoreButton } from "../fields";
 import { PLACEHOLDERS, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import {
@@ -18,6 +18,8 @@ import {
   type Obj,
   PINNED,
   PINNED_STATE,
+  entryHasOwn,
+  inheritedEntry,
   newId,
   type Schedule,
   type StepData,
@@ -967,6 +969,8 @@ export class NcStepEditor extends LitElement {
   private _setEntry(step: EditorStep, entry: Button, inherited: boolean): void {
     const buttons = [...step.buttons];
     const index = this._entryIndex(step, entry, inherited);
+    // What equals the category's is not stored: it follows the category.
+    if (inherited) entry = inheritedEntry(entry, this._base({ ...entry, category: true } as EffectiveButton));
     if (index < 0) buttons.push(entry);
     else buttons[index] = entry;
     this._change({ buttons });
@@ -1080,13 +1084,10 @@ export class NcStepEditor extends LitElement {
     const inherited = this._base(button);
     const entry = (): Button => {
       const index = this._entryIndex(step, button, button.category);
-      return index >= 0
-        ? step.buttons[index]
-        : // The Tap keeps following the category's Tap behavior.
-          (button.type === "tap"
-            ? { id: button.id, type: button.type }
-            : { id: button.id, type: button.type, actions: button.actions }) as Button;
+      // Nothing stored: everything follows the category.
+      return index >= 0 ? step.buttons[index] : ({ id: button.id, type: button.type } as Button);
     };
+    const own = button.category && entryHasOwn(entry());
     const open = () =>
       (this._interaction = { button: entry(), inherited, isNew: false });
     return html`<div
@@ -1118,6 +1119,11 @@ export class NcStepEditor extends LitElement {
         <div>${label}</div>
         <div class="secondary">${parts.join(" · ")}</div>
       </div>
+      ${own
+        ? restoreButton("Restore the category's settings", () =>
+            this._setEntry(step, { id: entry().id, type: button.type } as Button, true),
+          )
+        : nothing}
       <ha-icon-button .label=${"Edit"}>
         <ha-icon icon="mdi:pencil"></ha-icon>
       </ha-icon-button>
@@ -1148,6 +1154,7 @@ export class NcStepEditor extends LitElement {
       .isNew=${edit.isNew}
       .entityActionSet=${this.entityActions.has(edit.button.id)}
       .runChoices=${runChoicesOf(effectiveButtons(this.category, step))}
+      .generalOpenOnTap=${this.config?.general?.open_on_tap}
       @interaction-closed=${(
         ev: CustomEvent<{ result?: Button | "delete" }>,
       ) => {
