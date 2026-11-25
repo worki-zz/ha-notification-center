@@ -3,8 +3,8 @@
 // notification, the Snooze button's times and the action.
 //
 // In a category it sets what the notifications inherit: the label of every
-// button, its icon, push and times, and the Tap behavior, but no other
-// action. In a notification, a category's button follows the category: a
+// button, its icon, push, times and Actions (an Entity action there means
+// each notification's own entities), and the Tap behavior. In a notification, a category's button follows the category: a
 // field left empty (or on Default) shows the category's value, and the
 // restore button in the header brings the whole button back to it. The
 // same button in a category brings a built-in button back to its defaults.
@@ -188,7 +188,7 @@ export class NcInteractionDialog extends LitElement {
 
   @property({ type: Boolean }) public isNew = false;
 
-  // "category": a category's button (no action, every label).
+  // "category": a category's button (what its notifications inherit).
   @property() public mode: "step" | "category" = "step";
 
   // In a notification: the category's button this one inherits from.
@@ -234,7 +234,9 @@ export class NcInteractionDialog extends LitElement {
   // The actions the button has now: its own, else what it inherits. The
   // Tap's always have a Navigation.
   private _actionsOf(button: Button): ButtonActions {
-    if (button.type !== "tap") return button.actions ?? {};
+    if (button.type !== "tap") {
+      return button.actions ?? (this.mode === "step" ? this.inherited?.actions : undefined) ?? {};
+    }
     const own = this.mode === "category" || tapBehaviorOwn(button);
     const actions = (own ? button.actions : this.inherited?.actions) ?? TAP_DEFAULT;
     return actions.navigation ? actions : { ...actions, ...TAP_DEFAULT };
@@ -272,9 +274,9 @@ export class NcInteractionDialog extends LitElement {
     }
     if (step) {
       if (button.show_in_push !== undefined && button.show_in_push !== null) return true;
-      return !!button.actions && Object.keys(button.actions).length > 0;
+      return this._actionsChanged(button);
     }
-    return button.show_in_push === false;
+    return button.show_in_push === false || this._actionsChanged(button);
   }
 
   // The header's restore button: the whole button as its base again.
@@ -333,15 +335,9 @@ export class NcInteractionDialog extends LitElement {
           : inherited
             ? this._renderPushChoice(button, inherited)
             : this._renderPush(button)}
-        ${category && button.type === "snooze"
-          ? html`<div class="divider"></div>
-              ${this._renderSnooze(button)}`
-          : nothing}
         ${button.type === "tap"
           ? html`${this._tapBehavior(button)} ${this._renderTapPush(button)}`
-          : category
-            ? nothing
-            : this._renderActions(button)}
+          : this._renderActions(button)}
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button
@@ -364,8 +360,10 @@ export class NcInteractionDialog extends LitElement {
 
   // Changed from the category's (or the built-in) default.
   private _actionsChanged(button: Button): boolean {
+    if (button.actions === undefined) return false;
+    if (this.mode === "category") return !!this._base && Object.keys(button.actions).length > 0;
     if (!this.inherited) return false;
-    return button.actions !== undefined && Object.keys(button.actions).length > 0;
+    return JSON.stringify(button.actions) !== JSON.stringify(this.inherited.actions ?? {});
   }
 
   private _resetActions(): void {
@@ -494,7 +492,9 @@ export class NcInteractionDialog extends LitElement {
         ${this._switchRow(
           "mdi:format-list-checks",
           "Entity action",
-          "Set the action for each entity in the Entities block.",
+          this.mode === "category"
+            ? "Each notification sets the action of its entities in its Entities block."
+            : "Set the action for each entity in the Entities block.",
           !!actions.entity_action,
           (on) => this._setActions({ entity_action: on || undefined }),
         )}

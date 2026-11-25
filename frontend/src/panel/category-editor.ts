@@ -489,14 +489,13 @@ export class NcCategoryEditor extends LitElement {
     const label =
       button.type === "tap" ? defaults.label : button.label || defaults.label;
     const secondary =
-      button.type === "snooze"
-        ? snoozeChoices(button)
-            .map((choice) => choice.text)
-            .join(", ")
-        : button.type === "tap"
-          ? runText(button, this._draft!.buttons) ||
-            actionsText(this.hass, button.actions ?? { navigation: { type: "more_info" } }).join(" · ")
-          : "";
+      button.type === "tap"
+        ? runText(button, this._draft!.buttons) ||
+          actionsText(this.hass, button.actions ?? { navigation: { type: "more_info" } }).join(" · ")
+        : [
+            ...(button.type === "snooze" ? [snoozeChoices(button).map((choice) => choice.text).join(", ")] : []),
+            ...actionsText(this.hass, button.actions),
+          ].join(" · ");
     const open = () => (this._button = { button, isNew: false });
     return html`<div
       class="interaction ${button.enabled ? "" : "off"}"
@@ -580,11 +579,11 @@ export class NcCategoryEditor extends LitElement {
           });
           return;
         }
-        // Only the Tap has actions in a category (its Tap behavior).
         const { actions, ...rest } = result;
+        const keep = actions && (rest.type === "tap" || Object.keys(actions).length > 0);
         this._setButton({
           ...rest,
-          ...(rest.type === "tap" && actions ? { actions } : {}),
+          ...(keep ? { actions } : {}),
           enabled: rest.enabled ?? true,
         } as CategoryButton);
       }}

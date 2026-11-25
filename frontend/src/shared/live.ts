@@ -178,8 +178,12 @@ export function effectiveButtons(
       enabled: entry.enabled ?? base.enabled,
       label: entry.label || base.label,
       icon: entry.icon || base.icon,
-      // Not stored: the built-in button's default (the Tap shows more info).
-      actions: entry.actions ?? (base.type === "tap" ? { navigation: { type: "more_info" } } : {}),
+      // Left out: the category's, else the built-in button's default (the
+      // Tap shows more info).
+      actions:
+        entry.actions ??
+        (base.type === "tap" ? undefined : base.actions) ??
+        (base.type === "tap" ? { navigation: { type: "more_info" } } : {}),
       category: true,
     };
     // The Tap behavior is one block: the step's, or the category's.
