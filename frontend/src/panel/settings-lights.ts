@@ -264,7 +264,7 @@ export class NcSettingsLights extends LitElement {
             edit.color_temp_kelvin ?? undefined,
             "Color temperature",
             (value) => this._set({ color_temp_kelvin: value === undefined || value === "" ? null : Number(value) }),
-            { helper: "Empty: the light's own." },
+            { placeholder: "Default" },
           )
         : nothing}
       ${field(
@@ -354,11 +354,11 @@ export class NcSettingsLights extends LitElement {
         </label>
         <div class="text">
           <div>${label}</div>
-          <div class="secondary">${value.join(", ")}${changed ? "" : " (default)"}</div>
+          <div class="secondary">${changed ? value.join(", ") : `Default (${value.join(", ")})`}</div>
         </div>
         ${changed
           ? html`<ha-icon-button
-              .label=${"Reset to the default"}
+              .label=${"Restore the default"}
               @click=${() => {
                 const colors = { ...own };
                 delete colors[name];

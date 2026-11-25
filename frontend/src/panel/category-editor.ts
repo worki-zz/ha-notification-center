@@ -451,7 +451,7 @@ export class NcCategoryEditor extends LitElement {
       </div>
       <div class="row three">
         ${colorField(this.hass, this.config, draft.color, (value) => this._change({ color: value }))}
-        ${highlightField(draft.highlight ?? "none", undefined, (value) => this._change({ highlight: value ?? "none" }))}
+        ${highlightField(draft.highlight, undefined, (value) => this._change({ highlight: value ?? "none" }))}
         ${this.config?.speakers.length
           ? chimeField(this.config, draft.chime, undefined, (value) => this._change({ chime: value }))
           : nothing}
@@ -564,6 +564,7 @@ export class NcCategoryEditor extends LitElement {
       .button=${edit.button as Button}
       .isNew=${edit.isNew}
       .runChoices=${runChoicesOf(this._draft!.buttons)}
+      .generalOpenOnTap=${this.config?.general?.open_on_tap}
       @interaction-closed=${(
         ev: CustomEvent<{ result?: Button | "delete" }>,
       ) => {

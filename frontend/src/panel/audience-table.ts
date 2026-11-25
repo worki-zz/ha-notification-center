@@ -3,7 +3,7 @@
 import { LitElement, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
-import { type AudienceEntry, type AudienceState } from "../shared/config";
+import { AUDIENCE_STATES, type AudienceEntry, type AudienceState } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
 
 import { TABLE_STYLES } from "./table-styles";
@@ -90,7 +90,11 @@ export class NcAudienceTable extends LitElement {
     const effective = this._effective(people);
     const entry = { ...effective[person], [state]: on };
     if (this._isStep) {
-      this._emit({ ...this.value, [person]: entry });
+      // A row equal to the category's is not stored: it follows it again.
+      const base = effectiveAudience(this.base, undefined, people.map((item) => item.id))[person];
+      const value = { ...this.value, [person]: entry };
+      if (AUDIENCE_STATES.every((key) => base[key] === entry[key])) delete value[person];
+      this._emit(value);
       return;
     }
     // A category lists everyone, so a person added later gets what they all
@@ -191,7 +195,7 @@ export class NcAudienceTable extends LitElement {
                     ${own
                       ? html`<ha-icon-button
                           class="reset"
-                          .label=${"Reset to the category's settings"}
+                          .label=${"Restore the category's settings"}
                           @click=${() => this._reset(person.id)}
                         >
                           <ha-icon icon="mdi:restore"></ha-icon>

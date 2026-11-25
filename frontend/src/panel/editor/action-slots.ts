@@ -5,6 +5,7 @@
 import { css, html, nothing } from "lit";
 
 import type { HomeAssistant } from "../../shared/types";
+import { restoreButton } from "../fields";
 import type { ActionSlot, Obj } from "./model";
 
 export function renderActionSlots(
@@ -42,8 +43,8 @@ export function renderActionSlots(
 
 /**
  * The entity actions of a member of an entity group: for each button the
- * group's action until it is changed here; Reset beside the button brings
- * the group's back.
+ * group's action until it is changed here; the restore button beside the
+ * button brings the group's back.
  */
 export function renderMemberSlots(
   hass: HomeAssistant | undefined,
@@ -62,18 +63,11 @@ export function renderMemberSlots(
         <div class="slot-head">
           <div class="slot-label">${slot.label}</div>
           ${own
-            ? html`<ha-button
-                appearance="plain"
-                size="s"
-                @click=${() => {
-                  const next: Obj = { ...custom };
-                  delete next[slot.id];
-                  changed(next);
-                }}
-              >
-                <ha-icon slot="start" icon="mdi:restore"></ha-icon>
-                Reset
-              </ha-button>`
+            ? restoreButton("Restore the group's action", () => {
+                const next: Obj = { ...custom };
+                delete next[slot.id];
+                changed(next);
+              })
             : nothing}
         </div>
         <ha-automation-action
@@ -115,6 +109,10 @@ export const ACTION_SLOT_STYLES = css`
   }
   .slot-head .slot-label {
     margin-bottom: 0;
+  }
+  .slot-head .restore {
+    margin: -8px 0;
+    color: var(--secondary-text-color);
   }
   .slots-empty {
     color: var(--secondary-text-color);

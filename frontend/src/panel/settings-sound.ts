@@ -506,27 +506,20 @@ export class NcSettingsSound extends LitElement {
     </ha-dialog>`;
   }
 
-  // The volume, with an X that empties it (the device's own volume).
-  private _volume(value: number | null | undefined, helper: string) {
+  // The volume; empty: the device's own ("Default").
+  private _volume(value: number | null | undefined) {
     const set = value !== undefined && value !== null;
-    return html`<div class="clearable">
-      ${field(
-        this.hass,
-        { number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" } },
-        set ? Math.round(value * 100) : undefined,
-        "Volume",
-        (volume) =>
-          this._set({
-            volume: volume === undefined || volume === null || volume === "" ? null : Number(volume) / 100,
-          }),
-        { helper },
-      )}
-      ${set
-        ? html`<ha-icon-button class="clear" .label=${"Clear"} @click=${() => this._set({ volume: null })}>
-            <ha-icon icon="mdi:close"></ha-icon>
-          </ha-icon-button>`
-        : nothing}
-    </div>`;
+    return field(
+      this.hass,
+      { number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" } },
+      set ? Math.round(value * 100) : undefined,
+      "Volume",
+      (volume) =>
+        this._set({
+          volume: volume === undefined || volume === null || volume === "" ? null : Number(volume) / 100,
+        }),
+      { placeholder: "Default" },
+    );
   }
 
   private _renderSpeaker(item: Partial<Speaker>) {
@@ -534,7 +527,7 @@ export class NcSettingsSound extends LitElement {
     const supported = features(state);
     return html`
       ${state && supported & MEDIA_VOLUME_SET
-        ? this._volume(item.volume, "Empty: the speaker's volume stays as it is.")
+        ? this._volume(item.volume)
         : nothing}
       ${state
         ? html`<ha-alert alert-type="info">
@@ -592,7 +585,7 @@ export class NcSettingsSound extends LitElement {
           )
         : nothing}
       ${domain === "siren" && supported & SIREN_VOLUME_SET
-        ? this._volume(item.volume, "Empty: the siren's own.")
+        ? this._volume(item.volume)
         : nothing}
       ${domain === "siren" && supported & SIREN_DURATION
         ? field(
@@ -728,15 +721,6 @@ export class NcSettingsSound extends LitElement {
       /* A line between the rows, as in the General list. */
       ha-list-item-button + ha-list-item-button {
         border-top: 1px solid var(--divider-color);
-      }
-      .clearable {
-        position: relative;
-      }
-      .clearable .clear {
-        position: absolute;
-        top: 4px;
-        inset-inline-end: 40px;
-        color: var(--secondary-text-color);
       }
     `,
   ];

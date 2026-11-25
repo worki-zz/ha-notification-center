@@ -51,7 +51,7 @@ def test_colors() -> None:
     assert parse_color("red") is None
     assert color_of({}, {"color": "red"}) == "red"
     assert color_of({"color": "c1"}, {"color": "red"}) == "c1"
-    assert color_of({}, {}) == "primary"
+    assert color_of({}, {}) == "amber"
     own = [{"id": "c1", "name": "Custom 1", "rgb": [1, 2, 3]}]
     assert light_rgb({"colors": {"red": [200, 0, 0]}}, "red") == (200, 0, 0)
     assert light_rgb({}, "red") == (244, 67, 54)

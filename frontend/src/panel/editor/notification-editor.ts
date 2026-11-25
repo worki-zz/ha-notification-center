@@ -26,7 +26,7 @@ import { BLOCK_INTROS, block } from "./block";
 import "./group-dialog";
 import "./info-dialog";
 import { ACTION_SLOT_STYLES } from "./action-slots";
-import { type EditorNotification, type EditorStep, applyCategoryDefaults, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, stepLabel, toEditor, toSaved } from "./model";
+import { type EditorNotification, type EditorStep, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, stepLabel, toEditor, toSaved } from "./model";
 import "./entities-block";
 import "./step-editor";
 import { NOTIFICATION_EDITOR_STYLES } from "./notification-editor.styles";
@@ -613,10 +613,7 @@ export class NcNotificationEditor extends LitElement {
         )}
       </div>
       <div class="row three">
-        ${colorField(this.hass, this.config, draft.color, (value) => this._change({ color: value }), {
-          defaultColor: category?.color ?? "primary",
-          inherits: true,
-        })}
+        ${colorField(this.hass, this.config, draft.color, (value) => this._change({ color: value }), category?.color)}
         ${highlightField(
           draft.highlight ?? undefined,
           category?.highlight ?? "none",
@@ -636,15 +633,14 @@ export class NcNotificationEditor extends LitElement {
   }
 
   // Another category: its buttons are inherited from now on. The old
-  // category's own buttons stay as the notification's own; a new
-  // notification takes the new category's switches.
+  // category's own buttons stay as the notification's own; the built-in
+  // ones follow the new category.
   private _changeCategory(value: string): void {
     const draft = JSON.parse(JSON.stringify(this._draft)) as EditorNotification;
     const previous = this._category();
     const next = this.config!.categories.find((item) => item.id === value);
     draft.category = value;
     detachCategoryButtons(draft, previous, next);
-    if (this._isNew) applyCategoryDefaults(draft, next);
     this._set(draft);
   }
 
@@ -797,7 +793,7 @@ export class NcNotificationEditor extends LitElement {
   }
 
   private _addStep(): void {
-    const steps = [...this._draft!.steps, newStep(this._category())];
+    const steps = [...this._draft!.steps, newStep()];
     this._change({ steps });
     this._step = steps.length - 1;
   }
