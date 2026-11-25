@@ -322,6 +322,8 @@ export class NotificationCenterBadge extends LitElement {
       </ha-badge>`;
     }
     const status = this._status();
+    // While loading (Home Assistant starting) a dashboard shows nothing.
+    if (!status && !this._store.config && !this.preview) return nothing;
     if (!status) {
       return html`<ha-badge .label=${config.entity}>
         <ha-icon slot="icon" icon="mdi:bell"></ha-icon>

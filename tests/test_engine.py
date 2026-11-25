@@ -88,6 +88,23 @@ async def test_trigger_done_when_and_last_done(
     assert center.state("sensor.notification_center") == "0"
 
 
+async def test_placeholders_read_the_trigger_entity(center: Center) -> None:
+    """Without listed entities, {Entity} reads the entity that triggered."""
+    await center.set("input_boolean.dishwasher", "off")
+    await center.add(
+        "Dishwasher",
+        step(
+            "Empty {Entity}",
+            activation={
+                "type": "triggers",
+                "triggers": [state_trigger("input_boolean.dishwasher")],
+            },
+        ),
+    )
+    await center.set("input_boolean.dishwasher", "on")
+    assert center.attrs("sensor.nc_dishwasher")["message"] == "Empty dishwasher"
+
+
 async def test_dismiss_when(center: Center) -> None:
     """A Dismiss when trigger dismisses the card; last done stays empty."""
     await center.set("input_boolean.dishwasher", "off")

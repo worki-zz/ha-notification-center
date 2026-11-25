@@ -13,19 +13,18 @@ export interface Status {
 }
 
 /**
- * Active (in the notification's colour), Upcoming (purple), Snoozed (orange)
- * or Disabled (grey); nothing when idle. The same colours as the
- * ``icon_color`` attribute of the notification's sensor.
+ * Active (green), Upcoming (purple), Snoozed (orange) or Disabled (grey);
+ * nothing when idle. Only the sensor's ``icon_color`` shows an active
+ * notification in its own colour.
  */
 export function statusOf(
   notification: Pick<Notification, "enabled">,
   state: NotificationState | undefined,
-  color?: string,
 ): Status | undefined {
   if (!notification.enabled) return { label: "Disabled", tone: "grey" };
   switch (state?.state) {
     case "active":
-      return color ? { label: "Active", tone: "color", color } : { label: "Active", tone: "green" };
+      return { label: "Active", tone: "green" };
     case "snoozed":
       return { label: "Snoozed", tone: "orange" };
     case "upcoming":
