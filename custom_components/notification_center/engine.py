@@ -1133,17 +1133,18 @@ class Engine(EngineQueries, EngineActions):
         if step is None:
             return False
         variables = self.variables(card)
+        entity_id = self._text_entity(card)
         message, message_error = render_text(
             self.hass,
             card.message_override or step["message"],
             variables,
-            card.entity_id,
+            entity_id,
         )
         info, info_error = render_text(
-            self.hass, card.info_override or step.get("info"), variables, card.entity_id
+            self.hass, card.info_override or step.get("info"), variables, entity_id
         )
         data_text, data_error = render_text(
-            self.hass, custom_data_text(step), variables, card.entity_id
+            self.hass, custom_data_text(step), variables, entity_id
         )
         error = message_error or info_error or data_error
         key = (card.notification_id, card.step_id)
@@ -1161,6 +1162,15 @@ class Engine(EngineQueries, EngineActions):
         card.message, card.info, card.data_text = message, info, data_text
         return changed
 
+    @staticmethod
+    def _text_entity(card: Card) -> str | None:
+        """Return the entity whose placeholders ({Device}, ...) a card's text reads.
+
+        The listed entity of the card, or else the entity that triggered it.
+        """
+        entity_id = card.entity_id or (card.trigger or {}).get("entity_id")
+        return entity_id if isinstance(entity_id, str) else None
+
     def _start_text(self, card: Card) -> None:
         self._stop_text(card)
         step = self._step_config(card.notification_id, card.step_id)
@@ -1175,7 +1185,7 @@ class Engine(EngineQueries, EngineActions):
             )
             if text
         ]
-        entity_id = card.entity_id or (card.trigger or {}).get("entity_id")
+        entity_id = self._text_entity(card)
 
         @callback
         def changed() -> None:
@@ -1187,7 +1197,7 @@ class Engine(EngineQueries, EngineActions):
             self.hass,
             texts,
             self.variables(card),
-            entity_id if isinstance(entity_id, str) else None,
+            entity_id,
             changed,
         )
         self._text_trackers[card.key] = tracker

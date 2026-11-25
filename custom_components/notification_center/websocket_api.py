@@ -7,7 +7,7 @@ change the configuration.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, time
 from functools import wraps
 from http import HTTPStatus
@@ -410,6 +410,8 @@ async def ws_set_channel_modes(
         vol.Optional("name"): vol.Any(None, str),
         vol.Optional("message"): vol.Any(None, str),
         vol.Optional("info"): vol.Any(None, str),
+        # The entity whose placeholders ({Device}, ...) a test push reads.
+        vol.Optional("entity_id"): vol.Any(None, str),
         # Push: to whom (me, all, person), the step's audience being edited,
         # and the person's phone as the People dialog edits it.
         vol.Optional("scope"): vol.In(("me", "all", "person")),
@@ -436,6 +438,13 @@ async def ws_channel_test(
         return
     data = {key: value for key, value in msg.items() if key not in ("id", "type")}
     key = data.pop("channel")
+    # The step's texts as a notification shows them: templates rendered and
+    # placeholders ({Device}, ...) read from the entity, as the preview.
+    entity_id = data.pop("entity_id", None)
+    variables = _preview_variables(entity_id, data.get("notification"))
+    for text_key in ("message", "info"):
+        if data.get(text_key):
+            data[text_key], _ = render_text(hass, data[text_key], variables, entity_id)
     if key == CHANNEL_PUSH:
         # A push is sent at once: a missing phone is told back.
         data["user_id"] = connection.user.id if connection.user else None
@@ -818,6 +827,18 @@ def ws_step_set_next(
     connection.send_result(msg["id"], {"last_done": last_done.isoformat()})
 
 
+def _preview_variables(
+    entity_id: str | None, notification: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """Return the template variables of a step's text outside a notification."""
+    return {
+        "entity": entity_id,
+        "trigger": {"entity_id": entity_id} if entity_id else {},
+        "data": {},
+        "notification": {"id": (notification or {}).get("id")},
+    }
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/text/preview",
@@ -834,12 +855,7 @@ def ws_text_preview(
 ) -> None:
     """Render texts of a step being edited, for an entity of the list."""
     entity_id = msg.get("entity_id")
-    variables = {
-        "entity": entity_id,
-        "trigger": {"entity_id": entity_id} if entity_id else {},
-        "data": {},
-        "notification": {"id": msg.get("notification_id")},
-    }
+    variables = _preview_variables(entity_id, {"id": msg.get("notification_id")})
     results = []
     for text in msg["texts"]:
         rendered, error = render_text(hass, text, variables, entity_id)

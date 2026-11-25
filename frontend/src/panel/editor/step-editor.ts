@@ -6,7 +6,7 @@ import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { field } from "../fields";
-import { PLACEHOLDERS } from "../../shared/text";
+import { PLACEHOLDERS, plainPlaceholders } from "../../shared/text";
 import type { HomeAssistant } from "../../shared/types";
 import {
   type DataType,
@@ -1005,8 +1005,10 @@ export class NcStepEditor extends LitElement {
           category: this.category,
           notification: this.notification,
           name: this.notification?.name,
-          message: step.message,
-          info: step.info ?? null,
+          message: this.entities[0] ? step.message : plainPlaceholders(step.message),
+          info: step.info && !this.entities[0] ? plainPlaceholders(step.info) : (step.info ?? null),
+          // A test push reads its placeholders from the first entity, as the preview.
+          entity_id: this.entities[0] ?? null,
           step: { audience: step.audience ?? {} },
         }}
         .base=${this.category?.channels ?? {}}

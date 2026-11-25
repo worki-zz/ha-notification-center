@@ -251,7 +251,7 @@ export class NcSettings extends LitElement {
   private _renderRow(item: Notification, category: Category | undefined, filtering: boolean) {
     const steps = item.steps.length;
     const color = cssColor(colorCss(this.config, item.color ?? category?.color));
-    const status = statusOf(item, this.state?.notifications[item.id], color);
+    const status = statusOf(item, this.state?.notifications[item.id]);
     // The menu and the handle are inside the row's link: they must not open it.
     const stop = (ev: Event) => {
       ev.preventDefault();

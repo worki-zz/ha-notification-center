@@ -381,6 +381,20 @@ async def test_push_test_and_repairs(
     assert len(ios) == 1
     assert len(android) == 2
 
+    # The step's text reads its placeholders and templates, as the preview.
+    hass.states.async_set("sensor.nc_test_battery", "12", {"friendly_name": "Hall"})
+    await client.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/channel/test",
+            "channel": "push",
+            "scope": "me",
+            "message": "{Device}: {{ 5 + 5 }}%",
+            "entity_id": "sensor.nc_test_battery",
+        }
+    )
+    assert (await client.receive_json())["success"]
+    assert android[-1].data["message"] == "Hall: 10%"
+
     await client.send_json_auto_id(
         {
             "type": f"{DOMAIN}/channel/test",

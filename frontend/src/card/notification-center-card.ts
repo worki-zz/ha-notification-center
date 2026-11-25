@@ -397,6 +397,8 @@ export class NotificationCenterCard extends LitElement {
         return html`<ha-card class="warning">${this._store.error}</ha-card>`;
       }
       const status = this._status();
+      // While loading (Home Assistant starting) a dashboard shows nothing.
+      if (!status && !this._store.config && !this.preview) return nothing;
       if (!status) {
         return html`<ha-card class="warning">
           ${this._store.config ? "Notification not found" : "Loading…"}

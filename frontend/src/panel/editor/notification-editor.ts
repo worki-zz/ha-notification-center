@@ -401,12 +401,7 @@ export class NcNotificationEditor extends LitElement {
   }
 
   private _renderToolbar(draft: EditorNotification) {
-    const category = this.config ? categoryOf(this.config, draft as unknown as Notification) : undefined;
-    const status = statusOf(
-      draft,
-      this._isNew ? undefined : this.state?.notifications[draft.id ?? ""],
-      cssColor(colorCss(this.config, draft.color ?? category?.color)),
-    );
+    const status = statusOf(draft, this._isNew ? undefined : this.state?.notifications[draft.id ?? ""]);
     return html`
       <div slot="toolbar-icon" class="toolbar">
         ${status && !this._isNew

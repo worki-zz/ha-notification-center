@@ -16,7 +16,11 @@ export interface HassConnection {
   subscribeMessage<T>(
     callback: (message: T) => void,
     message: HassMessage,
+    options?: { resubscribe?: boolean },
   ): Promise<() => Promise<void>>;
+  // "ready" fires after the connection came back (Home Assistant restarted).
+  addEventListener?(event: "ready" | "disconnected", listener: () => void): void;
+  removeEventListener?(event: "ready" | "disconnected", listener: () => void): void;
 }
 
 export interface HassEntity {
