@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Schedule** on the Overview has *Next week* and *Next month* sections (beside This week, This month, This year and Next year; an empty one does not show), and a step due tomorrow reads *Tomorrow* with its time.
 - The *Active* status chip in the Notifications list and the notification editor is green; the notification's own colour stays for the sensor's `icon_color`, the badge and the cards.
 
 ### Fixed

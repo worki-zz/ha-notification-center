@@ -52,6 +52,7 @@ const TITLES: Record<Page, string> = {
 
 // The Schedule section of the days left this week.
 const WEEK = "This week";
+const NEXT_WEEK = "Next week";
 
 // How often relative times are written again.
 const TICK = 30_000;
@@ -381,8 +382,10 @@ export class NotificationCenterPanel extends LitElement {
     ></notification-center-view>`;
   }
 
-  // The scheduled steps due after today, by their next day, under the
-  // week, this month, this year, next year (and later years by number).
+  // The scheduled steps due after today, by their next day, under this week,
+  // next week, this month, next month, this year, next year (and later years
+  // by number); an empty section does not show. Tomorrow reads "Tomorrow" with
+  // its time, the other days of the two weeks their weekday.
   private _renderSchedule() {
     const hass = this.hass!;
     const end = endOfToday(this._now);
@@ -390,17 +393,29 @@ export class NotificationCenterPanel extends LitElement {
     if (!items.length) return this._renderEmpty("Nothing scheduled");
     const today = new Date(this._now);
     today.setHours(0, 0, 0, 0);
+    const tomorrowEnd = new Date(today);
+    tomorrowEnd.setDate(today.getDate() + 2);
     const week = new Date(today);
     week.setDate(today.getDate() + (((firstWeekday(hass) - today.getDay() + 6) % 7) + 1));
+    const nextWeek = new Date(week);
+    nextWeek.setDate(week.getDate() + 7);
     const month = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
     const year = new Date(today.getFullYear() + 1, 0, 1);
     const nextYear = new Date(today.getFullYear() + 2, 0, 1);
     const title = (due: Date): string => {
       if (due < week) return WEEK;
+      if (due < nextWeek) return NEXT_WEEK;
       if (due < month) return "This month";
+      if (due < nextMonth) return "Next month";
       if (due < year) return "This year";
       if (due < nextYear) return "Next year";
       return String(due.getFullYear());
+    };
+    const when = (section: string, due: Date): string => {
+      if (due < tomorrowEnd) return `Tomorrow, ${formatTime(hass, due, "time", this._now)}`;
+      if (section === WEEK || section === NEXT_WEEK) return weekday(hass, due);
+      return formatDay(hass, due, this._now);
     };
     const sections: { title: string; items: Upcoming[] }[] = [];
     for (const item of items) {
@@ -415,13 +430,7 @@ export class NotificationCenterPanel extends LitElement {
         ${this._renderUpcoming(
           section.items.map((item) => ({
             ...item,
-            view: {
-              ...item.view,
-              when:
-                section.title === WEEK
-                  ? weekday(hass, item.due)
-                  : formatDay(hass, item.due, this._now),
-            },
+            view: { ...item.view, when: when(section.title, item.due) },
           })),
         )}
       `,
