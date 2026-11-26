@@ -12,6 +12,7 @@ import {
   type AudienceState,
   type NotificationCenterConfig,
   type Person,
+  type PushDevice,
   type StateMessage,
 } from "../shared/config";
 import { errorText } from "../shared/live";
@@ -25,7 +26,7 @@ import { STATUS_STYLES, type Status, renderStatus } from "./status";
 const STATE_TONES: Record<AudienceState, Status["tone"]> = { home: "green", sleep: "purple", away: "red" };
 
 type ConditionType = "none" | "state" | "template";
-type DeviceType = Person["device_type"];
+type DeviceType = PushDevice["device_type"];
 
 interface SleepDraft {
   person: Person;
@@ -135,7 +136,7 @@ export class NcSettingsPeople extends LitElement {
             person.sleep
               ? `Sleep when ${conditionWords(this.hass, person.sleep)}`
               : "No sleep condition",
-            person.notify ? this._deviceName(person.notify) : "",
+            person.push_devices[0] ? this._deviceName(person.push_devices[0].notify) : "",
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -159,8 +160,9 @@ export class NcSettingsPeople extends LitElement {
       entity_id: String(condition.entity_id ?? ""),
       state: toggle ? "on" : String(condition.state ?? ""),
       value_template: String(condition.value_template ?? ""),
-      notify: person.notify ?? "",
-      device_type: person.device_type,
+      // The dialog edits the first push device only.
+      notify: person.push_devices[0]?.notify ?? "",
+      device_type: person.push_devices[0]?.device_type ?? "other",
     };
     this._testError = undefined;
     this._tested = false;
@@ -289,6 +291,13 @@ export class NcSettingsPeople extends LitElement {
     </div>`;
   }
 
+  /** The person's push devices with the first one as edited (none when cleared). */
+  private _devicesOf(edit: SleepDraft): Partial<PushDevice>[] {
+    const [first, ...others] = edit.person.push_devices;
+    if (!edit.notify) return others;
+    return [{ ...first, notify: edit.notify, device_type: edit.device_type }, ...others];
+  }
+
   private async _test(edit: SleepDraft): Promise<void> {
     if (!this.hass) return;
     this._testError = undefined;
@@ -357,8 +366,7 @@ export class NcSettingsPeople extends LitElement {
         type: `${DOMAIN}/person/update`,
         data: {
           person: person.person,
-          notify: edit.notify || null,
-          device_type: edit.device_type,
+          push_devices: this._devicesOf(edit),
           sleep,
         },
       });

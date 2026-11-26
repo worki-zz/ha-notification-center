@@ -19,6 +19,7 @@ from custom_components.notification_center.push import (
     build_payload,
     color_hex,
     parse_action,
+    phones_of,
     press_url,
     push_body,
 )
@@ -141,12 +142,16 @@ async def _setup(
     await center.manager.async_update_person(
         {
             "person": KRISTOF,
-            "notify": "notify.kristof_nothing",
-            "device_type": "android",
+            "push_devices": [
+                {"notify": "notify.kristof_nothing", "device_type": "android"}
+            ],
         }
     )
     await center.manager.async_update_person(
-        {"person": DORA, "notify": "notify.dora_iphone", "device_type": "ios"}
+        {
+            "person": DORA,
+            "push_devices": [{"notify": "notify.dora_iphone", "device_type": "ios"}],
+        }
     )
     category = dict(center.manager.config["categories"][0])
     category["channels"] = {
@@ -420,16 +425,48 @@ async def test_push_test_and_repairs(
     } in services
 
     await center.manager.async_update_person(
-        {"person": DORA, "notify": "notify.gone", "device_type": "ios"}
+        {
+            "person": DORA,
+            "push_devices": [
+                {"id": "gone", "notify": "notify.gone", "device_type": "ios"}
+            ],
+        }
     )
     await hass.async_block_till_done()
-    issue = ir.async_get(hass).async_get_issue(DOMAIN, f"missing_push_service_{DORA}")
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, f"missing_push_service_{DORA}_gone"
+    )
     assert issue is not None
     assert issue.translation_placeholders == {
         "name": "Dóra",
         "service": "notify.gone",
         "link": "/notification-center/settings/general/people",
     }
+
+
+async def test_disabled_device_gets_nothing_and_no_issue(
+    center: Center, hass: HomeAssistant
+) -> None:
+    """A switched-off device is not sent to and raises no Repairs issue."""
+    await _setup(center, hass)
+    ios = async_mock_service(hass, "notify", "dora_iphone")
+    await center.manager.async_update_person(
+        {
+            "person": DORA,
+            "push_devices": [
+                {"id": "a", "notify": "notify.dora_iphone", "device_type": "ios"},
+                {"id": "b", "notify": "notify.off", "enabled": False},
+            ],
+        }
+    )
+    await hass.async_block_till_done()
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, f"missing_push_service_{DORA}_b")
+        is None
+    )
+    phones = phones_of(center.manager.config)
+    assert [phone.device_id for phone in phones[DORA]] == ["a"]
+    assert not ios
 
 
 async def test_no_phone_for_the_viewer(

@@ -210,7 +210,7 @@ async def test_snapshot_lists_every_channel(center: Center) -> None:
     await center.set("person.a", "home")
     await center.set("person.b", "home")
     await center.manager.async_update_person(
-        {"person": "person.a", "notify": "notify.a_phone"}
+        {"person": "person.a", "push_devices": [{"notify": "notify.a_phone"}]}
     )
     await _set_category(
         center,

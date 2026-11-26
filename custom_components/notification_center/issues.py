@@ -207,22 +207,24 @@ class IssueTracker:
                 },
             )
         for person in engine.manager.config.get("people", []):
-            service = person.get("notify")
-            if not service:
-                continue
-            domain, _, name = str(service).partition(".")
-            if not name:
-                domain, name = "notify", domain
-            if self._hass.services.has_service(domain, name):
-                continue
             state = self._hass.states.get(person["person"])
             if state is None:
                 continue
-            links[f"{ISSUE_MISSING_PUSH}_{person['person']}"] = _PEOPLE_LINK
-            problems[f"{ISSUE_MISSING_PUSH}_{person['person']}"] = (
-                ISSUE_MISSING_PUSH,
-                {"name": state.name, "service": str(service)},
-            )
+            for device in person.get("push_devices", []):
+                service = device["notify"]
+                if not device.get("enabled", True):
+                    continue
+                domain, _, name = str(service).partition(".")
+                if not name:
+                    domain, name = "notify", domain
+                if self._hass.services.has_service(domain, name):
+                    continue
+                issue_id = f"{ISSUE_MISSING_PUSH}_{person['person']}_{device['id']}"
+                links[issue_id] = _PEOPLE_LINK
+                problems[issue_id] = (
+                    ISSUE_MISSING_PUSH,
+                    {"name": state.name, "service": str(service)},
+                )
         for key, page, kind in _DEVICES:
             for device in engine.manager.config.get(key, []):
                 entity = device["entity_id"]

@@ -53,7 +53,8 @@ STORAGE_VERSION: Final = 1
 # 7: a schedule's Expires is the Expires row of Dismiss when (0.7.4).
 # 8: button values stored equal to the category's are left out, once: a
 #    value chosen equal to the category's is kept from now on (0.7.10).
-STORAGE_MINOR_VERSION: Final = 8
+# 9: a person's notify and device_type are a list of push devices (0.7.11).
+STORAGE_MINOR_VERSION: Final = 9
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -66,7 +67,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # 5: Silence is Mute, the own light blink is Notification Pulse.
 # 6: a schedule's Expires is the Expires row of Dismiss when.
 # 7: button values equal to the category's are chosen ones, not leftovers.
-EXPORT_VERSION: Final = 7
+# 8: a person's notify and device_type are a list of push devices.
+EXPORT_VERSION: Final = 8
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -96,6 +98,8 @@ class _ConfigStore(Store[ConfigData]):
             move_schedule_expires(old_data)
         if old_major_version == 1 and old_minor_version < 8:
             drop_inherited_values(old_data)
+        if old_major_version == 1 and old_minor_version < 9:
+            upgrade_push_devices(old_data)
         return old_data
 
 
@@ -114,6 +118,24 @@ _OLD_ACTIONS: Final[dict[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {
         "navigation": {"type": "navigate", "path": old.get("path") or ""}
     },
 }
+
+
+def upgrade_push_devices(data: dict[str, Any]) -> None:
+    """Turn a person's notify and device_type into a list of one push device."""
+    for person in data.get("people") or []:
+        if not isinstance(person, dict):
+            continue
+        notify = person.pop("notify", None)
+        device_type = person.pop("device_type", None)
+        if notify and "push_devices" not in person:
+            person["push_devices"] = [
+                {
+                    "id": new_id(),
+                    "notify": notify,
+                    "device_type": device_type or "other",
+                    "enabled": True,
+                }
+            ]
 
 
 def upgrade_button_actions(data: dict[str, Any]) -> None:
@@ -598,7 +620,7 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, 3, 4, 5, 6, EXPORT_VERSION):
+        if version not in (1, 2, 3, 4, 5, 6, 7, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
@@ -612,6 +634,8 @@ class ConfigManager:
             move_schedule_expires(data)
         if version < 7:
             drop_inherited_values(data)
+        if version < 8:
+            upgrade_push_devices(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(
@@ -733,8 +757,7 @@ def async_people_view(hass: HomeAssistant, config: ConfigData) -> list[dict[str,
                 "name": state.name,
                 "picture": state.attributes.get("entity_picture"),
                 "user_id": state.attributes.get("user_id"),
-                "notify": stored.get("notify"),
-                "device_type": stored.get("device_type", "other"),
+                "push_devices": stored.get("push_devices", []),
                 "sleep": stored.get("sleep"),
             }
         )

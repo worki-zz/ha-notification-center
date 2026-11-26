@@ -202,12 +202,20 @@ export interface Notification {
   steps: Step[];
 }
 
+/** A push device of a person: a notify action and how it shows a push. */
+export interface PushDevice {
+  id: string;
+  notify: string;
+  device_type: "ios" | "android" | "other";
+  // Switched off: no push. There is no switch for it in the UI yet.
+  enabled: boolean;
+}
+
 export interface Person {
   person: string;
   name: string;
   picture?: string | null;
-  notify?: string | null;
-  device_type: "ios" | "android" | "other";
+  push_devices: PushDevice[];
   // When the person is asleep (counted only at home), like a mode's condition.
   sleep?: Mode["condition"];
 }

@@ -19,6 +19,7 @@ from custom_components.notification_center.model import (
 from custom_components.notification_center.store import (
     move_schedule_expires,
     rename_mute_and_pulse,
+    upgrade_push_devices,
     upgrade_tap_behavior,
 )
 
@@ -523,3 +524,22 @@ async def test_old_step_values_equal_to_the_category_are_dropped(
     # The Tap's actions are its own Tap behavior.
     assert stored["tap"]["actions"] == {}
     assert "enabled" not in stored["tap"]
+
+
+def test_upgrade_push_devices() -> None:
+    """A person's notify and device_type become a list of one push device."""
+    people: list[dict[str, Any]] = [
+        {"person": "person.a", "notify": "notify.a", "device_type": "ios"},
+        {"person": "person.b"},
+    ]
+    value: dict[str, Any] = {"people": people}
+    upgrade_push_devices(value)
+    [device] = people[0]["push_devices"]
+    assert device["id"]
+    assert (device["notify"], device["device_type"], device["enabled"]) == (
+        "notify.a",
+        "ios",
+        True,
+    )
+    assert "notify" not in people[0]
+    assert "push_devices" not in people[1]

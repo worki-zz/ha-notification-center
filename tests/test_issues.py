@@ -123,14 +123,15 @@ async def test_diagnostics(
 ) -> None:
     """Diagnostics hold the config and the cards, without people."""
     await center.manager.async_update_person(
-        {"person": "person.someone", "notify": "notify.phone"}
+        {"person": "person.someone", "push_devices": [{"notify": "notify.phone"}]}
     )
     await center.add("Plants", step())
     await center.call("trigger", "sensor.nc_plants")
     data = await async_get_config_entry_diagnostics(hass, config_entry)
     assert data["version"] == "0.7.10"
-    assert data["config"]["people"] == [
-        {"person": "**REDACTED**", "notify": "**REDACTED**", "device_type": "other"}
-    ]
+    [device] = data["config"]["people"][0]["push_devices"]
+    assert data["config"]["people"][0]["person"] == "**REDACTED**"
+    assert device["notify"] == "**REDACTED**"
+    assert device["device_type"] == "other"
     assert [card["status"] for card in data["cards"]] == ["active"]
     assert len(data["steps"]) == 1

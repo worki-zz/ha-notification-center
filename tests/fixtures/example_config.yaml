@@ -15,10 +15,12 @@ modes:
 - {id: home, name: Home, icon: 'mdi:home'}
 people:
 - person: person.parent
-  notify: notify.mobile_app_parent_phone
-  device_type: android
+  push_devices:
+  - {id: parent_phone, notify: notify.mobile_app_parent_phone, device_type: android, enabled: true}
   sleep: {type: state, entity_id: binary_sensor.bedroom_bed_occupied, state: 'on'}
-- {person: person.child, notify: notify.mobile_app_child_phone, device_type: ios}
+- person: person.child
+  push_devices:
+  - {id: child_phone, notify: notify.mobile_app_child_phone, device_type: ios, enabled: true}
 lights:
 - {id: kitchen_strip, entity_id: light.kitchen_strip, brightness: 80, illuminance_sensor: sensor.outdoor_illuminance, dim_below: 30,
   dim_brightness: 30, dim_continuously: true, effect: notification_pulse}
