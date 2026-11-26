@@ -14,15 +14,6 @@ import { STATUS_STYLES, renderStatus } from "./status";
 import { CHANNEL_PAGE_STYLES, TABLE_STYLES } from "./table-styles";
 import { type LiveTone, PUSH_PRIORITY_INFO, channelSummary, durationText, effectiveChannel, hasDelay, liveBadge, modeColumns, whenText } from "./channel-helpers";
 
-// The switches and ticks of a channel: without a Default choice, a value
-// equal to the inherited one is not stored. Their built-in values.
-const SWITCH_DEFAULTS: Record<string, boolean> = {
-  play_chime: true,
-  read_the_message: false,
-  read_name: false,
-  read_info: false,
-};
-
 type Repeat = { type: string; every?: Duration; times?: number };
 
 const REPEAT_NAMES: Record<string, string> = {
@@ -101,18 +92,9 @@ export class NcChannelTable extends LitElement {
   }
 
   private _store(key: string, settings: ChannelSettings): void {
+    // A value set here is the channel's own, also when it equals the
+    // inherited one; the restore icons bring the inherited ones back.
     const own = { ...settings };
-    const inherited = this._inherited(key);
-    for (const [name, fallback] of Object.entries(SWITCH_DEFAULTS)) {
-      if (own[name] === undefined) continue;
-      if (own[name] === ((inherited[name] as boolean | undefined) ?? fallback)) delete own[name];
-    }
-    // A step's home modes equal to the category's follow it again.
-    if (this._isStep && own.modes) {
-      const same = (a: string[], b: string[]) =>
-        a.length === b.length && a.every((id) => b.includes(id));
-      if (same(own.modes, inherited.modes ?? [])) delete own.modes;
-    }
     const value = { ...this.value };
     if (Object.keys(own).length) value[key] = own;
     else delete value[key];

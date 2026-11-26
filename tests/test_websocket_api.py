@@ -286,7 +286,7 @@ async def test_import_export_round_trip(
     exported = (await client.ok("config/export"))["yaml"]
     data = yaml_util.parse_yaml(exported)
     assert isinstance(data, dict)
-    assert data["version"] == 6
+    assert data["version"] == 7
     stored = hass_storage[CONFIG_KEY]["data"]
     assert {key: value for key, value in data.items() if key != "version"} == stored
 
@@ -352,6 +352,30 @@ async def test_import_drops_the_unused_fields(
     saved = stored["notifications"][0]["steps"][0]
     assert "attachments" not in saved
     assert all("confirm" not in button for button in saved["buttons"])
+
+
+@pytest.mark.parametrize(("version", "kept"), [(6, False), (7, True)])
+async def test_import_of_values_equal_to_the_category(
+    client: Client, hass_storage: dict[str, Any], version: int, kept: bool
+) -> None:
+    """Up to version 6 they were stored unasked and follow the category again."""
+    data = yaml_util.parse_yaml(EXAMPLE.read_text())
+    assert isinstance(data, dict)
+    data["version"] = version
+    notification = data["notifications"][0]
+    category = next(
+        item for item in data["categories"] if item["id"] == notification["category"]
+    )
+    category["buttons"] = [
+        button for button in category.get("buttons") or [] if button["type"] != "done"
+    ] + [{"id": "done", "type": "done", "enabled": True}]
+    notification["steps"][0]["buttons"] = [
+        {"id": "done", "type": "done", "enabled": True}
+    ]
+    await client.ok("config/import", yaml=yaml_util.dump(data))
+    saved = hass_storage[CONFIG_KEY]["data"]["notifications"][0]["steps"][0]
+    entry = next(button for button in saved["buttons"] if button["type"] == "done")
+    assert ("enabled" in entry) is kept
 
 
 @pytest.mark.parametrize(
@@ -483,5 +507,5 @@ async def test_export_download(
     assert "attachment" in response.headers["Content-Disposition"]
     data = yaml_util.parse_yaml(await response.text())
     assert isinstance(data, dict)
-    assert data["version"] == 6
+    assert data["version"] == 7
     assert data["categories"] == hass_storage[CONFIG_KEY]["data"]["categories"]

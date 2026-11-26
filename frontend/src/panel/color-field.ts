@@ -17,7 +17,7 @@ import {
 } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
 import { cssColor } from "../shared/format";
-import { inheritField } from "./fields";
+import { DEFAULT_OPTION, inheritField } from "./fields";
 
 // Only the listed colours, the system ones first: Home Assistant's colour
 // picker offers what is typed in the search as a "Custom color", which is
@@ -89,7 +89,7 @@ export function ownColorOptions(config: NotificationCenterConfig | undefined) {
 
 /**
  * Color: the own colour, or Default (the category's in a notification, Amber
- * in a category). Choosing the inherited colour is no own value.
+ * in a category). The inherited colour chosen by name is an own value.
  */
 export function colorField(
   hass: HomeAssistant | undefined,
@@ -101,19 +101,31 @@ export function colorField(
   const known = (color: string | null | undefined) =>
     !!color && (color in SYSTEM_COLORS || !!config?.colors?.some((item) => item.id === color));
   const fallback = known(defaultColor) ? defaultColor! : DEFAULT_COLOR;
+  // The Default option is an option of its own, so that the inherited
+  // colour can also be chosen as an own value (Home Assistant's picker
+  // would take its default colour as no value).
+  const own = ownColorOptions(config);
+  const name =
+    own.find((option) => option.value === fallback)?.label ??
+    (fallback.charAt(0).toUpperCase() + fallback.slice(1)).replace(/-/g, " ");
+  const defaultOption = {
+    value: DEFAULT_OPTION,
+    label: name,
+    display_color: own.find((option) => option.value === fallback)?.display_color ?? cssColor(fallback),
+  };
   return html`<ha-color-picker
         .hass=${hass}
         .label=${"Color"}
         .value=${value || undefined}
         ${ref((element) => onlyListed(element))}
-        .defaultColor=${fallback}
+        .defaultColor=${DEFAULT_OPTION}
         .includeNone=${false}
         .includeState=${false}
-        .extraOptions=${ownColorOptions(config)}
+        .extraOptions=${[defaultOption, ...own]}
         @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
           ev.stopPropagation();
           const picked = ev.detail.value;
-          changed(picked && picked !== fallback ? picked : null);
+          changed(picked && picked !== DEFAULT_OPTION ? picked : null);
         }}
       ></ha-color-picker>`;
 }
@@ -135,18 +147,16 @@ export function chimeField(
     ...(options.inherits ? [{ value: CHIME_NONE, label: "None" }] : []),
     ...orderedChimes(config).map((chime) => ({ value: chime.id, label: chime.name })),
   ];
-  const own = value && value !== fallback ? value : undefined;
+  const own = value || undefined;
   const name = chimes.find((chime) => chime.value === fallback)?.label ?? fallback;
-  return inheritField(undefined, chimes, own, name, "Chime", (picked) =>
-    changed(picked && picked !== fallback ? picked : null),
-  );
+  return inheritField(undefined, chimes, own, name, "Chime", (picked) => changed(picked ?? null));
 }
 
 /**
  * Highlight: Normal or one of the card's highlights (Pulse, Glow, Alert);
  * any highlight also makes the lights pulse. Default: the category's in a
- * notification, Normal in a category. Choosing the inherited one is no own
- * value.
+ * notification, Normal in a category. The inherited one chosen by name is
+ * an own value.
  */
 export function highlightField(
   value: CardHighlight | null | undefined,
@@ -160,9 +170,9 @@ export function highlightField(
     { value: "glow", label: "Glow" },
     { value: "alert", label: "Alert" },
   ];
-  const own = value && value !== fallback ? value : undefined;
+  const own = value || undefined;
   const name = options.find((option) => option.value === fallback)?.label ?? fallback;
   return inheritField(undefined, options, own, name, "Highlight", (picked) =>
-    changed(picked && picked !== fallback ? (picked as CardHighlight) : undefined),
+    changed(picked as CardHighlight | undefined),
   );
 }

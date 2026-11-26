@@ -3,7 +3,7 @@
 import { LitElement, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
-import { AUDIENCE_STATES, type AudienceEntry, type AudienceState } from "../shared/config";
+import { type AudienceEntry, type AudienceState } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
 
 import { TABLE_STYLES } from "./table-styles";
@@ -90,11 +90,9 @@ export class NcAudienceTable extends LitElement {
     const effective = this._effective(people);
     const entry = { ...effective[person], [state]: on };
     if (this._isStep) {
-      // A row equal to the category's is not stored: it follows it again.
-      const base = effectiveAudience(this.base, undefined, people.map((item) => item.id))[person];
-      const value = { ...this.value, [person]: entry };
-      if (AUDIENCE_STATES.every((key) => base[key] === entry[key])) delete value[person];
-      this._emit(value);
+      // A row changed here is the step's own, also when it equals the
+      // category's again; its restore icon brings the category's back.
+      this._emit({ ...this.value, [person]: entry });
       return;
     }
     // A category lists everyone, so a person added later gets what they all

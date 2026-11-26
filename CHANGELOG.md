@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Default and an own value equal to it stay apart**, everywhere a setting inherits: choosing *Default (Blue)* follows the category (or the built-in default) when it changes, choosing *Blue* keeps blue. The same for Highlight, Chime, a button's Enabled switch, Show in push, Snooze *Times* and Actions, a channel's switches and *Home modes*, and the Audience rows: a value set there is the notification's own even when it equals the inherited one, and its restore icon brings Default back. The tidy of 0.7.8 that left out values equal to the category's now runs once: on the stored settings at the update and on importing an export of 0.7.9 or earlier (those versions stored such values without being asked).
 - The button dialog's **Enabled** switch is on a card of its own (without an icon), as the other built-in rows; the Tap's dialog has no line above *Tap behavior*.
 - **Built-in rows not in use have a grey icon** (instead of amber): the *Conditions* switches, *When the activation is no longer true*, *Entity action*, Notification state, Expiration and Notification entities while not set, and switched-off buttons in Interactions.
 

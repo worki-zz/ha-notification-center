@@ -1628,35 +1628,52 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
                     ),
                 )
     order_modes(config["modes"])
-    categories = {category["id"]: category for category in config["categories"]}
-    for notification in config["notifications"]:
-        category = categories.get(notification["category"])
-        for step in notification["steps"]:
-            _drop_inherited_values(category, step)
     _check_references(config)
     return config
 
 
-def _drop_inherited_values(
-    category: dict[str, Any] | None, step: dict[str, Any]
-) -> None:
-    """Leave out what a step's button stores equal to the category's button.
+def drop_inherited_values(data: dict[str, Any]) -> None:
+    """Leave out what steps' buttons store equal to their category's buttons.
 
-    Such a value follows the category again, also when the category changes
-    later (older versions stored the switches and empty actions of every
-    button). What the step does now stays the same.
+    Run once on data of 0.7.9 and earlier: those versions stored the
+    switches and empty actions of every button without being asked, so such
+    a value was never chosen. Later, a value chosen equal to the category's
+    is kept: it no longer follows the category. What a step does now stays
+    the same.
     """
+    categories = {
+        category.get("id"): category
+        for category in data.get("categories") or []
+        if isinstance(category, dict)
+    }
+    for notification in data.get("notifications") or []:
+        if not isinstance(notification, dict):
+            continue
+        category = categories.get(notification.get("category"))
+        for step in notification.get("steps") or []:
+            if isinstance(step, dict):
+                _drop_step_inherited(category, step)
+
+
+def _drop_step_inherited(category: dict[str, Any] | None, step: dict[str, Any]) -> None:
     if not category:
         return
 
     def ref(button: dict[str, Any]) -> str:
-        return str(button["id"] if button["type"] == "custom" else button["type"])
+        kind = button.get("type")
+        return str(button.get("id") if kind == "custom" else kind)
 
-    bases = {ref(button): button for button in category.get("buttons", [])}
-    for button in step.get("buttons", []):
-        kind = button["type"]
+    bases = {
+        ref(button): button
+        for button in category.get("buttons") or []
+        if isinstance(button, dict)
+    }
+    for button in step.get("buttons") or []:
+        if not isinstance(button, dict):
+            continue
+        kind = button.get("type")
         base = bases.get(ref(button))
-        if base is None or base["type"] != kind:
+        if base is None or base.get("type") != kind:
             continue
         for name in ("enabled", "show_in_push", "label", "icon"):
             if name in button and button[name] == base.get(name):
