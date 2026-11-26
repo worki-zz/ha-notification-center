@@ -378,9 +378,11 @@ export class NcInteractionDialog extends LitElement {
   private _enabledRow(button: Button) {
     const base = this.mode === "step" ? this.inherited : undefined;
     const on = button.enabled ?? base?.enabled ?? true;
-    return html`<label class="switch-row">
+    return html`<ha-card outlined class="own-row">
+      <div class="own-text">Enabled</div>
       <ha-switch
         .checked=${on}
+        .label=${"Enabled"}
         @change=${(ev: Event) => {
           const checked = (ev.target as HTMLInputElement).checked;
           const copy: Partial<Button> = { ...this._button!, enabled: checked };
@@ -388,8 +390,7 @@ export class NcInteractionDialog extends LitElement {
           this._button = copy as Button;
         }}
       ></ha-switch>
-      <span>Enabled</span>
-    </label>`;
+    </ha-card>`;
   }
 
   // The Tap behavior, one block: Action (its actions) or Button action
@@ -410,8 +411,7 @@ export class NcInteractionDialog extends LitElement {
       }
       this._button = copy;
     };
-    return html`<div class="divider"></div>
-      <div class="section-head">
+    return html`<div class="section-head">
         <span class="title">Tap behavior</span>
       </div>
       <div class="row">
@@ -585,7 +585,7 @@ export class NcInteractionDialog extends LitElement {
     changed: (on: boolean) => void,
   ) {
     return html`<ha-card outlined class="own-row">
-      <ha-icon class="builtin" .icon=${icon}></ha-icon>
+      <ha-icon class="builtin ${on ? "" : "off"}" .icon=${icon}></ha-icon>
       <div class="own-text">
         <div>${title}</div>
         <div class="secondary">${text}</div>
@@ -1012,6 +1012,10 @@ export class NcInteractionDialog extends LitElement {
     ha-icon.builtin {
       flex: none;
       color: var(--amber-color, #ffc107);
+    }
+    /* Grey while the built-in row is not in use. */
+    ha-icon.builtin.off {
+      color: var(--disabled-text-color);
     }
     /* As the step editor's built-in Conditions and Done rows. */
     .own-row {
