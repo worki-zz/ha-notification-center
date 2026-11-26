@@ -37,6 +37,7 @@ from .model import (
     category_custom_ids,
     default_config,
     detach_category_buttons,
+    drop_inherited_values,
     new_id,
     notifications_using,
     validate_item,
@@ -50,7 +51,9 @@ STORAGE_VERSION: Final = 1
 # 5: the Tap behavior is one block, the step's or the category's.
 # 6: Silence is Mute, the own light blink is Notification Pulse (0.7.4).
 # 7: a schedule's Expires is the Expires row of Dismiss when (0.7.4).
-STORAGE_MINOR_VERSION: Final = 7
+# 8: button values stored equal to the category's are left out, once: a
+#    value chosen equal to the category's is kept from now on (0.7.10).
+STORAGE_MINOR_VERSION: Final = 8
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -62,7 +65,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # 4: the Tap behavior is one block, the step's or the category's.
 # 5: Silence is Mute, the own light blink is Notification Pulse.
 # 6: a schedule's Expires is the Expires row of Dismiss when.
-EXPORT_VERSION: Final = 6
+# 7: button values equal to the category's are chosen ones, not leftovers.
+EXPORT_VERSION: Final = 7
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -90,6 +94,8 @@ class _ConfigStore(Store[ConfigData]):
             rename_mute_and_pulse(old_data)
         if old_major_version == 1 and old_minor_version < 7:
             move_schedule_expires(old_data)
+        if old_major_version == 1 and old_minor_version < 8:
+            drop_inherited_values(old_data)
         return old_data
 
 
@@ -592,7 +598,7 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, 3, 4, 5, EXPORT_VERSION):
+        if version not in (1, 2, 3, 4, 5, 6, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
@@ -604,6 +610,8 @@ class ConfigManager:
             rename_mute_and_pulse(data)
         if version < 6:
             move_schedule_expires(data)
+        if version < 7:
+            drop_inherited_values(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(

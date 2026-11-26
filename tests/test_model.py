@@ -13,6 +13,7 @@ from custom_components.notification_center.model import (
     ConfigValidationError,
     async_validate_config,
     default_config,
+    drop_inherited_values,
     effective_buttons,
 )
 from custom_components.notification_center.store import (
@@ -473,10 +474,29 @@ async def test_button_actions_follow_the_category(hass: HomeAssistant) -> None:
     assert "actions" not in category_done
 
 
-async def test_step_values_equal_to_the_category_are_dropped(
+async def test_step_values_equal_to_the_category_are_kept(
     hass: HomeAssistant,
 ) -> None:
-    """Switches, times and empty actions equal to the category's follow it."""
+    """A value chosen equal to the category's stays the step's own."""
+    config = _with_notification(
+        buttons=[
+            {"type": "done", "enabled": True, "actions": {}},
+            {"type": "snooze", "snooze": ["1h", "3h", "tomorrow"]},
+        ]
+    )
+    validated = await async_validate_config(hass, config)
+    stored = {
+        b["type"]: b for b in validated["notifications"][0]["steps"][0]["buttons"]
+    }
+    assert stored["done"]["enabled"] is True
+    assert stored["done"]["actions"] == {}
+    assert stored["snooze"]["snooze"] == ["1h", "3h", "tomorrow"]
+
+
+async def test_old_step_values_equal_to_the_category_are_dropped(
+    hass: HomeAssistant,
+) -> None:
+    """Once, on old data: switches, times and empty actions follow again."""
     config = _with_notification(
         buttons=[
             {"type": "done", "enabled": True, "actions": {}},
@@ -490,6 +510,7 @@ async def test_step_values_equal_to_the_category_are_dropped(
         ]
     )
     validated = await async_validate_config(hass, config)
+    drop_inherited_values(validated)
     stored = {
         b["type"]: b for b in validated["notifications"][0]["steps"][0]["buttons"]
     }

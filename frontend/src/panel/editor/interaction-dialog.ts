@@ -263,7 +263,7 @@ export class NcInteractionDialog extends LitElement {
     const base = this._base;
     if (!base) return false;
     const step = this.mode === "step";
-    if (button.enabled !== undefined && button.enabled !== base.enabled) return true;
+    if (button.enabled !== undefined && (step || button.enabled !== base.enabled)) return true;
     if (button.label || button.icon) return true;
     if (button.type === "snooze" && button.snooze?.length) {
       if (step || button.snooze.join() !== DEFAULT_SNOOZE.join()) return true;
@@ -362,8 +362,7 @@ export class NcInteractionDialog extends LitElement {
   private _actionsChanged(button: Button): boolean {
     if (button.actions === undefined) return false;
     if (this.mode === "category") return !!this._base && Object.keys(button.actions).length > 0;
-    if (!this.inherited) return false;
-    return JSON.stringify(button.actions) !== JSON.stringify(this.inherited.actions ?? {});
+    return !!this.inherited;
   }
 
   private _resetActions(): void {
@@ -374,7 +373,8 @@ export class NcInteractionDialog extends LitElement {
   }
 
   // The switch that turns the button on, as the switch of its row. In a
-  // notification the category's value is not stored.
+  // notification a value set here is its own, also when it equals the
+  // category's; the header's restore button brings the category's back.
   private _enabledRow(button: Button) {
     const base = this.mode === "step" ? this.inherited : undefined;
     const on = button.enabled ?? base?.enabled ?? true;
@@ -385,9 +385,7 @@ export class NcInteractionDialog extends LitElement {
         .label=${"Enabled"}
         @change=${(ev: Event) => {
           const checked = (ev.target as HTMLInputElement).checked;
-          const copy: Partial<Button> = { ...this._button!, enabled: checked };
-          if (base && checked === base.enabled) delete copy.enabled;
-          this._button = copy as Button;
+          this._button = { ...this._button!, enabled: checked };
         }}
       ></ha-switch>
     </ha-card>`;
@@ -792,11 +790,17 @@ export class NcInteractionDialog extends LitElement {
       const snooze = SNOOZE_CHOICES.map((c) => c.key).filter((k) =>
         keys.includes(k),
       );
-      // The category's (or the default) times again: inherited, not stored.
-      const same = inherits && snooze.join() === [...base].join();
+      // In a category, the default times again are no own times; in a
+      // notification, times ticked here are its own, also when they equal
+      // the category's (the restore icon brings the category's back).
+      const step = this.mode === "step";
+      const same = inherits && !step && snooze.join() === [...base].join();
       this._set({ snooze: same ? null : snooze });
     };
-    const own = inherits && !!button.snooze?.length && button.snooze.join() !== [...base].join();
+    const own =
+      inherits &&
+      !!button.snooze?.length &&
+      (this.mode === "step" || button.snooze.join() !== [...base].join());
     return html`<div class="snooze">
       <div class="section-head">
         <span class="title">Times</span>

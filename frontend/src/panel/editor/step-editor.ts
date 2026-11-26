@@ -969,8 +969,8 @@ export class NcStepEditor extends LitElement {
   private _setEntry(step: EditorStep, entry: Button, inherited: boolean): void {
     const buttons = [...step.buttons];
     const index = this._entryIndex(step, entry, inherited);
-    // What equals the category's is not stored: it follows the category.
-    if (inherited) entry = inheritedEntry(entry, this._base({ ...entry, category: true } as EffectiveButton));
+    // Empty values are not stored: they follow the category.
+    if (inherited) entry = inheritedEntry(entry);
     if (index < 0) buttons.push(entry);
     else buttons[index] = entry;
     this._change({ buttons });

@@ -6,7 +6,6 @@ import type {
   Button,
   CardHighlight,
   Category,
-  CategoryButton,
   ChannelSettings,
   Duration,
   NotificationState,
@@ -195,23 +194,19 @@ export function newStep(): EditorStep {
 }
 
 /**
- * A step's entry of a category's button, with what equals the category's
- * left out (it follows the category again). The entry itself stays, so an
- * entity action can keep pointing to its id.
+ * A step's entry of a category's button, with empty values left out (they
+ * follow the category). A value chosen equal to the category's stays: it
+ * no longer follows the category. The entry itself stays, so an entity
+ * action can keep pointing to its id.
  */
-export function inheritedEntry(entry: Button, base: CategoryButton | undefined): Button {
+export function inheritedEntry(entry: Button): Button {
   const copy: Partial<Button> = { ...entry };
-  if (copy.enabled === undefined || copy.enabled === base?.enabled) delete copy.enabled;
+  if (copy.enabled === undefined || copy.enabled === null) delete copy.enabled;
   if (!copy.label) delete copy.label;
   if (!copy.icon) delete copy.icon;
   if (copy.show_in_push === undefined || copy.show_in_push === null) delete copy.show_in_push;
-  if (!copy.snooze?.length || copy.snooze.join() === (base?.snooze ?? []).join()) delete copy.snooze;
+  if (!copy.snooze?.length) delete copy.snooze;
   if (!copy.open_on_tap) delete copy.open_on_tap;
-  // Actions equal to the category's (or none where it has none) follow it.
-  if (copy.type !== "tap" && copy.actions) {
-    const same = JSON.stringify(copy.actions) === JSON.stringify(base?.actions ?? {});
-    if (same) delete copy.actions;
-  }
   return copy as Button;
 }
 
