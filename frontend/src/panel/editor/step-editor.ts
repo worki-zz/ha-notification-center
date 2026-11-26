@@ -647,7 +647,7 @@ export class NcStepEditor extends LitElement {
         }}
         @expanded-will-change=${(ev: Event) => ev.stopPropagation()}
       >
-        <ha-icon slot="leading-icon" class="builtin" .icon=${icon}></ha-icon>
+        <ha-icon slot="leading-icon" class="builtin ${filled ? "" : "off"}" .icon=${icon}></ha-icon>
         <div slot="header" class="pinned-title">
           ${title}
           <span class="pinned-state">· ${filled ? "Set" : "Not in use"}</span>
@@ -821,7 +821,7 @@ export class NcStepEditor extends LitElement {
     return html`<div class="block">
       <div class="show-switches">
         <ha-card outlined class="own-row">
-          <ha-icon class="builtin" icon="mdi:play-circle-outline"></ha-icon>
+          <ha-icon class="builtin ${show.activate_only_while_met ? "" : "off"}" icon="mdi:play-circle-outline"></ha-icon>
           <div class="own-text">Activate only while conditions are met</div>
           <ha-switch
             .checked=${show.activate_only_while_met}
@@ -829,7 +829,7 @@ export class NcStepEditor extends LitElement {
           ></ha-switch>
         </ha-card>
         <ha-card outlined class="own-row">
-          <ha-icon class="builtin" icon="mdi:eye-off-outline"></ha-icon>
+          <ha-icon class="builtin ${show.hide_while_not_met ? "" : "off"}" icon="mdi:eye-off-outline"></ha-icon>
           <div class="own-text">
             Hide while conditions are not met
           </div>
@@ -892,7 +892,7 @@ export class NcStepEditor extends LitElement {
       )}
       ${listed
         ? html`<ha-card outlined class="own-row">
-            <ha-icon class="builtin" icon="mdi:format-list-checks"></ha-icon>
+            <ha-icon class="builtin ${step.done_when.activation_conditions_no_longer_true ? "" : "off"}" icon="mdi:format-list-checks"></ha-icon>
             <div class="own-text">
               When the activation is no longer true
             </div>

@@ -4,6 +4,17 @@
 
 ### Changed
 
+- The button dialog's **Enabled** switch is on a card of its own (without an icon), as the other built-in rows; the Tap's dialog has no line above *Tap behavior*.
+- **Built-in rows not in use have a grey icon** (instead of amber): the *Conditions* switches, *When the activation is no longer true*, *Entity action*, Notification state, Expiration and Notification entities while not set, and switched-off buttons in Interactions.
+
+### Fixed
+
+- The pencil of a switched-off button in Interactions is no longer faded: it opens the dialog as on any other row.
+
+## 0.7.9
+
+### Changed
+
 - **Upcoming and Schedule leave out a scheduled step whose *Conditions* are not met now** (when it would be held back when due), for example *Bring back the bin* until *Put out the bin* is done. Notification state, Notification entities and entity conditions count; conditions that change with time (time, sun, template) are checked when the step is due. The notification's `next_due` and its *upcoming* state follow the same rule.
 
 ## 0.7.8
