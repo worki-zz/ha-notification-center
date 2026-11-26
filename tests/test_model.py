@@ -471,3 +471,34 @@ async def test_button_actions_follow_the_category(hass: HomeAssistant) -> None:
         b for b in validated["categories"][0]["buttons"] if b["type"] == "done"
     )
     assert "actions" not in category_done
+
+
+async def test_step_values_equal_to_the_category_are_dropped(
+    hass: HomeAssistant,
+) -> None:
+    """Switches, times and empty actions equal to the category's follow it."""
+    config = _with_notification(
+        buttons=[
+            {"type": "done", "enabled": True, "actions": {}},
+            {"type": "dismiss", "enabled": True, "actions": {}},
+            {
+                "type": "snooze",
+                "snooze": ["1h", "3h", "tomorrow"],
+                "actions": {"mute": True},
+            },
+            {"type": "tap", "enabled": False, "actions": {}},
+        ]
+    )
+    validated = await async_validate_config(hass, config)
+    stored = {
+        b["type"]: b for b in validated["notifications"][0]["steps"][0]["buttons"]
+    }
+    assert set(stored["done"]) == {"id", "type"}
+    # Differs from the category (Dismiss is off there): kept.
+    assert stored["dismiss"]["enabled"] is True
+    assert "actions" not in stored["dismiss"]
+    assert "snooze" not in stored["snooze"]
+    assert stored["snooze"]["actions"] == {"mute": True}
+    # The Tap's actions are its own Tap behavior.
+    assert stored["tap"]["actions"] == {}
+    assert "enabled" not in stored["tap"]

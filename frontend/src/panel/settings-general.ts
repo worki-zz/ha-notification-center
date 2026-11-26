@@ -10,7 +10,7 @@ import { DOMAIN, type NotificationCenterConfig } from "../shared/config";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { VERSION } from "../shared/version";
-import { field, pageName } from "./fields";
+import { field, loadPageName, pageName } from "./fields";
 
 interface GeneralPage {
   key: string;
@@ -64,6 +64,14 @@ export class NcSettingsGeneral extends LitElement {
 
   @state() private _notice?: string;
 
+  // The page a push opens, by name (a dashboard view once its title is read).
+  private _pushPage(path: string | null | undefined): string {
+    void loadPageName(this.hass, path).then((found) => {
+      if (found) this.requestUpdate();
+    });
+    return pageName(this.hass, path);
+  }
+
   protected override render() {
     const config = this.config;
     if (!config) return nothing;
@@ -110,7 +118,7 @@ export class NcSettingsGeneral extends LitElement {
       {
         key: "push",
         name: "Push",
-        description: pageName(this.hass, config.general?.open_on_tap),
+        description: this._pushPage(config.general?.open_on_tap),
         icon: "mdi:cellphone-message",
         color: "#29B6F6",
       },
