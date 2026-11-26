@@ -42,7 +42,7 @@ import {
 } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
 import { actionAddAvailable } from "../ha-elements";
-import { field, inheritField, pageName, restoreButton } from "../fields";
+import { field, inheritField, loadPageName, pageName, restoreButton } from "../fields";
 
 /** The default label and icon of an interaction. */
 export const INTERACTION_DEFAULTS: Record<
@@ -881,10 +881,13 @@ export class NcInteractionDialog extends LitElement {
   // Tap: the page the app opens when the push is tapped (More info opens
   // on top of it).
   private _renderOpenOnTap(button: Button, moreInfo: boolean) {
-    const base = pageName(
-      this.hass,
-      (this.mode === "step" ? this.inherited?.open_on_tap : undefined) || this.generalOpenOnTap,
-    );
+    const path =
+      (this.mode === "step" ? this.inherited?.open_on_tap : undefined) || this.generalOpenOnTap;
+    // A dashboard view is named by its title once it is read.
+    void loadPageName(this.hass, path).then((found) => {
+      if (found) this.requestUpdate();
+    });
+    const base = pageName(this.hass, path);
     const top = moreInfo ? " More info opens on top of it." : "";
     return field(
       this.hass,

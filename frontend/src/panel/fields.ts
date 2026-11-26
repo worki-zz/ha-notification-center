@@ -117,20 +117,59 @@ export function restoreButton(
   </ha-icon-button>`;
 }
 
+// The names of dashboard views, by path, once loaded ("Overview ▸ Home").
+const VIEW_NAMES = new Map<string, string>();
+
+type Panels = Record<string, { url_path?: string; title?: string | null; component_name?: string }>;
+
+function panelOf(hass: HomeAssistant | undefined, path: string) {
+  const panels = (hass as { panels?: Panels } | undefined)?.panels;
+  const [key, view] = path.replace(/^\/+/, "").split(/[?#]/)[0].split("/");
+  return { key, view, panel: panels?.[key] };
+}
+
 /**
  * The name of a page, as the navigation picker shows it: a panel's or
- * dashboard's title, else the path itself. Empty: the Overview.
+ * dashboard's title (with the view's, once `loadPageName` has read it),
+ * else the path itself. Empty: the Overview.
  */
 export function pageName(hass: HomeAssistant | undefined, path: string | null | undefined): string {
   if (!path) return "Overview";
-  const panels = (hass as { panels?: Record<string, { url_path?: string; title?: string | null }> } | undefined)
-    ?.panels;
-  const key = path.replace(/^\/+/, "").split(/[/?#]/)[0];
-  const title = panels?.[key]?.title;
+  const known = VIEW_NAMES.get(path);
+  if (known) return known;
+  const { panel } = panelOf(hass, path);
+  const title = panel?.title;
   if (!title) return path;
   // Built-in panels have a translation key as their title.
   const localize = (hass as { localize?: (key: string) => string } | undefined)?.localize;
   return localize?.(`panel.${title}`) || title;
+}
+
+/**
+ * Read the title of a dashboard view, so that `pageName` names it; true
+ * when a new name was found.
+ */
+export async function loadPageName(
+  hass: HomeAssistant | undefined,
+  path: string | null | undefined,
+): Promise<boolean> {
+  if (!hass || !path || VIEW_NAMES.has(path)) return false;
+  const { key, view, panel } = panelOf(hass, path);
+  if (!view || panel?.component_name !== "lovelace") return false;
+  try {
+    const config = (await hass.callWS({
+      type: "lovelace/config",
+      url_path: key === "lovelace" ? null : key,
+    })) as { views?: { path?: string; title?: string }[] };
+    const views = config.views ?? [];
+    const index = /^\d+$/.test(view) ? Number(view) : -1;
+    const found = views.find((item) => item.path === view) ?? views[index];
+    if (!found?.title) return false;
+    VIEW_NAMES.set(path, `${pageName(hass, `/${key}`)} ▸ ${found.title}`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export interface IconOption {

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.8
 
 ### Changed
 
@@ -12,6 +12,7 @@
 - A notification can change the **label** of its category's buttons (the placeholder shows the category's). The button dialog has an *Enabled* switch at the top.
 - The **default colour** of a category is **Amber** (was the primary colour): categories and notifications without a colour of their own, their lights and pushes turn amber.
 - A **new notification follows its category's button switches** instead of copying them, and a switch, home mode tick or Audience row set back to the category's value is no longer stored: it follows the category again.
+- *Open on tap* names the page it follows under the field (*Default: Overview ▸ Home*): a dashboard view by its title, not its path; the General list's Push line does the same.
 - On a phone, each row of the Channels list has a pencil (was an arrow) and, when changed, the restore icon.
 
 ### Fixed
