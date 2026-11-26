@@ -85,11 +85,14 @@ class _Conditions:
         notification: NotificationRunner,
         own: list[dict[str, Any]],
         checker: ConditionsChecker | None,
+        untimed: ConditionsChecker | None = None,
     ) -> None:
         self._engine = engine
         self._notification = notification
         self._own = own
         self._checker = checker
+        # The Home Assistant conditions that do not change with time.
+        self._untimed = untimed
 
     @property
     def empty(self) -> bool:
@@ -116,9 +119,26 @@ class _Conditions:
             return self._checker(dict(variables))
         return True
 
+    def check_untimed(self, variables: Mapping[str, Any]) -> bool:
+        """Return whether every condition that does not change with time is true.
+
+        For a step that is due later: a time of day or the sun is checked
+        when it is due, not now.
+        """
+        for condition in self._own:
+            if not self._engine.check_own_condition(
+                condition, self._notification, variables
+            ):
+                return False
+        if self._untimed is not None:
+            return self._untimed(dict(variables))
+        return True
+
     def unload(self) -> None:
         if self._checker is not None:
             self._checker.async_unload()
+        if self._untimed is not None and self._untimed is not self._checker:
+            self._untimed.async_unload()
 
 
 async def _async_conditions(
@@ -131,6 +151,7 @@ async def _async_conditions(
     own = [c for c in configs if str(c.get("condition", "")).startswith(f"{DOMAIN}.")]
     others = [c for c in configs if c not in own]
     checker: ConditionsChecker | None = None
+    untimed: ConditionsChecker | None = None
     entities: set[str] = set()
     timed = False
     if others:
@@ -146,7 +167,20 @@ async def _async_conditions(
         for condition in validated:
             entities |= async_extract_entities(condition)
             timed |= _is_timed(condition)
-    return _Conditions(engine, notification, own, checker), entities, timed
+        if timed and (steady := [c for c in validated if not _is_timed(c)]):
+            untimed = await async_conditions_from_config(
+                engine.hass,
+                cast(list[dict[str, Any]], steady),
+                _LOGGER,
+                f"{name} (without time)",
+            )
+        elif not timed:
+            untimed = checker
+    return (
+        _Conditions(engine, notification, own, checker, untimed),
+        entities,
+        timed,
+    )
 
 
 def _is_timed(condition: Any) -> bool:
@@ -486,6 +520,9 @@ class StepRunner:
     @callback
     def _hide_changed(self, *_: Any) -> None:
         self.refresh_hidden()
+        if self.schedule is not None and self.schedule.next is not None:
+            # Upcoming shows the step only while its Conditions are met.
+            self.engine.async_changed()
 
     @callback
     def refresh_hidden(self) -> None:
@@ -513,6 +550,16 @@ class StepRunner:
             conditions is not None and conditions.has_own
             for conditions in (self.show_when, self.start_conditions)
         )
+
+    def waits_for_conditions(self, variables: Mapping[str, Any]) -> bool:
+        """Return whether a due step would be held back: Conditions not met now.
+
+        Conditions that change with time (time, sun, template, trigger) are
+        left out: they are checked when the step is due.
+        """
+        if not self._hides or self.show_when is None or self.show_when.empty:
+            return False
+        return not self.show_when.check_untimed(variables)
 
     def is_hidden(self, card: Card) -> bool:
         """Return whether a card is hidden: the Conditions are not met for it."""

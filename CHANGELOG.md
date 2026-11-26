@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Upcoming and Schedule leave out a scheduled step whose *Conditions* are not met now** (when it would be held back when due), for example *Bring back the bin* until *Put out the bin* is done. Notification state, Notification entities and entity conditions count; conditions that change with time (time, sun, template) are checked when the step is due. The notification's `next_due` and its *upcoming* state follow the same rule.
+
 ## 0.7.8
 
 ### Changed
