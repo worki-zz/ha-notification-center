@@ -389,7 +389,7 @@ export class NcInteractionDialog extends LitElement {
       ${tap
         ? nothing
         : html`<div class="divider"></div>
-            ${this._labelField(button)} ${this._iconField(button)}`}`;
+            <div class="row">${this._labelField(button)} ${this._iconField(button)}</div>`}`;
   }
 
   // A row of a settings card: its title (and a line under it) at the
@@ -546,7 +546,8 @@ export class NcInteractionDialog extends LitElement {
     void loadPageName(this.hass, path).then((found) => {
       if (found) this.requestUpdate();
     });
-    return `Off, a tap on the push notification opens ${pageName(this.hass, path)}.`;
+    const page = path ? pageName(this.hass, path) : "the Overview";
+    return `Off, a tap on the push notification opens ${page}.`;
   }
 
   // The built-in Snooze button: the times the dashboard offers besides
@@ -842,6 +843,14 @@ export class NcInteractionDialog extends LitElement {
     ha-tab-group {
       display: block;
       margin: -8px -24px 16px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .row > * {
+      flex: 1 1 200px;
     }
     .title {
       font-weight: var(--ha-font-weight-medium, 500);
