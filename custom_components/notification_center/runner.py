@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from contextlib import suppress
+from datetime import datetime
 import logging
 from typing import TYPE_CHECKING, Any, Final, cast
 
@@ -119,15 +120,16 @@ class _Conditions:
             return self._checker(dict(variables))
         return True
 
-    def check_untimed(self, variables: Mapping[str, Any]) -> bool:
-        """Return whether every condition that does not change with time is true.
+    def check_untimed(self, variables: Mapping[str, Any], at: datetime) -> bool:
+        """Return whether the conditions hold at a later time, as far as known.
 
-        For a step that is due later: a time of day or the sun is checked
-        when it is due, not now.
+        For a step that is due at ``at``: a Notification state's time window
+        is checked for that time; entity states as they are now; a time of
+        day, the sun or a template only when it is due (left out here).
         """
         for condition in self._own:
             if not self._engine.check_own_condition(
-                condition, self._notification, variables
+                condition, self._notification, variables, at
             ):
                 return False
         if self._untimed is not None:
@@ -551,15 +553,14 @@ class StepRunner:
             for conditions in (self.show_when, self.start_conditions)
         )
 
-    def waits_for_conditions(self, variables: Mapping[str, Any]) -> bool:
-        """Return whether a due step would be held back: Conditions not met now.
+    def waits_for_conditions(self, variables: Mapping[str, Any], due: datetime) -> bool:
+        """Return whether a step due later would be held back by its Conditions.
 
-        Conditions that change with time (time, sun, template, trigger) are
-        left out: they are checked when the step is due.
+        See ``_Conditions.check_untimed`` for what is checked for that time.
         """
         if not self._hides or self.show_when is None or self.show_when.empty:
             return False
-        return not self.show_when.check_untimed(variables)
+        return not self.show_when.check_untimed(variables, due)
 
     def is_hidden(self, card: Card) -> bool:
         """Return whether a card is hidden: the Conditions are not met for it."""
