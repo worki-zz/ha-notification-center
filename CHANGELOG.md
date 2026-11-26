@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **A person's push devices are a list** (the data model only, nothing changes in the UI): `push_devices` with an id, the notify action, the device type and `enabled` replace `notify` and `device_type`. The People page still shows one device. A person without an enabled device gets no push, as before, and a switched-off device raises no Repairs issue. The pushes on the phones are followed per device. The stored settings and an export of 0.7.10 or earlier are migrated once.
+
 ## 0.7.10
 
 ### Changed

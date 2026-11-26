@@ -326,11 +326,23 @@ MODE_SCHEMA = _with_id(
     }
 )
 
+# A push device of a person: a notify action and how it shows a push. A
+# switched-off device (``enabled: false``) gets no push; there is no switch
+# for it in the UI yet.
+PUSH_DEVICE_SCHEMA = _with_id(
+    {
+        vol.Required("notify"): cv.string,
+        vol.Optional("device_type", default="other"): vol.In(DEVICE_TYPES),
+        vol.Optional("enabled", default=True): cv.boolean,
+    }
+)
+
 PERSON_SCHEMA = vol.Schema(
     {
         vol.Required("person"): cv.entity_domain("person"),
-        vol.Optional("notify"): _optional(cv.string),
-        vol.Optional("device_type", default="other"): vol.In(DEVICE_TYPES),
+        vol.Optional("push_devices", default=list): vol.All(
+            cv.ensure_list, [PUSH_DEVICE_SCHEMA]
+        ),
         # When the person is asleep (only counted at home), set like the
         # condition of a mode.
         vol.Optional("sleep"): _optional(MODE_CONDITION_SCHEMA),

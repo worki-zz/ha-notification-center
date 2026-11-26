@@ -330,7 +330,9 @@ class EngineQueries:
         for section, prefix in DEVICE_PREFIXES.items():
             keys.extend(prefix + item["id"] for item in config.get(section, []))
         phones = {
-            item["person"] for item in config.get("people", []) if item.get("notify")
+            item["person"]
+            for item in config.get("people", [])
+            if any(device.get("enabled", True) for device in item["push_devices"])
         }
         views: dict[str, dict[str, Any]] = {}
         for key in keys:

@@ -164,11 +164,14 @@ def push_body(message: str | None, info: str | None) -> str:
 
 @dataclass(slots=True)
 class Phone:
-    """The phone of a person."""
+    """A push device of a person."""
 
     person: str
     service: str
     device_type: str
+    # The id of the device in the person's push_devices; what the push
+    # bookkeeping is keyed by.
+    device_id: str = ""
 
     @property
     def domain_service(self) -> tuple[str, str]:
@@ -191,15 +194,23 @@ class Content:
     url: str
 
 
-def phones_of(config: Mapping[str, Any]) -> dict[str, Phone]:
-    """Return the phone of every person who has one, by person."""
-    return {
-        item["person"]: Phone(
-            item["person"], str(item["notify"]), item.get("device_type", "other")
-        )
-        for item in config.get("people", [])
-        if item.get("notify")
-    }
+def phones_of(config: Mapping[str, Any]) -> dict[str, list[Phone]]:
+    """Return the enabled push devices of every person who has one, by person."""
+    result: dict[str, list[Phone]] = {}
+    for item in config.get("people", []):
+        devices = [
+            Phone(
+                item["person"],
+                str(device["notify"]),
+                device.get("device_type", "other"),
+                device["id"],
+            )
+            for device in item.get("push_devices", [])
+            if device.get("enabled", True)
+        ]
+        if devices:
+            result[item["person"]] = devices
+    return result
 
 
 def build_payload(
@@ -271,14 +282,41 @@ class PushDevice(Device):
         # Per card (its key joined by "|"): the token of the card's opening,
         # and the people it was sent to with the tag and the time.
         self._sent: dict[str, dict[str, Any]] = dict(saved.get("sent") or {})
-        # Per phone and tag: the card whose push is there now.
+        # Per device id and tag: the card whose push is there now.
         self._phones: dict[str, str] = dict(saved.get("phones") or {})
         self._categories: dict[str, str] = {}
+        # Per person: when the latest push went to one of their devices.
         self.last_sent: dict[str, str] = dict(saved.get("last_sent") or {})
+        self._keep_sent_of_devices(manager.engine.manager.config)
         self._unsub: Callable[[], None] | None = manager.hass.bus.async_listen(
             EVENT_NOTIFICATION_ACTION, self._action_pressed
         )
         self._remember_categories(manager.engine.manager.config)
+
+    def _keep_sent_of_devices(self, config: Mapping[str, Any]) -> None:
+        """Key a push sent before the push devices (per person) by device id.
+
+        Part of the one-time migration of 0.7.11; removed with the other 0.x
+        migrations at 1.0.
+        """
+        first = {
+            person: devices[0].device_id
+            for person, devices in phones_of(config).items()
+        }
+        for record in self._sent.values():
+            old = record.pop("people", None)
+            if old is not None:
+                record["devices"] = {
+                    first[person]: {**sent, "person": person}
+                    for person, sent in old.items()
+                    if person in first
+                }
+        for key in list(self._phones):
+            person, _, tag = key.partition(ACTION_SEPARATOR)
+            if person in first:
+                self._phones[_phone_key(first[person], tag)] = self._phones.pop(key)
+            elif person.startswith("person."):
+                del self._phones[key]
 
     @property
     def entity_id(self) -> str:
@@ -325,35 +363,43 @@ class PushDevice(Device):
             if record is not None and record.get("token") != token:
                 record = None
             for person in view.people:
-                phone = phones.get(person)
-                if phone is None:
-                    continue
-                if record is not None and person in record["people"]:
-                    continue
-                if record is None:
-                    record = {"token": token, "people": {}}
-                    self._sent[card_key] = record
-                self._send_card(card, phone)
-                now = dt_util.utcnow().isoformat()
-                record["people"][person] = {"tag": push_tag(card), "at": now}
-                self._phones[_phone_key(person, push_tag(card))] = card_key
-                self.last_sent[person] = now
-                changed = True
+                for phone in phones.get(person, []):
+                    if record is not None and phone.device_id in record["devices"]:
+                        continue
+                    if record is None:
+                        record = {"token": token, "devices": {}}
+                        self._sent[card_key] = record
+                    self._send_card(card, phone)
+                    now = dt_util.utcnow().isoformat()
+                    record["devices"][phone.device_id] = {
+                        "person": person,
+                        "tag": push_tag(card),
+                        "at": now,
+                    }
+                    self._phones[_phone_key(phone.device_id, push_tag(card))] = card_key
+                    self.last_sent[person] = now
+                    changed = True
         if changed:
             self._save()
             self.manager.changed()
 
     def _remove(
-        self, card_key: str, record: Mapping[str, Any], phones: Mapping[str, Phone]
+        self,
+        card_key: str,
+        record: Mapping[str, Any],
+        phones: Mapping[str, list[Phone]],
     ) -> None:
         """Take a card's push away from the phones it is still on."""
-        for person, sent in (record.get("people") or {}).items():
-            phone_key = _phone_key(person, sent["tag"])
+        by_id = {
+            phone.device_id: phone for devices in phones.values() for phone in devices
+        }
+        for device_id, sent in (record.get("devices") or {}).items():
+            phone_key = _phone_key(device_id, sent["tag"])
             if self._phones.get(phone_key) != card_key:
                 # A later push with the same tag replaced it.
                 continue
             del self._phones[phone_key]
-            phone = phones.get(person)
+            phone = by_id.get(device_id)
             if phone is not None:
                 self._clear(phone, sent["tag"])
 
@@ -374,7 +420,7 @@ class PushDevice(Device):
         ]
         if not renamed:
             return
-        for phone in phones_of(config).values():
+        for phone in (p for devices in phones_of(config).values() for p in devices):
             if phone.device_type != "android":
                 continue
             for name in renamed:
@@ -393,7 +439,7 @@ class PushDevice(Device):
     def _send_card(self, card: Card, phone: Phone) -> None:
         content = self.content_of(card)
         tag = push_tag(card)
-        replaced = self._phones.get(_phone_key(phone.person, tag))
+        replaced = self._phones.get(_phone_key(phone.device_id, tag))
         payload = build_payload(phone, content, tag=tag, actions=self.actions_of(card))
         if replaced is not None and phone.device_type == "ios":
             # iOS cannot replace a critical push: take the earlier one away.
@@ -567,12 +613,13 @@ class PushDevice(Device):
             step = data.get("step") or {}
             audience = audience_of(category, step, sorted(engine.person_states))
             targets = [
-                phones[person]
+                phone
                 for person, ticks in audience.items()
-                if any(ticks.values()) and person in phones
+                if any(ticks.values())
+                for phone in phones.get(person, [])
             ]
             if not targets and not engine.person_states:
-                targets = list(phones.values())
+                targets = [phone for devices in phones.values() for phone in devices]
             if not targets:
                 raise ServiceValidationError(
                     "Nobody of the audience has a push device."
@@ -585,7 +632,7 @@ class PushDevice(Device):
                 raise ServiceValidationError(
                     "You have no push device: set it on the People page."
                 )
-            targets = [phones[person]]
+            targets = list(phones[person])
         notification = data.get("notification") or {}
         category = data.get("category") or {}
         content = self.content_of(
@@ -627,8 +674,8 @@ def _split_key(text: str) -> tuple[str, str, str]:
     return (notification_id, step_id, entity_id)
 
 
-def _phone_key(person: str, tag: str) -> str:
-    return f"{person}{ACTION_SEPARATOR}{tag}"
+def _phone_key(device_id: str, tag: str) -> str:
+    return f"{device_id}{ACTION_SEPARATOR}{tag}"
 
 
 def mobile_app_phones(hass: HomeAssistant) -> list[dict[str, Any]]:

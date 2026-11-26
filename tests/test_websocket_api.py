@@ -252,15 +252,17 @@ async def test_people_follow_person_entities(
         "person/update",
         data={
             "person": "person.bob",
-            "notify": "notify.bob_phone",
-            "device_type": "ios",
+            "push_devices": [{"notify": "notify.bob_phone", "device_type": "ios"}],
         },
     )
     people = (await client.config())["people"]
     assert [person["name"] for person in people] == ["Anna", "Bob"]
-    assert people[0]["notify"] is None
-    assert people[1]["notify"] == "notify.bob_phone"
-    assert people[1]["device_type"] == "ios"
+    assert people[0]["push_devices"] == []
+    [device] = people[1]["push_devices"]
+    assert device["notify"] == "notify.bob_phone"
+    assert device["device_type"] == "ios"
+    assert device["enabled"] is True
+    assert device["id"]
     assert people[1]["picture"] == "/b.png"
 
 
@@ -286,7 +288,7 @@ async def test_import_export_round_trip(
     exported = (await client.ok("config/export"))["yaml"]
     data = yaml_util.parse_yaml(exported)
     assert isinstance(data, dict)
-    assert data["version"] == 7
+    assert data["version"] == 8
     stored = hass_storage[CONFIG_KEY]["data"]
     assert {key: value for key, value in data.items() if key != "version"} == stored
 
@@ -507,5 +509,5 @@ async def test_export_download(
     assert "attachment" in response.headers["Content-Disposition"]
     data = yaml_util.parse_yaml(await response.text())
     assert isinstance(data, dict)
-    assert data["version"] == 7
+    assert data["version"] == 8
     assert data["categories"] == hass_storage[CONFIG_KEY]["data"]["categories"]
