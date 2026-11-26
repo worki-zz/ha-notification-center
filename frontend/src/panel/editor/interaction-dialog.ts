@@ -1,26 +1,22 @@
-// The dialog of an interaction (a button of the card, or the tap on it):
-// whether it is switched on, its label and icon, whether it is in the push
-// notification, the Snooze button's times and the action.
+// The dialog of an interaction (a button of the card, or the tap on it), in
+// two tabs.
 //
-// In a category it sets what the notifications inherit: the label of every
-// button, its icon, push, times and Actions (an Entity action there means
-// each notification's own entities), and the Tap behavior. In a notification, a category's button follows the category: a
-// field left empty (or on Default) shows the category's value, and the
-// restore button in the header brings the whole button back to it. The
-// same button in a category brings a built-in button back to its defaults.
+// Settings: how and where it shows. Enabled, Show in push, the Navigation
+// (where it takes the user, on the device it was pressed on; the Tap's is
+// also what a tap on the push opens), the Snooze button's Snooze options
+// in the Dashboard, then the Label and Icon.
 //
-// In a notification, a button has a list of Actions in a fixed order (the
-// order they run in): the Entity action (a switch, always there), Mute
-// (added and deleted), the notification state (fixed on Done, Dismiss and
-// Snooze, which shows its times there; one can be added to the Tap and the
-// own buttons), any number
-// of Home Assistant actions (Home Assistant's own rows, in their own order),
-// and the Navigation last. The restore button beside Actions brings back
-// the default.
+// Actions: what it does. One card with the notification state it sets
+// (fixed on the built-in Done, Dismiss, Snooze and Mute buttons), Snooze
+// for, and in a notification the Run … actions switch (the actions of the
+// step's status block of that state). A custom button and the Tap also
+// have their own actions: the Entity action and the Home Assistant actions.
+// The Tap can instead run another button (Same as …).
 //
-// The Tap behavior is one block: Action (the same Actions list, with the
-// Navigation always in it) or Button action (runs another button). Set in
-// the category; a notification follows it, or has its own.
+// In a category it sets what the notifications inherit, key by key. In a
+// notification, a category's button follows the category: a field on
+// Default shows the category's value; the restore button beside a field
+// brings back that one, the one in the header the whole button.
 
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -31,17 +27,18 @@ import type {
   ButtonNavigation,
   ButtonState,
   CategoryButton,
+  EffectiveButton,
 } from "../../shared/config";
 import {
   DEFAULT_SNOOZE,
+  DEFAULT_SNOOZE_FOR,
   SNOOZE_CHOICES,
   buttonRef,
+  buttonState,
   categoryButtons,
-  snoozeChoices,
-  tapBehaviorOwn,
+  mergeButton,
 } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
-import { actionAddAvailable } from "../ha-elements";
 import { field, inheritField, loadPageName, pageName, restoreButton } from "../fields";
 
 /** The default label and icon of an interaction. */
@@ -59,39 +56,68 @@ export const INTERACTION_DEFAULTS: Record<
 
 // The notification states, in the order of their choice.
 const STATES: { value: ButtonState["type"]; label: string }[] = [
+  { value: "unchanged", label: "Unchanged" },
   { value: "done", label: "Done" },
   { value: "dismiss", label: "Dismiss" },
   { value: "snooze", label: "Snooze" },
+  { value: "mute", label: "Mute" },
 ];
 
+/** The status block of each state a button sets. */
+export const STATE_BLOCKS: Record<
+  Exclude<ButtonState["type"], "unchanged">,
+  { key: "done_when" | "dismiss_when" | "snooze_when" | "mute_when"; name: string; run: string }
+> = {
+  done: { key: "done_when", name: "Done when", run: "Run Done actions" },
+  dismiss: { key: "dismiss_when", name: "Dismiss when", run: "Run Dismiss actions" },
+  snooze: { key: "snooze_when", name: "Snooze when", run: "Run Snooze actions" },
+  mute: { key: "mute_when", name: "Mute when", run: "Run Mute actions" },
+};
+
+/** A status block of the step, as the Run … actions switch tells of it. */
+export interface BlockInfo {
+  // Snooze when and Mute when can be switched off.
+  enabled: boolean;
+  // Its actions: the entity action and the Home Assistant actions.
+  actions: number;
+}
+
+/** The result of the dialog: the button, and a status block to switch on. */
+export interface InteractionResult {
+  result?: Button | "delete";
+  enableBlock?: "snooze_when" | "mute_when";
+  // Open this status block's Actions after saving.
+  goTo?: "done_when" | "dismiss_when" | "snooze_when" | "mute_when";
+}
+
 // The icon and the line of a built-in button's own notification state.
-const OWN_STATE_ICONS: Record<ButtonState["type"], string> = {
+const OWN_STATE_ICONS: Partial<Record<ButtonState["type"], string>> = {
   done: "mdi:check",
   dismiss: "mdi:close",
   snooze: "mdi:alarm-snooze",
+  mute: "mdi:volume-off",
 };
-const OWN_STATE_TEXTS: Record<ButtonState["type"], string> = {
+const OWN_STATE_TEXTS: Partial<Record<ButtonState["type"], string>> = {
   done: "Closes the notification as done.",
   dismiss: "Closes the notification without marking it done.",
-  snooze: "",
+  snooze: "Hides the notification for a while.",
+  mute: "Stops the notification lights, speakers and sirens.",
 };
 
-// A built-in button's own notification state.
-const OWN_STATE: Partial<Record<Button["type"], ButtonState["type"]>> = {
-  done: "done",
-  dismiss: "dismiss",
-  snooze: "snooze",
-};
-
-// The Tap's actions when none are set: more info of the card's entity.
-const TAP_DEFAULT: ButtonActions = { navigation: { type: "more_info" } };
-
-// The snooze time a newly added Snooze notification state starts with.
-const DEFAULT_STATE_SNOOZE = "1h";
+// The sentinel of a Tap that runs its own actions (an empty run_button).
+const OWN_ACTIONS = "__own__";
 
 function haActionName(action: unknown): string | undefined {
   const item = action as { action?: string; service?: string } | undefined;
   return item?.action ?? item?.service;
+}
+
+function stateLabel(type: ButtonState["type"]): string {
+  return STATES.find((item) => item.value === type)?.label ?? type;
+}
+
+function snoozeLabel(key: string | null | undefined): string {
+  return SNOOZE_CHOICES.find((choice) => choice.key === key)?.label ?? key ?? "";
 }
 
 /** A button a Tap can run, with its navigation (what the push opens). */
@@ -101,20 +127,22 @@ export interface RunChoice {
   navigation?: ButtonNavigation;
 }
 
-/** The buttons a Tap can run (Button action): the switched on ones. */
+/** The buttons a Tap can run (Same as …): the switched on ones. */
 export function runChoicesOf(
-  buttons: Pick<CategoryButton, "id" | "type" | "enabled" | "label" | "actions">[],
+  buttons: Pick<CategoryButton, "id" | "type" | "enabled" | "label" | "navigation">[],
 ): RunChoice[] {
   return buttons
     .filter((button) => button.type !== "tap" && button.enabled)
     .map((button) => ({
       value: buttonRef(button),
       label: button.label || INTERACTION_DEFAULTS[button.type].label,
-      ...(button.actions?.navigation ? { navigation: button.actions.navigation } : {}),
+      ...(button.navigation && button.navigation.type !== "none"
+        ? { navigation: button.navigation }
+        : {}),
     }));
 }
 
-/** A Tap's Button action, in a few words (empty: its own actions). */
+/** A Tap's Same as …, in a few words (empty: its own actions). */
 export function runText(
   tap: Pick<Button, "type" | "run_button">,
   buttons: Pick<CategoryButton, "id" | "type" | "enabled" | "label">[],
@@ -123,7 +151,7 @@ export function runText(
   if (!ref) return "";
   const target = buttons.find((button) => button.type !== "tap" && buttonRef(button) === ref);
   const label = target ? target.label || INTERACTION_DEFAULTS[target.type].label : ref;
-  return `Button action: ${label}`;
+  return `Same as ${label}`;
 }
 
 /** The Android push shows only the first three buttons. */
@@ -140,42 +168,43 @@ export function pushButtonsWarning(
     : nothing;
 }
 
-/** What an interaction does, in a few words (the row's second line). */
-export function actionsText(
-  hass: HomeAssistant | undefined,
-  actions: ButtonActions | undefined,
-): string[] {
+/**
+ * What a button does, in a few words (the row's second line): the state a
+ * custom button or the Tap sets, its own actions and its navigation.
+ */
+export function buttonText(hass: HomeAssistant | undefined, button: EffectiveButton): string[] {
   const parts: string[] = [];
-  if (!actions) return parts;
-  if (actions.entity_action) parts.push("Entity action");
-  if (actions.mute) parts.push("Mute");
-  const state = actions.notification_state;
-  if (state) {
-    const label = STATES.find((item) => item.value === state.type)?.label ?? state.type;
-    const time = state.type === "snooze"
-      ? SNOOZE_CHOICES.find((choice) => choice.key === state.snooze)?.text
-      : undefined;
-    parts.push(time ? `${label} ${time}` : label);
+  const actions = button.actions;
+  if (button.type === "custom" || button.type === "tap") {
+    const type = buttonState(button);
+    if (type === "snooze") parts.push(`Snooze ${snoozeLabel(button.snooze_for).toLowerCase()}`);
+    else if (type !== "unchanged") parts.push(stateLabel(type));
   }
+  if (actions.entity_action) parts.push("Entity action");
   const list = actions.ha_actions ?? [];
   if (list.length) {
     const name = haActionName(list[0]);
     const more = list.length > 1 ? ` +${list.length - 1}` : "";
     parts.push(name ? `Action: ${name}${more}` : `Action${more}`);
   }
-  const navigation = actions.navigation;
+  parts.push(...navigationText(hass, button.navigation));
+  return parts;
+}
+
+function navigationText(
+  hass: HomeAssistant | undefined,
+  navigation: ButtonNavigation | null | undefined,
+): string[] {
   if (navigation?.type === "more_info") {
     const entityId = navigation.entity_id;
     const name = entityId ? hass?.states[entityId]?.attributes.friendly_name : undefined;
-    parts.push(
-      entityId ? `More info: ${typeof name === "string" ? name : entityId}` : "More info",
-    );
-  } else if (navigation?.type === "navigate") {
-    parts.push(navigation.path ? `Navigate: ${navigation.path}` : "Navigate");
-  } else if (navigation?.type === "notification_info") {
-    parts.push("Notification info");
+    return [entityId ? `More info: ${typeof name === "string" ? name : entityId}` : "More info"];
   }
-  return parts;
+  if (navigation?.type === "navigate") {
+    return [navigation.path ? `Navigate: ${navigation.path}` : "Navigate"];
+  }
+  if (navigation?.type === "notification_info") return ["Notification info"];
+  return [];
 }
 
 @customElement("nc-interaction-dialog")
@@ -197,55 +226,71 @@ export class NcInteractionDialog extends LitElement {
   // Some entity (or entity group) has an action for this button.
   @property({ type: Boolean, attribute: false }) public entityActionSet = false;
 
-  // The Tap: the buttons it can run (Button action), by their key.
+  // The Tap: the buttons it can run (Same as …), by their key.
   @property({ attribute: false }) public runChoices: RunChoice[] = [];
 
-  // The Tap: the page the push opens set under General, Push (empty: the
-  // Overview).
+  // In a notification: the step's status blocks, by the state they are of.
+  @property({ attribute: false }) public blocks?: Partial<
+    Record<Exclude<ButtonState["type"], "unchanged">, BlockInfo>
+  >;
+
+  // The page a tap on the push opens when the Tap does not navigate (set
+  // under General, Push; empty: the Overview).
   @property({ attribute: false }) public generalOpenOnTap?: string | null;
 
   @state() private _button?: Button;
 
   @state() private _open = true;
 
+  @state() private _tab: "settings" | "actions" = "settings";
+
+  // The Run … actions switch was switched on while its block was off.
+  @state() private _enableBlock?: "snooze_when" | "mute_when";
+
   private _result?: Button | "delete";
 
+  private _goTo?: InteractionResult["goTo"];
+
   protected override willUpdate(): void {
-    if (!this._button && this.button)
-      this._button = structuredClone(this.button);
+    if (!this._button && this.button) this._button = structuredClone(this.button);
   }
 
   private _set(changes: Partial<Button>): void {
-    this._button = { ...this._button!, ...changes };
-  }
-
-  // Change the button's actions; a left out (undefined) action goes. On the
-  // Tap it makes the Tap behavior Action, the notification's own.
-  private _setActions(changes: Partial<ButtonActions>): void {
-    const actions: ButtonActions = { ...this._actionsOf(this._button!), ...changes };
-    for (const key of Object.keys(actions) as (keyof ButtonActions)[]) {
-      if (actions[key] === undefined) delete actions[key];
+    const copy = { ...this._button!, ...changes } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === undefined) delete copy[key];
     }
-    const copy = { ...this._button!, actions };
-    if (copy.type === "tap") delete copy.run_button;
-    this._button = copy;
+    this._button = copy as unknown as Button;
   }
 
-  // The actions the button has now: its own, else what it inherits. The
-  // Tap's always have a Navigation.
-  private _actionsOf(button: Button): ButtonActions {
-    if (button.type !== "tap") {
-      return button.actions ?? (this.mode === "step" ? this.inherited?.actions : undefined) ?? {};
+  // Change one key of the button's own actions; undefined follows the
+  // category again (in a category, or on a button of its own: off).
+  private _setAction<K extends keyof ButtonActions>(key: K, value: ButtonActions[K] | undefined) {
+    const actions: ButtonActions = { ...(this._button!.actions ?? {}) };
+    if (value === undefined) delete actions[key];
+    else actions[key] = value;
+    this._set({ actions: Object.keys(actions).length ? actions : undefined });
+  }
+
+  // Whether a key follows something: in a notification the category's
+  // button. In a category, or on a notification's own button, a key left
+  // out is simply off.
+  private get _inherits(): boolean {
+    return this.mode === "step" && !!this.inherited;
+  }
+
+  // The button as it works now.
+  private _effective(button: Button): EffectiveButton {
+    if (this.mode === "category") {
+      return mergeButton({ ...(button as CategoryButton), enabled: button.enabled ?? true }, {}, true);
     }
-    const own = this.mode === "category" || tapBehaviorOwn(button);
-    const actions = (own ? button.actions : this.inherited?.actions) ?? TAP_DEFAULT;
-    return actions.navigation ? actions : { ...actions, ...TAP_DEFAULT };
-  }
-
-  // The button the Tap runs (empty: its actions).
-  private _runOf(button: Button): string {
-    const own = this.mode === "category" || tapBehaviorOwn(button);
-    return (own ? button.run_button : this.inherited?.run_button) || "";
+    const base: CategoryButton = this.inherited ?? {
+      id: button.id,
+      type: button.type,
+      enabled: true,
+      show_in_push: true,
+    };
+    return mergeButton(base, button, !!this.inherited);
   }
 
   // What the button follows: in a notification the category's button, in
@@ -257,31 +302,29 @@ export class NcInteractionDialog extends LitElement {
     return categoryButtons(undefined).find((item) => item.type === type);
   }
 
-  // Whether the button has anything of its own the header's restore
-  // button would bring back.
+  // Whether the header's restore button would bring anything back.
   private _hasOwn(button: Button): boolean {
     const base = this._base;
     if (!base) return false;
-    const step = this.mode === "step";
-    if (button.enabled !== undefined && (step || button.enabled !== base.enabled)) return true;
-    if (button.label || button.icon) return true;
+    if (this.mode === "step") {
+      return Object.keys(button).some(
+        (key) => key !== "id" && key !== "type" && (button as unknown as Record<string, unknown>)[key] !== undefined,
+      );
+    }
+    if (button.enabled !== undefined && button.enabled !== base.enabled) return true;
+    if (button.label || button.icon || button.snooze_for || button.navigation) return true;
+    if (button.run_button !== undefined && button.run_button !== null) return true;
+    if (button.actions && Object.keys(button.actions).length) return true;
     if (button.type === "snooze" && button.snooze?.length) {
-      if (step || button.snooze.join() !== DEFAULT_SNOOZE.join()) return true;
+      if (button.snooze.join() !== DEFAULT_SNOOZE.join()) return true;
     }
-    if (button.type === "tap") {
-      if (button.open_on_tap) return true;
-      return step ? tapBehaviorOwn(button) : !!button.run_button || !!button.actions;
-    }
-    if (step) {
-      if (button.show_in_push !== undefined && button.show_in_push !== null) return true;
-      return this._actionsChanged(button);
-    }
-    return button.show_in_push === false || this._actionsChanged(button);
+    return button.show_in_push === false;
   }
 
   // The header's restore button: the whole button as its base again.
   private _resetAll(): void {
     const button = this._button!;
+    this._enableBlock = undefined;
     this._button = (
       this.mode === "step"
         ? { id: button.id, type: button.type }
@@ -297,9 +340,7 @@ export class NcInteractionDialog extends LitElement {
     const category = this.mode === "category";
     const inherited = this.inherited;
     const title =
-      button.type === "tap"
-        ? defaults.label
-        : button.label || inherited?.label || defaults.label;
+      button.type === "tap" ? defaults.label : button.label || inherited?.label || defaults.label;
     return html`<ha-dialog
       .open=${this._open}
       width="medium"
@@ -323,28 +364,24 @@ export class NcInteractionDialog extends LitElement {
             <ha-icon icon="mdi:delete"></ha-icon>
           </ha-icon-button>`
         : nothing}
+      <ha-tab-group
+        @wa-tab-show=${(ev: CustomEvent<{ name: string }>) => {
+          ev.stopPropagation();
+          this._tab = ev.detail.name === "actions" ? "actions" : "settings";
+        }}
+      >
+        <ha-tab-group-tab slot="nav" panel="settings" .active=${this._tab === "settings"}>
+          Settings
+        </ha-tab-group-tab>
+        <ha-tab-group-tab slot="nav" panel="actions" .active=${this._tab === "actions"}>
+          Actions
+        </ha-tab-group-tab>
+      </ha-tab-group>
       <div class="form">
-        ${this.isNew ? nothing : this._enabledRow(button)}
-        ${button.type === "tap"
-          ? nothing
-          : html`<div class="row">
-              ${this._labelField(button)} ${this._iconField(button)}
-            </div>`}
-        ${button.type === "tap"
-          ? nothing
-          : inherited
-            ? this._renderPushChoice(button, inherited)
-            : this._renderPush(button)}
-        ${button.type === "tap"
-          ? html`${this._tapBehavior(button)} ${this._renderTapPush(button)}`
-          : this._renderActions(button)}
+        ${this._tab === "settings" ? this._renderSettings(button) : this._renderActions(button)}
       </div>
       <ha-dialog-footer slot="footer">
-        <ha-button
-          slot="secondaryAction"
-          appearance="plain"
-          @click=${() => this._close()}
-        >
+        <ha-button slot="secondaryAction" appearance="plain" @click=${() => this._close()}>
           Cancel
         </ha-button>
         <ha-button
@@ -352,401 +389,240 @@ export class NcInteractionDialog extends LitElement {
           .disabled=${button.type === "custom" && !this.inherited && !button.label?.trim()}
           @click=${() => this._close(this._button)}
         >
-          ${this.isNew ? "Add" : "Update"}
+          ${this.isNew ? "Add" : "Save"}
         </ha-button>
       </ha-dialog-footer>
     </ha-dialog>`;
   }
 
-  // Changed from the category's (or the built-in) default.
-  private _actionsChanged(button: Button): boolean {
-    if (button.actions === undefined) return false;
-    if (this.mode === "category") return !!this._base && Object.keys(button.actions).length > 0;
-    return !!this.inherited;
+  // -- Settings -----------------------------------------------------------------
+
+  private _renderSettings(button: Button) {
+    const tap = button.type === "tap";
+    return html`<ha-card outlined class="settings">
+        ${this.isNew ? nothing : this._enabledRow(button)}
+        ${tap ? nothing : this._pushRow(button)} ${this._navigationRow(button)}
+      </ha-card>
+      ${button.type === "snooze" ? this._snoozeOptions(button) : nothing}
+      ${tap
+        ? nothing
+        : html`<div class="divider"></div>
+            <div class="row">${this._labelField(button)} ${this._iconField(button)}</div>`}`;
   }
 
-  private _resetActions(): void {
-    const copy = { ...this._button! } as Partial<Button>;
-    delete copy.actions;
-    delete copy.run_button;
-    this._button = copy as Button;
+  // A row of a settings card: its title (and a line under it) at the
+  // start, its control at the end.
+  private _row(title: string, secondary: unknown, control: unknown, below?: unknown) {
+    return html`<div class="setting">
+      <div class="setting-head">
+        <div class="setting-text">
+          <div>${title}</div>
+          ${secondary ? html`<div class="secondary">${secondary}</div>` : nothing}
+        </div>
+        ${control}
+      </div>
+      ${below ? html`<div class="setting-below">${below}</div>` : nothing}
+    </div>`;
   }
 
-  // The switch that turns the button on, as the switch of its row. In a
-  // notification a value set here is its own, also when it equals the
+  private _switch(label: string, on: boolean, changed: (on: boolean) => void, disabled = false) {
+    return html`<ha-switch
+      .checked=${on}
+      .disabled=${disabled}
+      .label=${label}
+      @change=${(ev: Event) => changed((ev.target as HTMLInputElement).checked)}
+    ></ha-switch>`;
+  }
+
+  // In a notification a value set here is its own, also when it equals the
   // category's; the header's restore button brings the category's back.
   private _enabledRow(button: Button) {
     const base = this.mode === "step" ? this.inherited : undefined;
     const on = button.enabled ?? base?.enabled ?? true;
-    return html`<ha-card outlined class="own-row">
-      <div class="own-text">Enabled</div>
-      <ha-switch
-        .checked=${on}
-        .label=${"Enabled"}
-        @change=${(ev: Event) => {
-          const checked = (ev.target as HTMLInputElement).checked;
-          this._button = { ...this._button!, enabled: checked };
-        }}
-      ></ha-switch>
-    </ha-card>`;
-  }
-
-  // The Tap behavior, one block: Action (its actions) or Button action
-  // (another button's). In a notification, left out follows the category;
-  // any change makes the whole block the notification's own.
-  private _tapBehavior(button: Button) {
-    const hass = this.hass!;
-    const run = this._runOf(button);
-    const choices = this.runChoices;
-    const setRun = (value: string) => {
-      const copy = { ...this._button! };
-      if (value) {
-        copy.run_button = value;
-        delete copy.actions;
-      } else {
-        copy.actions = this._actionsOf(copy);
-        delete copy.run_button;
-      }
-      this._button = copy;
-    };
-    return html`<div class="section-head">
-        <span class="title">Tap behavior</span>
-      </div>
-      <div class="row">
-        ${field(
-          hass,
-          {
-            select: {
-              mode: "dropdown",
-              // Button action only with a switched on button to run.
-              options: [
-                { value: "action", label: "Action" },
-                ...(choices.length || run ? [{ value: "button", label: "Button action" }] : []),
-              ],
-            },
-          },
-          run ? "button" : "action",
-          "Type",
-          (value) => {
-            if (value === "button") {
-              if (!run) setRun(choices[0]?.value ?? "");
-            } else if (value === "action" && run) setRun("");
-          },
-        )}
-        ${run
-          ? field(
-              hass,
-              {
-                select: {
-                  mode: "dropdown",
-                  options: choices.some((choice) => choice.value === run)
-                    ? choices
-                    : [...choices, { value: run, label: `${run} (not switched on)` }],
-                },
-              },
-              run,
-              "Button",
-              (value) => {
-                if (value) setRun(value as string);
-              },
-            )
-          : nothing}
-      </div>
-      ${run && !choices.some((choice) => choice.value === run)
-        ? html`<ha-alert alert-type="warning">
-            The button it runs is switched off, so a tap does not run it. Switch it on, or choose
-            another button or Action.
-          </ha-alert>`
-        : nothing}
-      ${run ? nothing : this._actionList(button)}`;
-  }
-
-  // A button's Actions, with the restore button beside them.
-  private _renderActions(button: Button) {
-    return html`<div class="divider"></div>
-      <div class="section-head">
-        <span class="title">Actions</span>
-        ${this._actionsChanged(button)
-          ? restoreButton("Restore the default actions", () => this._resetActions())
-          : nothing}
-      </div>
-      ${this._actionList(button)}`;
-  }
-
-  // The Actions list, in its run order (Entity action, Mute, notification
-  // state, Home Assistant actions, navigation), and the buttons that add to it.
-  private _actionList(button: Button) {
-    const actions = this._actionsOf(button);
-    const own = OWN_STATE[button.type];
-    // The built-in Mute button has Mute as its own fixed row, and no
-    // notification state.
-    const muteButton = button.type === "mute";
-    const list = actions.ha_actions ?? [];
-    const tap = button.type === "tap";
-    // Home Assistant's own Add action button is used where ours cannot open
-    // its dialog.
-    const addAction = actionAddAvailable();
-    return html`<div class="actions">
-        ${this._switchRow(
-          "mdi:format-list-checks",
-          "Entity action",
-          this.mode === "category"
-            ? "Each notification sets the action of its entities in its Entities block."
-            : "Set the action for each entity in the Entities block.",
-          !!actions.entity_action,
-          (on) => this._setActions({ entity_action: on || undefined }),
-        )}
-        ${muteButton
-          ? html`<ha-card outlined class="own-row">
-              <ha-icon class="builtin" icon="mdi:volume-off"></ha-icon>
-              <div class="own-text">
-                <div>Mute</div>
-                <div class="secondary">Stops the notification lights, speakers and sirens.</div>
-              </div>
-              <ha-switch .checked=${true} disabled .label=${"Mute"}></ha-switch>
-            </ha-card>`
-          : actions.mute
-          ? html`<ha-card outlined class="own-row">
-              <ha-icon class="builtin" icon="mdi:volume-off"></ha-icon>
-              <div class="own-text">
-                <div>Mute</div>
-                <div class="secondary">Stops the notification lights, speakers and sirens.</div>
-              </div>
-              <ha-icon-button
-                class="end"
-                .label=${"Delete"}
-                @click=${() => this._setActions({ mute: undefined })}
-              >
-                <ha-icon icon="mdi:delete"></ha-icon>
-              </ha-icon-button>
-            </ha-card>`
-          : nothing}
-        ${own || actions.notification_state ? this._stateCard(button, actions) : nothing}
-        <ha-automation-action
-          class="ha-actions"
-          ?hidden=${addAction && !list.length}
-          ?nc-hide-add=${addAction}
-          .hass=${this.hass}
-          .narrow=${this.narrow}
-          .actions=${list}
-          @value-changed=${(ev: CustomEvent<{ value: unknown[] }>) => {
-            ev.stopPropagation();
-            this._setActions({
-              ha_actions: ev.detail.value.length ? ev.detail.value : undefined,
-            });
-          }}
-        ></ha-automation-action>
-        ${actions.navigation
-          ? this._navigationCard(actions.navigation, !tap)
-          : nothing}
-      </div>
-      <div class="add">
-        ${own || muteButton || actions.notification_state
-          ? nothing
-          : this._addButton("Add notification state", () =>
-              this._setActions({ notification_state: { type: "done" } }),
-            )}
-        ${actions.mute || muteButton
-          ? nothing
-          : this._addButton("Add mute", () => this._setActions({ mute: true }))}
-        ${addAction ? this._addButton("Add action", () => this._addHaAction()) : nothing}
-        ${actions.navigation
-          ? nothing
-          : this._addButton("Add navigation", () =>
-              this._setActions({ navigation: { type: "navigate", path: "" } }),
-            )}
-      </div>`;
-  }
-
-  private _addButton(label: string, add: () => void) {
-    return html`<ha-button appearance="filled" size="s" @click=${add}>
-      <ha-icon slot="start" icon="mdi:plus"></ha-icon>
-      ${label}
-    </ha-button>`;
-  }
-
-  // Home Assistant's Add action dialog of the action list.
-  private _addHaAction(): void {
-    const list = this.renderRoot.querySelector("ha-automation-action.ha-actions") as
-      | (HTMLElement & { _addActionDialog?: () => void })
-      | null;
-    list?._addActionDialog?.();
-  }
-
-  // A built-in row with a switch at its end, as the step editor's
-  // Conditions and Done rows.
-  private _switchRow(
-    icon: string,
-    title: string,
-    text: string,
-    on: boolean,
-    changed: (on: boolean) => void,
-  ) {
-    return html`<ha-card outlined class="own-row">
-      <ha-icon class="builtin ${on ? "" : "off"}" .icon=${icon}></ha-icon>
-      <div class="own-text">
-        <div>${title}</div>
-        <div class="secondary">${text}</div>
-      </div>
-      <ha-switch
-        .checked=${on}
-        .label=${title}
-        @change=${(ev: Event) => changed((ev.target as HTMLInputElement).checked)}
-      ></ha-switch>
-    </ha-card>`;
-  }
-
-  // A built-in card that is always open; one that can go has a delete
-  // button in its title row.
-  private _fixedCard(icon: string, title: string, content: unknown, remove?: () => void) {
-    return html`<ha-card outlined class="fixed-card">
-      <div class="fixed-head">
-        <ha-icon class="builtin" .icon=${icon}></ha-icon>
-        <div class="fixed-title">${title}</div>
-        ${remove
-          ? html`<ha-icon-button .label=${"Delete"} @click=${remove}>
-              <ha-icon icon="mdi:delete"></ha-icon>
-            </ha-icon-button>`
-          : nothing}
-      </div>
-      <div class="fixed-content">${content}</div>
-    </ha-card>`;
-  }
-
-  // A built-in button's own state cannot be removed or changed (Snooze
-  // chooses its times here); an added one is one of Done, Dismiss and
-  // Snooze, with how long a Snooze lasts.
-  private _stateCard(button: Button, actions: ButtonActions) {
-    const own = OWN_STATE[button.type];
-    const hass = this.hass!;
-    if (own) {
-      // Titled by its type, with a switch that is always on, as the Entity
-      // action row; Snooze has its times under the title.
-      const state = STATES.find((item) => item.value === own)!;
-      return html`<ha-card outlined class="own-row ${own === "snooze" ? "tall" : ""}">
-        <ha-icon class="builtin" .icon=${OWN_STATE_ICONS[own]}></ha-icon>
-        <div class="own-text">
-          <div>${state.label}</div>
-          ${own === "snooze"
-            ? html`<div class="own-content">${this._renderSnooze(button)}</div>`
-            : html`<div class="secondary">${OWN_STATE_TEXTS[own]}</div>`}
-        </div>
-        <ha-switch .checked=${true} disabled .label=${state.label}></ha-switch>
-      </ha-card>`;
-    }
-    const state = actions.notification_state ?? { type: "done" };
-    return this._fixedCard(
-      "mdi:list-status",
-      "Notification state",
-      html`<div class="row">
-        ${field(
-          hass,
-          {
-            select: {
-              mode: "dropdown",
-              options: STATES.map(({ value, label }) => ({ value, label })),
-            },
-          },
-          state.type,
-          "State",
-          (value) => {
-            const type = (value as ButtonState["type"]) || "done";
-            this._setActions({
-              notification_state:
-                type === "snooze"
-                  ? { type, snooze: state.snooze ?? DEFAULT_STATE_SNOOZE }
-                  : { type },
-            });
-          },
-        )}
-        ${state.type === "snooze"
-          ? field(
-              hass,
-              {
-                select: {
-                  mode: "dropdown",
-                  options: SNOOZE_CHOICES.map((choice) => ({
-                    value: choice.key,
-                    label: choice.label,
-                  })),
-                },
-              },
-              state.snooze ?? DEFAULT_STATE_SNOOZE,
-              "Snooze for",
-              (value) =>
-                this._setActions({
-                  notification_state: {
-                    type: "snooze",
-                    snooze: (value as string) || DEFAULT_STATE_SNOOZE,
-                  },
-                }),
-            )
-          : nothing}
-      </div>`,
-      () => this._setActions({ notification_state: undefined }),
+    return this._row(
+      "Enabled",
+      "",
+      this._switch("Enabled", on, (checked) => this._set({ enabled: checked })),
     );
   }
 
-  // Always last: Navigate or More info, where the button was pressed. The
-  // Tap's is always there.
-  private _navigationCard(navigation: ButtonNavigation, removable: boolean) {
+  private _pushRow(button: Button) {
+    const inherited = this._inherits ? this.inherited : undefined;
+    if (inherited) {
+      const own = button.show_in_push;
+      const base = inherited.show_in_push ?? true;
+      return this._row(
+        "Show in push",
+        "",
+        html`<div class="control">
+          ${inheritField(
+            this.hass,
+            [
+              { value: "on", label: "On" },
+              { value: "off", label: "Off" },
+            ],
+            own === undefined || own === null ? undefined : own ? "on" : "off",
+            base ? "On" : "Off",
+            "Push",
+            (value) => this._set({ show_in_push: value === undefined ? undefined : value === "on" }),
+          )}
+        </div>`,
+      );
+    }
+    return this._row(
+      "Show in push",
+      "",
+      this._switch("Show in push", button.show_in_push ?? true, (on) =>
+        this._set({ show_in_push: on }),
+      ),
+    );
+  }
+
+  // On or off; on, where to: More info, Navigate or Notification info. In a
+  // notification it follows the category until set here.
+  private _navigationRow(button: Button) {
     const hass = this.hass!;
-    const type = navigation.type;
-    return this._fixedCard(
-      "mdi:open-in-app",
-      "Navigation",
-      html`<div class="row">
-        ${field(
-          hass,
-          {
-            select: {
-              mode: "dropdown",
-              options: [
-                { value: "navigate", label: "Navigate" },
-                { value: "more_info", label: "More info" },
-                { value: "notification_info", label: "Notification info" },
-              ],
+    const effective = this._effective(button);
+    const navigation = effective.navigation;
+    const inherits = this._inherits;
+    const own = button.navigation !== undefined && button.navigation !== null;
+    const baseNavigation = inherits ? this.inherited?.navigation : undefined;
+    const baseOn = !!baseNavigation && baseNavigation.type !== "none";
+    const tap = button.type === "tap";
+    const about = tap
+      ? "Opens on a tap, on the device where it was tapped, and when the push notification is tapped"
+      : "Opens after the button, on the device where it was pressed";
+    const secondary =
+      inherits && !own
+        ? `Default (${navigationText(hass, baseNavigation?.type === "none" ? null : baseNavigation)[0] ?? "Off"})`
+        : about;
+    const setOn = (on: boolean) => {
+      if (on) this._set({ navigation: baseOn ? { ...baseNavigation! } : { type: "more_info" } });
+      else this._set({ navigation: baseOn ? { type: "none" } : undefined });
+    };
+    const setNavigation = (value: ButtonNavigation) => this._set({ navigation: value });
+    const control = html`<div class="end">
+      ${inherits && own
+        ? restoreButton("Restore the category's navigation", () => this._set({ navigation: undefined }))
+        : nothing}
+      ${this._switch("Navigation", !!navigation, setOn)}
+    </div>`;
+    const below = navigation
+      ? html`${field(
+            hass,
+            {
+              select: {
+                mode: "dropdown",
+                options: [
+                  { value: "more_info", label: "More info" },
+                  { value: "navigate", label: "Navigate" },
+                  { value: "notification_info", label: "Notification info" },
+                ],
+              },
             },
-          },
-          type,
-          "Type",
-          (value) => {
-            if (!value || value === type) return;
-            this._setActions({
-              navigation:
+            navigation.type,
+            "Open",
+            (value) => {
+              if (!value || value === navigation.type) return;
+              setNavigation(
                 value === "navigate"
                   ? { type: "navigate", path: "" }
                   : value === "notification_info"
                     ? { type: "notification_info" }
                     : { type: "more_info", entity_id: null },
-            });
-          },
+              );
+            },
+          )}
+          ${navigation.type === "more_info"
+            ? // As the Data's entity: empty is the card's own entity.
+              html`<ha-entity-picker
+                .hass=${hass}
+                .value=${navigation.entity_id ?? ""}
+                .placeholder=${"Active entity"}
+                @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+                  ev.stopPropagation();
+                  setNavigation({ type: "more_info", entity_id: ev.detail.value || null });
+                }}
+              ></ha-entity-picker>`
+            : navigation.type === "navigate"
+              ? field(hass, { navigation: {} }, navigation.path, "Page", (value) =>
+                  setNavigation({ type: "navigate", path: (value as string) ?? "" }),
+                )
+              : html`<div class="secondary">
+                  Opens the notification's Status dialog on the Overview.
+                </div>`}`
+      : tap
+        ? html`<div class="secondary">${this._pushPageText()}</div>`
+        : nothing;
+    return this._row("Navigation", secondary, control, below);
+  }
+
+  // Off, a tap on the push opens the page set under General, Push.
+  private _pushPageText(): string {
+    const path = this.generalOpenOnTap;
+    // A dashboard view is named by its title once it is read.
+    void loadPageName(this.hass, path).then((found) => {
+      if (found) this.requestUpdate();
+    });
+    const page = path ? pageName(this.hass, path) : "the Overview";
+    return `Off, a tap on the push notification opens ${page}.`;
+  }
+
+  // The built-in Snooze button: the times the dashboard offers besides
+  // Snooze for, only the ticked ones. With none ticked the button snoozes
+  // at once for its Snooze for, which a short line shows (it opens the
+  // Actions tab, where Snooze for is set).
+  private _snoozeOptions(button: Button) {
+    const base =
+      (this._inherits ? this.inherited?.snooze : undefined) ?? DEFAULT_SNOOZE;
+    const chosen = new Set(button.snooze ?? base);
+    const toggle = (key: string, on: boolean) => {
+      if (on) chosen.add(key);
+      else chosen.delete(key);
+      const snooze = SNOOZE_CHOICES.map((choice) => choice.key).filter((key) => chosen.has(key));
+      // In a category, the default times again are no own times; in a
+      // notification, times ticked here are its own, also when they equal
+      // the category's (the restore button brings the category's back).
+      const same = this.mode === "category" && snooze.join() === DEFAULT_SNOOZE.join();
+      this._set({ snooze: same ? undefined : snooze });
+    };
+    const own =
+      !!button.snooze &&
+      (this.mode === "step" ? this._inherits : button.snooze.join() !== DEFAULT_SNOOZE.join());
+    return html`<ha-card outlined class="snooze">
+      <div class="section-head">
+        <span class="title">Snooze options in the Dashboard</span>
+        ${own
+          ? restoreButton("Restore the snooze options", () => this._set({ snooze: undefined }))
+          : nothing}
+      </div>
+      <div class="times">
+        ${SNOOZE_CHOICES.map(
+          (choice) =>
+            html`<label class="time">
+              <ha-checkbox
+                .checked=${chosen.has(choice.key)}
+                @change=${(ev: Event) =>
+                  toggle(choice.key, (ev.target as HTMLInputElement).checked)}
+              ></ha-checkbox>
+              <span>${choice.label}</span>
+            </label>`,
         )}
-        ${navigation.type === "more_info"
-          ? // As the Data's entity: empty is the card's own entity.
-            html`<ha-entity-picker
-              .hass=${hass}
-              .value=${navigation.entity_id ?? ""}
-              .placeholder=${"Active entity"}
-              @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-                ev.stopPropagation();
-                this._setActions({
-                  navigation: { type: "more_info", entity_id: ev.detail.value || null },
-                });
-              }}
-            ></ha-entity-picker>`
-          : navigation.type === "navigate"
-            ? field(hass, { navigation: {} }, navigation.path, "Path", (value) =>
-                this._setActions({
-                  navigation: { type: "navigate", path: (value as string) ?? "" },
-                }),
-              )
-            : html`<div class="secondary">
-                Opens the notification's Status dialog on the Overview.
-              </div>`}
-      </div>`,
-      removable ? () => this._setActions({ navigation: undefined }) : undefined,
-    );
+      </div>
+      ${chosen.size ? nothing : this._snoozeForLine(button)}
+    </ha-card>`;
+  }
+
+  // Snooze for as its dropdown shows it ("Default (1 hour)"); a click opens
+  // the Actions tab, where it is set.
+  private _snoozeForLine(button: Button) {
+    const base = (this._inherits ? this.inherited?.snooze_for : undefined) || DEFAULT_SNOOZE_FOR;
+    const text = button.snooze_for ? snoozeLabel(button.snooze_for) : `Default (${snoozeLabel(base)})`;
+    return html`<div>
+      <ha-button appearance="plain" size="s" @click=${() => (this._tab = "actions")}>
+        ${text}
+      </ha-button>
+    </div>`;
   }
 
   // Required for a custom button defined here (in the category, or a
@@ -776,179 +652,222 @@ export class NcInteractionDialog extends LitElement {
     );
   }
 
-  private _renderSnooze(button: Button) {
-    const base = this.inherited?.snooze?.length
-      ? this.inherited.snooze
-      : DEFAULT_SNOOZE;
-    const chosen = button.snooze?.length ? button.snooze : base;
-    // A custom button's own times do not inherit.
-    const inherits = !!this.inherited || this.mode === "category";
-    const toggle = (key: string, on: boolean) => {
-      const keys = on ? [...chosen, key] : chosen.filter((k) => k !== key);
-      // At least one time.
-      if (!keys.length) return;
-      const snooze = SNOOZE_CHOICES.map((c) => c.key).filter((k) =>
-        keys.includes(k),
-      );
-      // In a category, the default times again are no own times; in a
-      // notification, times ticked here are its own, also when they equal
-      // the category's (the restore icon brings the category's back).
-      const step = this.mode === "step";
-      const same = inherits && !step && snooze.join() === [...base].join();
-      this._set({ snooze: same ? null : snooze });
-    };
-    const own =
-      inherits &&
-      !!button.snooze?.length &&
-      (this.mode === "step" || button.snooze.join() !== [...base].join());
-    return html`<div class="snooze">
-      <div class="section-head">
-        <span class="title">Times</span>
-        ${own ? restoreButton("Restore the default times", () => this._set({ snooze: null })) : nothing}
-      </div>
-      <div class="times">
-        ${SNOOZE_CHOICES.map(
-          (choice) =>
-            html`<label class="time">
-              <ha-checkbox
-                .checked=${chosen.includes(choice.key)}
-                .disabled=${chosen.length === 1 && chosen.includes(choice.key)}
-                @change=${(ev: Event) =>
-                  toggle(choice.key, (ev.target as HTMLInputElement).checked)}
-              ></ha-checkbox>
-              <span>${choice.label}</span>
-            </label>`,
-        )}
-      </div>
-    </div>`;
+  // -- Actions ------------------------------------------------------------------
+
+  private _renderActions(button: Button) {
+    const tap = button.type === "tap";
+    const run = tap ? this._effective(button).run_button : null;
+    const own = button.type === "custom" || tap;
+    return html`${tap ? this._tapRuns(button) : nothing}
+      ${run
+        ? nothing
+        : html`${this._stateCard(button)} ${own ? this._ownActions(button) : nothing}`}`;
   }
 
-  // Tap: the push part, at the bottom. A tap on the push always opens the
-  // app and does the same; with a Navigate (its own, or the run button's)
-  // the push opens that page, else the Open on tap page.
-  private _renderTapPush(button: Button) {
-    const navigation = this._tapNavigation(button);
-    return html`<div class="divider"></div>
-      <div class="section-head"><span class="title">Push notification</span></div>
-      <div class="secondary">Tapping the push notification opens the app and does the same.</div>
-      ${navigation?.type === "navigate"
-        ? html`<div class="secondary">
-            The push opens ${navigation.path || "the Navigate page"}
-            (${this._tapNavigationSource(button)}).
-          </div>`
-        : navigation?.type === "notification_info"
-          ? html`<div class="secondary">
-              The push opens the Overview with the notification's Status dialog
-              (${this._tapNavigationSource(button)}).
-            </div>`
-          : this._renderOpenOnTap(button, navigation?.type === "more_info")}`;
-  }
-
-  // The navigation a Tap does: its own actions', or the run button's.
-  private _tapNavigation(button: Button): ButtonNavigation | undefined {
-    const run = this._runOf(button);
-    if (run) return this.runChoices.find((choice) => choice.value === run)?.navigation;
-    return this._actionsOf(button).navigation;
-  }
-
-  // Where the Tap's Navigate comes from: "Navigate of Done", "Navigate".
-  private _tapNavigationSource(button: Button): string {
-    const run = this._runOf(button);
-    const label = run ? this.runChoices.find((choice) => choice.value === run)?.label : undefined;
-    const name =
-      this._tapNavigation(button)?.type === "notification_info" ? "Notification info" : "Navigate";
-    return label ? `${name} of ${label}` : name;
-  }
-
-  private _renderPush(button: Button) {
-    const on = button.show_in_push ?? true;
-    const times = button.type === "snooze" ? snoozeChoices(button) : [];
-    return html`<label class="switch-row">
-        <ha-switch
-          .checked=${on}
-          @change=${(ev: Event) => {
-            const checked = (ev.target as HTMLInputElement).checked;
-            this._set({ show_in_push: checked });
-          }}
-        ></ha-switch>
-        <span>
-          Show button in the push notification
-          ${times.length
-            ? html`<div class="secondary">
-                The push snoozes for ${times[0].label.toLowerCase()}.
-              </div>`
-            : nothing}
-        </span>
-      </label>`;
-  }
-
-  // Tap: the page the app opens when the push is tapped (More info opens
-  // on top of it).
-  private _renderOpenOnTap(button: Button, moreInfo: boolean) {
-    const path =
-      (this.mode === "step" ? this.inherited?.open_on_tap : undefined) || this.generalOpenOnTap;
-    // A dashboard view is named by its title once it is read.
-    void loadPageName(this.hass, path).then((found) => {
-      if (found) this.requestUpdate();
-    });
-    const base = pageName(this.hass, path);
-    const top = moreInfo ? " More info opens on top of it." : "";
-    return field(
-      this.hass,
-      { navigation: {} },
-      button.open_on_tap ?? "",
-      "Open on tap",
-      (value) => {
-        const copy = { ...this._button! };
-        if (value) copy.open_on_tap = String(value);
-        else delete copy.open_on_tap;
-        this._button = copy;
-      },
-      { helper: `Default: ${base}.${top}` },
-    );
-  }
-
-  // A category's button in a notification: Show in push follows the
-  // category unless chosen here.
-  private _renderPushChoice(button: Button, inherited: CategoryButton) {
-    const own = button.show_in_push;
-    const base = inherited.show_in_push ?? true;
-    const times = button.type === "snooze" ? snoozeChoices(button) : [];
+  // The Tap: its own actions, or the same as a switched on button.
+  private _tapRuns(button: Button) {
+    const choices = this.runChoices;
+    const own = button.run_button;
+    const value = own === undefined || own === null ? undefined : own || OWN_ACTIONS;
+    const base = this._inherits ? this.inherited?.run_button : undefined;
+    const label = (ref: string | null | undefined) =>
+      ref
+        ? `Same as ${choices.find((choice) => choice.value === ref)?.label ?? `${ref} (not switched on)`}`
+        : "Its own actions";
     const options = [
-      { value: "on", label: "On" },
-      { value: "off", label: "Off" },
+      { value: OWN_ACTIONS, label: "Its own actions" },
+      ...choices.map((choice) => ({ value: choice.value, label: `Same as ${choice.label}` })),
     ];
-    return html`${inheritField(
-        this.hass,
-        options,
-        own === undefined || own === null ? undefined : own ? "on" : "off",
-        base ? "On" : "Off",
-        "Show in push",
-        (value) => {
-          const copy = { ...this._button! };
-          if (value === undefined) delete copy.show_in_push;
-          else copy.show_in_push = value === "on";
-          this._button = copy;
-        },
-      )}
-      ${times.length
-        ? html`<div class="secondary">The push snoozes for ${times[0].label.toLowerCase()}.</div>`
+    const current = this._effective(button).run_button;
+    if (current && !choices.some((choice) => choice.value === current)) {
+      options.push({ value: current, label: label(current) });
+    }
+    const set = (next: string | undefined) =>
+      this._set({ run_button: next === undefined ? undefined : next === OWN_ACTIONS ? "" : next });
+    return html`${this._inherits
+        ? inheritField(this.hass, options, value, label(base), "Tap runs", set)
+        : field(
+            this.hass,
+            { select: { mode: "dropdown", options } },
+            current || OWN_ACTIONS,
+            "Tap runs",
+            (next) => set(next === OWN_ACTIONS ? undefined : String(next)),
+          )}
+      ${current && !choices.some((choice) => choice.value === current)
+        ? html`<ha-alert alert-type="warning">
+            The button it runs is switched off, so a tap does not run it. Switch it on, or choose
+            another button or its own actions.
+          </ha-alert>`
         : nothing}`;
   }
 
-  private _close(result?: Button | "delete"): void {
+  // The notification state, Snooze for and Run … actions, in one card.
+  private _stateCard(button: Button) {
+    const hass = this.hass!;
+    const effective = this._effective(button);
+    const type = buttonState(effective);
+    const builtin = button.type !== "custom" && button.type !== "tap";
+    const ownState = button.actions?.notification_state?.type;
+    const stateControl = this._inherits
+        ? html`<div class="control">
+            ${inheritField(
+              hass,
+              STATES.map(({ value, label }) => ({ value, label })),
+              ownState,
+              stateLabel(buttonState({ type: "custom", actions: this.inherited?.actions })),
+              "State",
+              (value) =>
+                this._setAction(
+                  "notification_state",
+                  value ? { type: value as ButtonState["type"] } : undefined,
+                ),
+            )}
+          </div>`
+        : html`<div class="control">
+            ${field(
+              hass,
+              { select: { mode: "dropdown", options: STATES } },
+              type,
+              "State",
+              (value) =>
+                this._setAction(
+                  "notification_state",
+                  !value || value === "unchanged" ? undefined : { type: value as ButtonState["type"] },
+                ),
+            )}
+          </div>`;
+    // A built-in button's own state, as before: titled by its type, with a
+    // switch that is always on.
+    const rows = [
+      builtin
+        ? html`<div class="setting">
+            <div class="setting-head">
+              <ha-icon class="builtin" .icon=${OWN_STATE_ICONS[type]}></ha-icon>
+              <div class="setting-text">
+                <div>${stateLabel(type)}</div>
+                <div class="secondary">${OWN_STATE_TEXTS[type]}</div>
+              </div>
+              <ha-switch .checked=${true} disabled .label=${stateLabel(type)}></ha-switch>
+            </div>
+          </div>`
+        : this._row("Notification state", "", stateControl),
+    ];
+    if (type === "snooze") rows.push(this._snoozeForRow(button));
+    if (this.mode === "step" && type !== "unchanged") rows.push(this._runRow(button, type));
+    return html`<ha-card outlined class="settings">${rows}</ha-card>`;
+  }
+
+  private _snoozeForRow(button: Button) {
+    const base = (this._inherits ? this.inherited?.snooze_for : undefined) || DEFAULT_SNOOZE_FOR;
+    return this._row(
+      "Snooze for",
+      "",
+      html`<div class="control">
+        ${inheritField(
+          this.hass,
+          SNOOZE_CHOICES.map((choice) => ({ value: choice.key, label: choice.label })),
+          button.snooze_for || undefined,
+          snoozeLabel(base),
+          "Snooze for",
+          (value) => this._set({ snooze_for: value }),
+        )}
+      </div>`,
+    );
+  }
+
+  // Run the actions of the step's status block of the state. Snooze when
+  // and Mute when can be off: then it shows off, and switching it on
+  // switches the block on too.
+  private _runRow(button: Button, type: Exclude<ButtonState["type"], "unchanged">) {
+    const block = STATE_BLOCKS[type];
+    const info = this.blocks?.[type];
+    const optional = block.key === "snooze_when" || block.key === "mute_when";
+    const blockOff = optional && !info?.enabled && this._enableBlock !== block.key;
+    const on = !blockOff && button.run_state_actions !== false;
+    return this._row(
+      block.run,
+      `Set in ${block.name}`,
+      this._switch(block.run, on, (checked) => {
+        if (checked && blockOff) this._enableBlock = block.key as "snooze_when" | "mute_when";
+        else if (!checked && this._enableBlock === block.key) this._enableBlock = undefined;
+        this._set({ run_state_actions: checked ? undefined : false });
+      }),
+      // As the Snooze for line of the Settings tab: it saves the button and
+      // opens the block's Actions.
+      on
+        ? html`<div>
+            <ha-button appearance="plain" size="s" @click=${() => this._close(this._button, block.key)}>
+              Open ${block.name}
+            </ha-button>
+          </div>`
+        : undefined,
+    );
+  }
+
+  // A custom button's or the Tap's own actions: the Entity action and the
+  // Home Assistant actions, each following the category until set here.
+  private _ownActions(button: Button) {
+    const effective = this._effective(button);
+    const actions = effective.actions;
+    const own = button.actions ?? {};
+    const inherits = this._inherits;
+    const title = button.type === "tap" ? "Tap actions" : "Button actions";
+    const list = actions.ha_actions ?? [];
+    return html`<div class="section-head">
+        <span class="title">${title}</span>
+        ${inherits && own.ha_actions !== undefined
+          ? restoreButton("Restore the category's actions", () =>
+              this._setAction("ha_actions", undefined),
+            )
+          : nothing}
+      </div>
+      <ha-card outlined class="settings">
+        ${this._row(
+          "Entity action",
+          this.mode === "category"
+            ? "Each notification sets the action of its entities in its Entities block."
+            : this.entityActionSet
+              ? "Set for the entities in the Entities block."
+              : "Set the action for each entity in the Entities block.",
+          html`<div class="end">
+            ${inherits && own.entity_action !== undefined
+              ? restoreButton("Restore the category's entity action", () =>
+                  this._setAction("entity_action", undefined),
+                )
+              : nothing}
+            ${this._switch("Entity action", !!actions.entity_action, (on) =>
+              this._setAction("entity_action", on || inherits ? on : undefined),
+            )}
+          </div>`,
+        )}
+      </ha-card>
+      <ha-automation-action
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .actions=${list}
+        @value-changed=${(ev: CustomEvent<{ value: unknown[] }>) => {
+          ev.stopPropagation();
+          const value = ev.detail.value;
+          this._setAction("ha_actions", value.length || inherits ? value : undefined);
+        }}
+      ></ha-automation-action>`;
+  }
+
+  private _close(result?: Button | "delete", goTo?: InteractionResult["goTo"]): void {
     this._result = result;
+    this._goTo = goTo;
     this._open = false;
   }
 
   private _closed(ev: Event): void {
     if (ev.target !== ev.currentTarget) return;
     ev.stopPropagation();
-    this.dispatchEvent(
-      new CustomEvent("interaction-closed", {
-        detail: { result: this._result },
-      }),
-    );
+    const detail: InteractionResult = { result: this._result };
+    if (this._result && this._result !== "delete" && this._goTo) detail.goTo = this._goTo;
+    if (this._result && this._result !== "delete" && this._enableBlock) {
+      detail.enableBlock = this._enableBlock;
+    }
+    this.dispatchEvent(new CustomEvent("interaction-closed", { detail }));
   }
 
   static override styles = css`
@@ -956,6 +875,10 @@ export class NcInteractionDialog extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 16px;
+    }
+    ha-tab-group {
+      display: block;
+      margin: -8px -24px 16px;
     }
     .row {
       display: flex;
@@ -968,23 +891,66 @@ export class NcInteractionDialog extends LitElement {
     .title {
       font-weight: var(--ha-font-weight-medium, 500);
     }
-    /* A switch at the start of its row, as in the editor's lists. */
-    .switch-row {
+    .secondary {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s, 12px);
+    }
+    /* A card of settings rows, a full-width line between them. */
+    ha-card.settings {
+      display: flex;
+      flex-direction: column;
+    }
+    .setting {
+      padding: 12px 16px;
+    }
+    .setting + .setting {
+      border-top: 1px solid var(--divider-color);
+    }
+    .setting-head {
       display: flex;
       align-items: center;
       gap: 16px;
-      cursor: pointer;
+      min-height: 40px;
     }
-    .switch-row .secondary,
-    .form > .secondary {
+    .setting-text {
+      flex: 1;
+      min-width: 0;
+    }
+    .setting-below {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .control {
+      flex: 0 1 220px;
+      min-width: 0;
+    }
+    .control > *,
+    ha-select.control {
+      display: block;
+      width: 100%;
+    }
+    .end {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    ha-icon.builtin {
+      flex: none;
+      color: var(--amber-color, #ffc107);
+    }
+    .end .restore {
       color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s, 12px);
+    }
+    ha-card.snooze {
+      padding: 12px 16px 16px;
     }
     .times {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 4px 16px;
-      margin-top: 8px;
+      margin: 8px 0;
     }
     .time {
       display: flex;
@@ -998,73 +964,6 @@ export class NcInteractionDialog extends LitElement {
       margin: -8px 0;
       color: var(--secondary-text-color);
     }
-    .divider {
-      height: 1px;
-      background-color: var(--divider-color);
-      margin: 0 -24px;
-    }
-    /* The Actions list: fixed rows like the step editor's built-in ones,
-       and Home Assistant's own action rows. */
-    .actions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .actions > [hidden] {
-      display: none;
-    }
-    ha-icon.builtin {
-      flex: none;
-      color: var(--amber-color, #ffc107);
-    }
-    /* Grey while the built-in row is not in use. */
-    ha-icon.builtin.off {
-      color: var(--disabled-text-color);
-    }
-    /* As the step editor's built-in Conditions and Done rows. */
-    .own-row {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 12px 16px;
-    }
-    .own-text {
-      flex: 1;
-      min-width: 0;
-    }
-    .own-row.tall {
-      align-items: flex-start;
-    }
-    .own-content {
-      margin-top: 12px;
-    }
-    /* A delete button at the end, as the switch of the other rows. */
-    .own-row ha-icon-button.end {
-      margin: -8px -8px -8px 0;
-      color: var(--secondary-text-color);
-    }
-    .own-text .secondary,
-    .fixed-content .secondary {
-      color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s, 12px);
-    }
-    .fixed-head {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      min-height: 48px;
-      padding: 0 8px 0 16px;
-    }
-    .fixed-title {
-      flex: 1;
-      font-weight: var(--ha-font-weight-medium, 500);
-    }
-    .fixed-head ha-icon-button {
-      color: var(--secondary-text-color);
-    }
-    .fixed-content {
-      padding: 0 16px 16px;
-    }
     .section-head {
       display: flex;
       align-items: center;
@@ -1072,15 +971,10 @@ export class NcInteractionDialog extends LitElement {
       gap: 8px;
       min-height: 32px;
     }
-    .fields {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .add {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+    .divider {
+      height: 1px;
+      background-color: var(--divider-color);
+      margin: 0 -24px;
     }
   `;
 }

@@ -10,7 +10,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 - Never read a file over ~400 lines in full. Find the spot with `grep -n` and read a
   line range. Large files: `engine.py`, `model.py`, `websocket_api.py`, `push.py`,
   `notification-editor.ts`, `step-editor.ts`, and the big test
-  files. Engine tests are split: `tests/test_engine*.py` (core, listed, causes, actions).
+  files. Engine tests are split: `tests/test_engine*.py` (core, listed, causes, actions, status).
 - `CHANGELOG.md`: read only the top section (`head -40`). `README.md` and `BACKLOG.md`:
   grep for the heading you need.
 - Use the file map below instead of exploring the tree.
@@ -21,14 +21,14 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 | --- | --- |
 | `__init__.py` | Setup and unload; wires store, engine, platforms, panel |
 | `const.py` | Constants and keys |
-| `model.py` | Config schema (voluptuous): sections at the `# ---` markers; buttons and category buttons (~520-920); `default_config` (~1106); reference checks (~1143); `async_validate_config` (~1449) |
+| `model.py` | Config schema (voluptuous): sections at the `# ---` markers; step status blocks and their actions (~620-710); buttons, category buttons and key-by-key inheritance (~710-1140); `default_config` (~1275); reference checks (~1312); `STATUS_BLOCKS` (~1546); `async_validate_config` (~1677) |
 | `normalize.py` | Editor form to stored form |
-| `store.py` | Storage of config and runtime state |
+| `store.py` | Storage of config and runtime state; the data migrations (`upgrade_*`) for storage and imports |
 | `engine.py` | `Engine`, the core (~175 to end): load, config changes, open/close/snooze, state changes, timers, saving |
 | `cards.py` | `Card`, `Overrides`, `StateWatch`, phases and card helpers |
 | `runner.py` | `StepRunner` (~151) and `NotificationRunner` (~486): triggers, conditions, listed trackers of a step |
 | `engine_queries.py` | `EngineQueries` mixin of `Engine`: own conditions, notification state, summary, snapshot, calendar events |
-| `engine_actions.py` | `EngineActions` mixin of `Engine`: trigger/select/close/snooze cards, buttons, button actions |
+| `engine_actions.py` | `EngineActions` mixin of `Engine`: trigger/select/close/snooze cards, buttons, button press, status actions (`queue_status_actions`) |
 | `schedule.py`, `scheduler.py` | When a scheduled step is due; running the schedule |
 | `channels.py` | Rules every channel follows before sending (modes, audience, timing) |
 | `devices.py` | `DeviceManager` (lights, speakers, sirens; tests of a channel) |

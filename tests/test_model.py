@@ -15,11 +15,13 @@ from custom_components.notification_center.model import (
     default_config,
     drop_inherited_values,
     effective_buttons,
+    snooze_options,
 )
 from custom_components.notification_center.store import (
     move_schedule_expires,
     rename_mute_and_pulse,
     upgrade_push_devices,
+    upgrade_status_actions,
     upgrade_tap_behavior,
 )
 
@@ -55,7 +57,25 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert notification["enabled"] is True
     step = notification["steps"][0]
     assert step["enabled"] is True
-    assert step["activation"] == {"type": "triggers", "triggers": []}
+    no_actions = {"entity_action": False, "ha_actions": []}
+    assert step["activation"] == {
+        "type": "triggers",
+        "triggers": [],
+        "actions": no_actions,
+    }
+    assert step["done_when"]["actions"] == no_actions
+    assert step["dismiss_when"]["actions"] == no_actions
+    assert step["snooze_when"] == {
+        "enabled": False,
+        "triggers": [],
+        "actions": no_actions,
+        "rerun_activation": False,
+    }
+    assert step["mute_when"] == {
+        "enabled": False,
+        "triggers": [],
+        "actions": no_actions,
+    }
     assert step["conditions"] == {
         "activate_only_while_met": True,
         "hide_while_not_met": True,
@@ -80,11 +100,20 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert "push_tap" not in done
     tap = next(button for button in buttons if button["type"] == "tap")
     assert "push_tap" not in tap
-    assert tap["actions"] == {"navigation": {"type": "more_info"}}
+    # The Tap does nothing until it is set.
+    assert tap["actions"] == {
+        "entity_action": False,
+        "notification_state": {"type": "unchanged"},
+        "ha_actions": [],
+    }
+    assert tap["navigation"] is None
+    assert tap["run_state_actions"] is True
     assert "show_in_push" not in tap
+    assert done["actions"] == {}
     snooze = next(button for button in buttons if button["type"] == "snooze")
     assert snooze["enabled"] is False
-    assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
+    assert snooze["snooze"] == ["3h", "tomorrow"]
+    assert snooze["snooze_for"] == "1h"
 
 
 async def test_builtin_buttons_keep_their_settings(hass: HomeAssistant) -> None:
@@ -305,13 +334,37 @@ def _with_category_tap(tap: dict[str, Any], **step: Any) -> dict[str, Any]:
     return config
 
 
-async def test_tap_behavior_follows_the_category(hass: HomeAssistant) -> None:
-    """A step's Tap without its own Tap behavior has the category's."""
-    actions = {"mute": True, "navigation": {"type": "navigate", "path": "/x"}}
-    config = await async_validate_config(hass, _with_category_tap({"actions": actions}))
+async def test_button_keys_follow_the_category(hass: HomeAssistant) -> None:
+    """Each key of a step's Tap or custom button is inherited on its own."""
+    actions = {"entity_action": True, "notification_state": {"type": "mute"}}
+    navigation = {"type": "navigate", "path": "/x"}
+    config = await async_validate_config(
+        hass,
+        _with_category_tap(
+            {"actions": actions, "navigation": navigation, "snooze_for": "3h"},
+            buttons=[{"type": "tap", "actions": {"entity_action": False}}],
+        ),
+    )
     tap = next(b for b in _effective(config) if b["type"] == "tap")
-    assert tap["actions"] == actions
+    assert tap["actions"] == {
+        "entity_action": False,
+        "notification_state": {"type": "mute"},
+        "ha_actions": [],
+    }
+    assert tap["navigation"] == navigation
+    assert tap["snooze_for"] == "3h"
     assert tap["run_button"] is None
+
+    # Navigation switched off in the step.
+    config = await async_validate_config(
+        hass,
+        _with_category_tap(
+            {"navigation": navigation},
+            buttons=[{"type": "tap", "navigation": {"type": "none"}}],
+        ),
+    )
+    tap = next(b for b in _effective(config) if b["type"] == "tap")
+    assert tap["navigation"] is None
 
     config = await async_validate_config(
         hass, _with_category_tap({"actions": actions, "run_button": "done"})
@@ -323,23 +376,24 @@ async def test_tap_behavior_follows_the_category(hass: HomeAssistant) -> None:
     assert tap["run_button"] == "done"
 
 
-async def test_tap_behavior_of_a_step_is_one_block(hass: HomeAssistant) -> None:
-    """A step's own actions or button replace the category's whole block."""
-    own = {"navigation": {"type": "more_info"}, "entity_action": True}
+async def test_step_tap_run_button(hass: HomeAssistant) -> None:
+    """A step's Tap can run its own actions instead of the category's button."""
+    own = {"entity_action": True}
     config = await async_validate_config(
         hass,
         _with_category_tap(
-            {"run_button": "done"}, buttons=[{"type": "tap", "actions": own}]
+            {"run_button": "done"},
+            buttons=[{"type": "tap", "run_button": "", "actions": own}],
         ),
     )
     tap = next(b for b in _effective(config) if b["type"] == "tap")
-    assert tap["actions"] == own
+    assert tap["actions"]["entity_action"] is True
     assert tap["run_button"] is None
 
     config = await async_validate_config(
         hass,
         _with_category_tap(
-            {"actions": {"mute": True}},
+            {"actions": {"ha_actions": [{"action": "light.turn_on"}]}},
             buttons=[{"type": "tap", "run_button": "dismiss", "actions": own}],
         ),
     )
@@ -351,7 +405,6 @@ async def test_tap_behavior_of_a_step_is_one_block(hass: HomeAssistant) -> None:
     assert "actions" not in step_tap
     tap = next(b for b in _effective(config) if b["type"] == "tap")
     assert tap["run_button"] == "dismiss"
-    assert tap["actions"] == {"navigation": {"type": "more_info"}}
 
 
 def test_upgrade_tap_behavior() -> None:
@@ -445,34 +498,53 @@ def test_move_schedule_expires() -> None:
     assert "dismiss_when" not in third
 
 
-async def test_button_actions_follow_the_category(hass: HomeAssistant) -> None:
-    """A category's button actions apply until the step sets its own."""
-    actions = {"mute": True, "entity_action": True}
-    config = _with_notification()
+async def test_builtin_buttons_have_no_own_actions(hass: HomeAssistant) -> None:
+    """Done, Dismiss, Snooze and Mute: their status block has the actions."""
+    actions = {"entity_action": True, "ha_actions": [{"action": "light.turn_on"}]}
+    config = _with_notification(buttons=[{"type": "done", "actions": actions}])
     config["categories"][0]["buttons"] = [
         {"type": "done", "enabled": True, "actions": actions}
     ]
-    validated = await async_validate_config(hass, config)
-    done = next(b for b in _effective(validated) if b["type"] == "done")
-    assert done["actions"] == actions
-
-    own = {"ha_actions": [{"action": "light.turn_on"}]}
-    config = _with_notification(buttons=[{"type": "done", "actions": own}])
-    config["categories"][0]["buttons"] = [
-        {"type": "done", "enabled": True, "actions": actions}
-    ]
-    validated = await async_validate_config(hass, config)
-    done = next(b for b in _effective(validated) if b["type"] == "done")
-    assert done["actions"] == own
-
-    # Empty actions of a category's button are not kept.
-    config = _with_notification()
-    config["categories"][0]["buttons"] = [{"type": "done", "actions": {}}]
     validated = await async_validate_config(hass, config)
     category_done = next(
         b for b in validated["categories"][0]["buttons"] if b["type"] == "done"
     )
     assert "actions" not in category_done
+    step_done = next(
+        b
+        for b in validated["notifications"][0]["steps"][0]["buttons"]
+        if b["type"] == "done"
+    )
+    assert "actions" not in step_done
+    done = next(b for b in _effective(validated) if b["type"] == "done")
+    assert done["actions"] == {}
+
+
+async def test_custom_button_actions_follow_the_category(
+    hass: HomeAssistant,
+) -> None:
+    """A category's custom button's actions apply until the step sets a key."""
+    config = _with_notification(
+        buttons=[{"id": "door", "type": "custom", "actions": {"ha_actions": []}}]
+    )
+    config["categories"][0]["buttons"] = [
+        {
+            "id": "door",
+            "type": "custom",
+            "label": "Open",
+            "actions": {
+                "entity_action": True,
+                "ha_actions": [{"action": "lock.unlock"}],
+            },
+        }
+    ]
+    validated = await async_validate_config(hass, config)
+    door = next(b for b in _effective(validated) if b["id"] == "door")
+    assert door["actions"] == {
+        "entity_action": True,
+        "notification_state": {"type": "unchanged"},
+        "ha_actions": [],
+    }
 
 
 async def test_step_values_equal_to_the_category_are_kept(
@@ -481,8 +553,9 @@ async def test_step_values_equal_to_the_category_are_kept(
     """A value chosen equal to the category's stays the step's own."""
     config = _with_notification(
         buttons=[
-            {"type": "done", "enabled": True, "actions": {}},
+            {"type": "done", "enabled": True},
             {"type": "snooze", "snooze": ["1h", "3h", "tomorrow"]},
+            {"type": "tap", "actions": {"ha_actions": []}},
         ]
     )
     validated = await async_validate_config(hass, config)
@@ -490,13 +563,42 @@ async def test_step_values_equal_to_the_category_are_kept(
         b["type"]: b for b in validated["notifications"][0]["steps"][0]["buttons"]
     }
     assert stored["done"]["enabled"] is True
-    assert stored["done"]["actions"] == {}
     assert stored["snooze"]["snooze"] == ["1h", "3h", "tomorrow"]
+    assert stored["tap"]["actions"] == {"ha_actions": []}
 
 
-async def test_old_step_values_equal_to_the_category_are_dropped(
+async def test_snooze_options_can_be_empty(hass: HomeAssistant) -> None:
+    """An empty list is kept: the Snooze button offers only its Snooze for."""
+    config = _with_notification(buttons=[{"type": "snooze", "snooze": []}])
+    config["categories"][0]["buttons"] = [{"type": "snooze", "snooze": []}]
+    validated = await async_validate_config(hass, config)
+    assert validated["categories"][0]["buttons"][3]["snooze"] == []
+    [snooze] = [b for b in _effective(validated) if b["type"] == "snooze"]
+    assert snooze["snooze"] == []
+    assert snooze_options(snooze) == ["1h"]
+
+
+async def test_run_state_actions_is_stored_only_when_off(
     hass: HomeAssistant,
 ) -> None:
+    config = _with_notification(
+        buttons=[
+            {"type": "done", "run_state_actions": False},
+            {"type": "dismiss", "run_state_actions": True},
+        ]
+    )
+    validated = await async_validate_config(hass, config)
+    stored = {
+        b["type"]: b for b in validated["notifications"][0]["steps"][0]["buttons"]
+    }
+    assert stored["done"]["run_state_actions"] is False
+    assert "run_state_actions" not in stored["dismiss"]
+    buttons = {b["type"]: b for b in _effective(validated)}
+    assert buttons["done"]["run_state_actions"] is False
+    assert buttons["dismiss"]["run_state_actions"] is True
+
+
+def test_old_step_values_equal_to_the_category_are_dropped() -> None:
     """Once, on old data: switches, times and empty actions follow again."""
     config = _with_notification(
         buttons=[
@@ -510,12 +612,16 @@ async def test_old_step_values_equal_to_the_category_are_dropped(
             {"type": "tap", "enabled": False, "actions": {}},
         ]
     )
-    validated = await async_validate_config(hass, config)
-    drop_inherited_values(validated)
-    stored = {
-        b["type"]: b for b in validated["notifications"][0]["steps"][0]["buttons"]
-    }
-    assert set(stored["done"]) == {"id", "type"}
+    config["categories"][0]["buttons"] = [
+        {"type": "tap", "enabled": False},
+        {"type": "done", "enabled": True},
+        {"type": "dismiss", "enabled": False},
+        {"type": "snooze", "enabled": False, "snooze": ["1h", "3h", "tomorrow"]},
+    ]
+    config["notifications"][0]["category"] = "general"
+    drop_inherited_values(config)
+    stored = {b["type"]: b for b in config["notifications"][0]["steps"][0]["buttons"]}
+    assert set(stored["done"]) == {"type"}
     # Differs from the category (Dismiss is off there): kept.
     assert stored["dismiss"]["enabled"] is True
     assert "actions" not in stored["dismiss"]
@@ -543,3 +649,135 @@ def test_upgrade_push_devices() -> None:
     )
     assert "notify" not in people[0]
     assert "push_devices" not in people[1]
+
+
+async def test_upgrade_status_actions(hass: HomeAssistant) -> None:
+    """Old button actions move to the status blocks; what runs stays the same."""
+    light = {"action": "light.turn_on"}
+    page = {"type": "navigate", "path": "/lovelace/home"}
+    config = default_config()
+    general = config["categories"][0]
+    quiet = {**copy.deepcopy(general), "id": "quiet", "name": "Quiet"}
+    general["buttons"] = [
+        {"type": "tap", "enabled": True},
+        {
+            "type": "done",
+            "enabled": True,
+            "actions": {"ha_actions": [light], "navigation": page},
+        },
+        {"type": "snooze", "snooze": ["3h", "tomorrow"]},
+        {
+            "id": "door",
+            "type": "custom",
+            "label": "Open",
+            "actions": {
+                "entity_action": True,
+                "notification_state": {"type": "snooze", "snooze": "2h"},
+            },
+        },
+    ]
+    quiet["buttons"] = [{"type": "tap", "enabled": False}]
+    config["categories"].append(quiet)
+    config["notifications"] = [
+        {
+            "id": "n1",
+            "name": "One",
+            "category": "general",
+            "steps": [
+                {
+                    "id": "s1",
+                    "message": "Hello",
+                    "buttons": [
+                        {"id": "b-done", "type": "done"},
+                        {
+                            "id": "b-mute",
+                            "type": "mute",
+                            "actions": {"entity_action": True},
+                        },
+                        {"id": "door", "type": "custom", "actions": {"mute": True}},
+                        {
+                            "id": "x",
+                            "type": "custom",
+                            "label": "X",
+                            "actions": {
+                                "mute": True,
+                                "notification_state": {"type": "done"},
+                            },
+                        },
+                        {
+                            "id": "b-tap",
+                            "type": "tap",
+                            "open_on_tap": "/p",
+                            "actions": {"navigation": {"type": "more_info"}},
+                        },
+                        {"id": "b-snooze", "type": "snooze", "snooze": ["30m", "1h"]},
+                    ],
+                }
+            ],
+        },
+        {
+            "id": "n2",
+            "name": "Two",
+            "category": "quiet",
+            "steps": [
+                {
+                    "message": "Hi",
+                    "buttons": [{"id": "t2", "type": "tap", "enabled": True}],
+                }
+            ],
+        },
+    ]
+    upgrade_status_actions(config)
+
+    buttons = {b.get("id", b["type"]): b for b in general["buttons"]}
+    assert buttons["tap"]["navigation"] == {"type": "more_info"}
+    assert "actions" not in buttons["done"]
+    assert buttons["done"]["navigation"] == page
+    assert buttons["snooze"]["snooze_for"] == "3h"
+    # The first time is Snooze for; the others stay on the dashboard.
+    assert buttons["snooze"]["snooze"] == ["tomorrow"]
+    assert buttons["door"]["actions"] == {
+        "entity_action": True,
+        "notification_state": {"type": "snooze"},
+    }
+    assert buttons["door"]["snooze_for"] == "2h"
+    assert "navigation" not in quiet["buttons"][0]
+
+    step = config["notifications"][0]["steps"][0]
+    own = {b["id"]: b for b in step["buttons"]}
+    assert step["done_when"]["actions"] == {
+        "entity_action": False,
+        "ha_actions": [light],
+    }
+    assert step["mute_when"] == {
+        "actions": {"entity_action": True, "ha_actions": []},
+        "enabled": True,
+    }
+    assert "snooze_when" not in step
+    assert "actions" not in own["b-mute"]
+    assert own["door"]["actions"] == {
+        "notification_state": {"type": "mute"},
+        "entity_action": False,
+    }
+    assert own["x"]["actions"] == {"notification_state": {"type": "done"}}
+    assert own["b-tap"] == {
+        "id": "b-tap",
+        "type": "tap",
+        "actions": {},
+        "navigation": {"type": "more_info"},
+    }
+    assert own["b-snooze"]["snooze_for"] == "30m"
+    assert own["b-snooze"]["snooze"] == ["1h"]
+    other = config["notifications"][1]["steps"][0]["buttons"][0]
+    assert other["navigation"] == {"type": "more_info"}
+
+    validated = await async_validate_config(hass, config)
+    effective = {
+        b["id"]: b
+        for b in effective_buttons(
+            validated["categories"][0], validated["notifications"][0]["steps"][0]
+        )
+    }
+    assert effective["b-done"]["navigation"] == page
+    assert effective["door"]["actions"]["notification_state"] == {"type": "mute"}
+    assert effective["b-tap"]["navigation"] == {"type": "more_info"}

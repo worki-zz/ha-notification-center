@@ -22,6 +22,7 @@ import {
   categoryButtons,
   errorText,
   liveButtons,
+  mergeButton,
   snoozeChoices,
 } from "../shared/live";
 import "../shared/notification-view";
@@ -47,7 +48,7 @@ import {
   INTERACTION_DEFAULTS,
   pushButtonsWarning,
   runChoicesOf,
-  actionsText,
+  buttonText,
   runText,
 } from "./editor/interaction-dialog";
 import "./editor/interaction-dialog";
@@ -488,13 +489,15 @@ export class NcCategoryEditor extends LitElement {
     const defaults = INTERACTION_DEFAULTS[button.type];
     const label =
       button.type === "tap" ? defaults.label : button.label || defaults.label;
+    const effective = mergeButton(button, {}, true);
     const secondary =
       button.type === "tap"
-        ? runText(button, this._draft!.buttons) ||
-          actionsText(this.hass, button.actions ?? { navigation: { type: "more_info" } }).join(" · ")
+        ? runText(button, this._draft!.buttons) || buttonText(this.hass, effective).join(" · ")
         : [
-            ...(button.type === "snooze" ? [snoozeChoices(button).map((choice) => choice.text).join(", ")] : []),
-            ...actionsText(this.hass, button.actions),
+            ...(button.type === "snooze"
+              ? [snoozeChoices(effective).map((choice) => choice.text).join(", ")]
+              : []),
+            ...buttonText(this.hass, effective),
           ].join(" · ");
     const open = () => (this._button = { button, isNew: false });
     return html`<div

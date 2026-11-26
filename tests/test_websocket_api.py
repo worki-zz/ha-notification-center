@@ -288,7 +288,7 @@ async def test_import_export_round_trip(
     exported = (await client.ok("config/export"))["yaml"]
     data = yaml_util.parse_yaml(exported)
     assert isinstance(data, dict)
-    assert data["version"] == 8
+    assert data["version"] == 9
     stored = hass_storage[CONFIG_KEY]["data"]
     assert {key: value for key, value in data.items() if key != "version"} == stored
 
@@ -326,14 +326,21 @@ async def test_import_of_an_older_export(
         )
         for button in step["buttons"]
     }
-    assert all("action" not in button for button in step["buttons"])
-    assert actions["tap"] == {"navigation": {"type": "navigate", "path": "/lovelace/0"}}
-    assert actions["done"] == {
-        "navigation": {"type": "more_info", "entity_id": "light.hall"}
+    navigation = {
+        button["id"] if button["type"] == "custom" else button["type"]: button.get(
+            "navigation"
+        )
+        for button in step["buttons"]
     }
+    assert all("action" not in button for button in step["buttons"])
+    assert actions["tap"] == {}
+    assert navigation["tap"] == {"type": "navigate", "path": "/lovelace/0"}
+    # The built-in Done keeps no own actions; its navigation stays.
+    assert actions["done"] is None
+    assert navigation["done"] == {"type": "more_info", "entity_id": "light.hall"}
     assert actions["mute"] == {"entity_action": True}
     assert actions["off"] == {"ha_actions": [{"action": "light.turn_off"}]}
-    assert actions["quiet"] == {"mute": True}
+    assert actions["quiet"] == {"notification_state": {"type": "mute"}}
     assert actions["clips"] == {}
 
 
@@ -385,7 +392,7 @@ async def test_import_of_values_equal_to_the_category(
     [
         ("not: [valid", "not valid YAML"),
         ("- a list", "must be a mapping"),
-        ("version: 9", "unknown export version"),
+        ("version: 10", "unknown export version"),
         ("display: []", "unknown sections: display"),
         ("notifications: [{name: x}]", "steps"),
     ],
@@ -509,5 +516,5 @@ async def test_export_download(
     assert "attachment" in response.headers["Content-Disposition"]
     data = yaml_util.parse_yaml(await response.text())
     assert isinstance(data, dict)
-    assert data["version"] == 8
+    assert data["version"] == 9
     assert data["categories"] == hass_storage[CONFIG_KEY]["data"]["categories"]

@@ -252,7 +252,7 @@ async def test_mute_keeps_snooze_clears(center: Center, hass: HomeAssistant) -> 
                     "id": "quiet",
                     "type": "custom",
                     "label": "Quiet",
-                    "actions": {"mute": True},
+                    "actions": {"notification_state": {"type": "mute"}},
                 }
             ],
         ),
@@ -325,7 +325,7 @@ async def test_tap_opens_the_page(center: Center, hass: HomeAssistant) -> None:
                 {
                     "type": "tap",
                     "enabled": True,
-                    "open_on_tap": "/lovelace/garden",
+                    "navigation": {"type": "navigate", "path": "/lovelace/garden"},
                     "actions": {"ha_actions": [{"action": "light.turn_on"}]},
                 }
             ],
@@ -339,7 +339,7 @@ async def test_tap_opens_the_page(center: Center, hass: HomeAssistant) -> None:
                 {
                     "type": "tap",
                     "enabled": True,
-                    "actions": {"navigation": {"type": "notification_info"}},
+                    "navigation": {"type": "notification_info"},
                 }
             ],
         ),

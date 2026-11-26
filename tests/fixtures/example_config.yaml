@@ -1,4 +1,4 @@
-version: 3
+version: 9
 modes:
 - id: away
   name: Away
@@ -72,7 +72,7 @@ categories:
       modes: [away, home]
   buttons:
   - type: snooze
-    snooze: [1h]
+    snooze: []
   audience: {}
   color: indigo
 - id: devices
@@ -86,7 +86,8 @@ categories:
       delay: {hours: 1}
   buttons:
   - type: snooze
-    snooze: [tomorrow]
+    snooze_for: tomorrow
+    snooze: []
   audience: {}
   color: orange
 - id: home_category
@@ -97,7 +98,7 @@ categories:
       modes: [away, home]
   buttons:
   - type: snooze
-    snooze: [1h]
+    snooze: []
   audience: {}
   color: amber
 - id: family
@@ -108,7 +109,7 @@ categories:
       modes: [away, home]
   buttons:
   - type: snooze
-    snooze: [1h]
+    snooze: []
   audience: {}
   color: purple
 - id: household
@@ -130,7 +131,7 @@ categories:
       modes: [away, home]
   buttons:
   - type: snooze
-    snooze: [1h]
+    snooze: []
   audience: {}
   color: light-green
 - id: general
@@ -270,7 +271,7 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      actions: {navigation: {type: more_info}}
+      navigation: {type: more_info}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     activation:
@@ -292,7 +293,7 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      actions: {navigation: {type: more_info}}
+      navigation: {type: more_info}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     activation:
@@ -436,11 +437,11 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      actions: {navigation: {type: more_info, entity_id: camera.front_door}}
+      navigation: {type: more_info, entity_id: camera.front_door}
     - type: custom
       label: Camera
       icon: mdi:cctv
-      actions: {navigation: {type: more_info, entity_id: camera.front_door}}
+      navigation: {type: more_info, entity_id: camera.front_door}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     - {type: snooze, enabled: false}

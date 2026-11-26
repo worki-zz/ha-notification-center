@@ -86,7 +86,7 @@ from .const import (
     STATE_SNOOZED,
     UNIQUE_ID_NOTIFICATION_PREFIX,
 )
-from .engine_actions import EngineActions
+from .engine_actions import EngineActions, PressRun, status_reached
 from .engine_queries import EngineQueries
 from .issues import IssueTracker
 from .model import (
@@ -241,6 +241,9 @@ class Engine(EngineQueries, EngineActions):
         self._sleep = ConditionTracker(
             hass, self._sleep_conditions(), self._presence_changed
         )
+        # While a button is pressed: the card, the button and whether its
+        # Run ... actions switch is on (see ``EngineActions.async_press``).
+        self._press: PressRun | None = None
 
     # -- Life cycle ---------------------------------------------------------
 
@@ -700,10 +703,19 @@ class Engine(EngineQueries, EngineActions):
             and (step_id is None or card.step_id == step_id)
         ]
 
-    def variables(self, card: Card) -> dict[str, Any]:
-        """Return the template variables of a card."""
+    def variables(
+        self,
+        card: Card,
+        status: str | None = None,
+        cause: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Return the template variables of a card.
+
+        Status actions also get the ``status`` the card reached and its
+        ``cause``.
+        """
         notification = self.notification_config(card.notification_id) or {}
-        return {
+        variables: dict[str, Any] = {
             "entity": card.entity_id,
             "trigger": card.trigger or {},
             "data": card.data,
@@ -713,6 +725,10 @@ class Engine(EngineQueries, EngineActions):
                 "entity_id": self.entity_id_of(card.notification_id),
             },
         }
+        if status is not None:
+            variables["status"] = status
+            variables["cause"] = cause or {}
+        return variables
 
     @callback
     def open(
@@ -1007,7 +1023,9 @@ class Engine(EngineQueries, EngineActions):
         **changes: Any,
     ) -> None:
         old = card.status
+        old_phase = card.phase
         opened = changes.get("phase") == PHASE_OPEN and card.phase != PHASE_OPEN
+        muted = bool(changes.get("muted")) and not card.muted
         for name, value in changes.items():
             setattr(card, name, value)
         if opened:
@@ -1043,6 +1061,9 @@ class Engine(EngineQueries, EngineActions):
                 self._fire_event(card, new, source, context)
         finally:
             self.summary_context = previous
+        reached = status_reached(old_phase, card, changed, opened=opened, muted=muted)
+        if reached is not None:
+            self.queue_status_actions(card, reached, source, context, old_phase)
 
     def _record(
         self, notification_id: str, step_id: str, state: str, when: datetime

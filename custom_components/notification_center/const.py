@@ -83,6 +83,10 @@ SOURCE_SCHEDULE: Final = "schedule"
 # The Expires row of Done when or Dismiss when.
 SOURCE_EXPIRES: Final = "expires"
 SOURCE_SNOOZE_END: Final = "snooze_end"
+SOURCE_SNOOZE_WHEN: Final = "snooze_when"
+SOURCE_MUTE_WHEN: Final = "mute_when"
+# A button pressed in a push notification (the ``cause`` of status actions).
+SOURCE_PUSH: Final = "push"
 
 # Actions
 SERVICE_TRIGGER: Final = "trigger"

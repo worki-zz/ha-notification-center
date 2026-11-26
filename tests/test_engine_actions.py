@@ -163,8 +163,22 @@ async def test_button_press(
     nid = await center.add(
         "Doors",
         step(
+            done_when={
+                "actions": {
+                    "entity_action": True,
+                    "ha_actions": [
+                        {
+                            "action": "test.ring",
+                            "data": {
+                                "who": "{{ status }} {{ cause.source }} "
+                                "{{ cause.button }} {{ cause.user_id is not none }}"
+                            },
+                        }
+                    ],
+                }
+            },
             buttons=[
-                {"type": "done", "actions": {"entity_action": True}, "id": "done"},
+                {"type": "done", "id": "done"},
                 {
                     "type": "custom",
                     "id": "ring",
@@ -184,7 +198,7 @@ async def test_button_press(
                     "enabled": True,
                     "snooze": ["30m", "2h"],
                 },
-            ]
+            ],
         ),
         entities=[
             {
@@ -233,10 +247,12 @@ async def test_button_press(
     assert until is not None
     assert timedelta(minutes=119) < until - before <= timedelta(minutes=121)
 
-    # Done runs the entity's own action; the state carries the user.
+    # Done runs the Done when actions: the entity's own action, then the
+    # others, which know the status and its cause; they carry the user.
     assert (await press("done"))["success"]
     assert center.state("sensor.nc_doors") == "done"
-    assert calls[-1].data == {"who": "binary_sensor.front"}
+    assert calls[-2].data == {"who": "binary_sensor.front"}
+    assert calls[-1].data == {"who": "done button done True"}
     assert calls[-1].context.user_id == hass_read_only_user.id
     state = hass.states.get("sensor.nc_doors")
     assert state is not None
@@ -261,11 +277,11 @@ async def test_button_action_list(hass: HomeAssistant, center: Center) -> None:
                     "actions": {
                         # Nothing to run: no entity has an action.
                         "entity_action": True,
-                        "notification_state": {"type": "snooze", "snooze": "2h"},
-                        "mute": True,
+                        "notification_state": {"type": "snooze"},
                         "ha_actions": [{"action": "test.ring"}],
-                        "navigation": {"type": "navigate", "path": "/lovelace/0"},
                     },
+                    "snooze_for": "2h",
+                    "navigation": {"type": "navigate", "path": "/lovelace/0"},
                 },
                 {
                     "type": "custom",
@@ -293,7 +309,6 @@ async def test_button_action_list(hass: HomeAssistant, center: Center) -> None:
     await center.engine.async_press(card, "later", None)
     await hass.async_block_till_done()
     assert center.state("sensor.nc_plants") == "snoozed"
-    assert card.muted
     assert len(calls) == 1
     until = card.snoozed_until
     assert until is not None

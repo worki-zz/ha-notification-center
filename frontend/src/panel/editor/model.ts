@@ -9,6 +9,7 @@ import type {
   ChannelSettings,
   Duration,
   NotificationState,
+  StatusActions,
 } from "../../shared/config";
 import { BUILTIN_ORDER, categoryButtons, effectiveButtons } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
@@ -56,6 +57,7 @@ export interface Start {
   type: "triggers" | "schedule";
   triggers?: Obj[];
   schedule?: Schedule;
+  actions: StatusActions;
 }
 
 /** Conditions: used at the activation and to hide an active card. */
@@ -77,8 +79,13 @@ export interface EditorStep {
     triggers: Obj[];
     activation_conditions_no_longer_true: boolean;
     expires?: Expires | null;
+    actions: StatusActions;
   };
-  dismiss_when: { triggers: Obj[]; expires?: Expires | null };
+  dismiss_when: { triggers: Obj[]; expires?: Expires | null; actions: StatusActions };
+  // Optional blocks, switched on in the step's menu: switched off, they keep
+  // their content but nothing of it runs.
+  snooze_when: { enabled: boolean; triggers: Obj[]; actions: StatusActions; rerun_activation: boolean };
+  mute_when: { enabled: boolean; triggers: Obj[]; actions: StatusActions };
   buttons: Button[];
   // The people whose states differ from the category's audience.
   audience?: Record<string, AudienceEntry>;
@@ -181,16 +188,30 @@ export function newNotification(category?: Category): EditorNotification {
  */
 export function newStep(): EditorStep {
   return {
+    // Its own id at once, so the Activation entity action can point to it.
+    id: newId(),
     enabled: true,
     message: "",
-    activation: { type: "triggers", triggers: [] },
+    activation: { type: "triggers", triggers: [], actions: noActions() },
     conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
-    done_when: { triggers: [], activation_conditions_no_longer_true: false },
-    dismiss_when: { triggers: [] },
+    done_when: { triggers: [], activation_conditions_no_longer_true: false, actions: noActions() },
+    dismiss_when: { triggers: [], actions: noActions() },
+    snooze_when: { enabled: false, triggers: [], actions: noActions(), rerun_activation: false },
+    mute_when: { enabled: false, triggers: [], actions: noActions() },
     buttons: BUILTIN_ORDER.map((type) => ({ id: newId(), type }) as Button),
     audience: {},
     channels: {},
   };
+}
+
+/** Status block Actions that do nothing. */
+export function noActions(): StatusActions {
+  return { entity_action: false, ha_actions: [] };
+}
+
+/** Whether status block Actions do something. */
+export function statusActionsUsed(actions: StatusActions | undefined): boolean {
+  return !!actions && (actions.entity_action || actions.ha_actions.length > 0);
 }
 
 /**
@@ -205,8 +226,18 @@ export function inheritedEntry(entry: Button): Button {
   if (!copy.label) delete copy.label;
   if (!copy.icon) delete copy.icon;
   if (copy.show_in_push === undefined || copy.show_in_push === null) delete copy.show_in_push;
-  if (!copy.snooze?.length) delete copy.snooze;
-  if (!copy.open_on_tap) delete copy.open_on_tap;
+  if (copy.snooze === undefined || copy.snooze === null) delete copy.snooze;
+  if (!copy.snooze_for) delete copy.snooze_for;
+  if (!copy.navigation) delete copy.navigation;
+  if (copy.run_state_actions !== false) delete copy.run_state_actions;
+  if (copy.actions) {
+    const actions = { ...copy.actions };
+    for (const key of ["entity_action", "notification_state", "ha_actions"] as const) {
+      if (actions[key] === undefined || actions[key] === null) delete actions[key];
+    }
+    if (Object.keys(actions).length) copy.actions = actions;
+    else delete copy.actions;
+  }
   return copy as Button;
 }
 
@@ -239,6 +270,10 @@ export function detachCategoryButtons(
       entry.label ||= source.label || "Button";
       entry.icon ||= source.icon ?? undefined;
       entry.show_in_push ??= source.show_in_push ?? true;
+      // What it inherited, key by key, becomes its own.
+      entry.actions = { ...(source.actions ?? {}), ...(entry.actions ?? {}) };
+      if (!entry.navigation && source.navigation) entry.navigation = source.navigation;
+      if (!entry.snooze_for && source.snooze_for) entry.snooze_for = source.snooze_for;
     }
   }
 }
@@ -268,20 +303,46 @@ const BUTTON_NAMES: Record<string, string> = {
   custom: "Button",
 };
 
+/** The entity action key of a step's Activation. */
+export function activationSlotId(stepId: string): string {
+  return `${stepId}.activation`;
+}
+
+// The status blocks whose entity action is keyed by a built-in button's id.
+const BLOCK_BUTTONS = [
+  ["done_when", "done", "Done when"],
+  ["dismiss_when", "dismiss", "Dismiss when"],
+  ["snooze_when", "snooze", "Snooze when"],
+  ["mute_when", "mute", "Mute when"],
+] as const;
+
 /**
- * The buttons whose action is Entity action, in every step ("Step 1 ·
- * Mute"; without the step when there is only one).
+ * The places of entity actions in every step ("Step 1 · Done when"; without
+ * the step when there is only one): the status blocks and the buttons that
+ * run one. Activation has its own key; the other status blocks use the id
+ * of the step's built-in button of their state.
  */
 export function entityActionSlots(draft: EditorNotification, category?: Category): ActionSlot[] {
   const many = draft.steps.length > 1;
-  return draft.steps.flatMap((step, index) =>
-    effectiveButtons(category, step)
-      .filter((button) => button.enabled && !!button.actions?.entity_action && button.id)
-      .map((button) => {
-        const name = button.type === "tap" ? BUTTON_NAMES.tap : button.label || BUTTON_NAMES[button.type];
-        return { id: button.id, label: many ? `Step ${index + 1} · ${name}` : name };
-      }),
-  );
+  return draft.steps.flatMap((step, index) => {
+    const label = (name: string) => (many ? `Step ${index + 1} · ${name}` : name);
+    const slots: ActionSlot[] = [];
+    if (step.id && step.activation.actions?.entity_action) {
+      slots.push({ id: activationSlotId(step.id), label: label("Activation") });
+    }
+    for (const [key, type, name] of BLOCK_BUTTONS) {
+      const block = step[key] as { enabled?: boolean; actions?: StatusActions } | undefined;
+      if (!block?.actions?.entity_action || block.enabled === false) continue;
+      const button = step.buttons.find((item) => item.type === type);
+      if (button?.id) slots.push({ id: button.id, label: label(name) });
+    }
+    for (const button of effectiveButtons(category, step)) {
+      if (!button.enabled || !button.actions.entity_action || !button.id) continue;
+      const name = button.type === "tap" ? BUTTON_NAMES.tap : button.label || BUTTON_NAMES[button.type];
+      slots.push({ id: button.id, label: label(name) });
+    }
+    return slots;
+  });
 }
 
 /** The buttons some entity or entity group has an action for. */
@@ -293,6 +354,10 @@ export function buttonsWithEntityActions(draft: EditorNotification): Set<string>
     }
   }
   return ids;
+}
+
+function statusActions(actions: Partial<StatusActions> | undefined): StatusActions {
+  return { entity_action: actions?.entity_action ?? false, ha_actions: actions?.ha_actions ?? [] };
 }
 
 function clone<T>(value: T): T {
@@ -368,6 +433,8 @@ export function toEditor(
     (items ?? []).map((item) => toEditorItem(item, "condition", draft.id, numbers, state));
   const selfSensor = sensorOf(state, draft.id);
   draft.steps.forEach((step, index) => {
+    step.id ||= newId();
+    step.activation.actions = statusActions(step.activation.actions);
     if (step.activation.type === "triggers") {
       step.activation.triggers = triggers(step.activation.triggers);
       // The first trigger on this notification's own entities is the one
@@ -399,10 +466,23 @@ export function toEditor(
       triggers: triggers(step.done_when?.triggers),
       activation_conditions_no_longer_true: step.done_when?.activation_conditions_no_longer_true ?? false,
       expires: step.done_when?.expires ?? null,
+      actions: statusActions(step.done_when?.actions),
     };
     step.dismiss_when = {
       triggers: triggers(step.dismiss_when?.triggers),
       expires: step.dismiss_when?.expires ?? null,
+      actions: statusActions(step.dismiss_when?.actions),
+    };
+    step.snooze_when = {
+      enabled: step.snooze_when?.enabled ?? false,
+      triggers: triggers(step.snooze_when?.triggers),
+      actions: statusActions(step.snooze_when?.actions),
+      rerun_activation: step.snooze_when?.rerun_activation ?? false,
+    };
+    step.mute_when = {
+      enabled: step.mute_when?.enabled ?? false,
+      triggers: triggers(step.mute_when?.triggers),
+      actions: statusActions(step.mute_when?.actions),
     };
     // Every button has an id, so an entity action can point to it.
     for (const button of step.buttons) button.id ||= newId();
@@ -442,8 +522,8 @@ export function toSaved(draft: EditorNotification): EditorNotification {
     if (!step.dismiss_when.expires) delete step.dismiss_when.expires;
     step.activation =
       start.type === "schedule"
-        ? { type: "schedule", schedule: start.schedule! }
-        : { type: "triggers", triggers };
+        ? { type: "schedule", schedule: start.schedule!, actions: start.actions }
+        : { type: "triggers", triggers, actions: start.actions };
     if (step.data && step.data.type === "none") step.data = null;
     if (!step.info) delete step.info;
     // A new step's buttons get their ids from Home Assistant.

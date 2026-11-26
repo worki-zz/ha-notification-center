@@ -544,7 +544,7 @@ export class NcNotificationEditor extends LitElement {
     copy.enabled ??= true;
     for (const step of copy.steps) {
       step.buttons ??= [];
-      step.activation ??= { type: "triggers", triggers: [] };
+      step.activation ??= { type: "triggers", triggers: [], actions: { entity_action: false, ha_actions: [] } };
       step.activation.triggers ??= [];
     }
     this._set(
@@ -738,6 +738,9 @@ export class NcNotificationEditor extends LitElement {
               </ha-dropdown-item>`
             : nothing}
           <wa-divider></wa-divider>
+          ${this._blockItem(step, "snooze_when", "Snooze when")}
+          ${this._blockItem(step, "mute_when", "Mute when")}
+          <wa-divider></wa-divider>
           <ha-dropdown-item value="toggle">
             <ha-icon
               slot="icon"
@@ -798,6 +801,20 @@ export class NcNotificationEditor extends LitElement {
     this._step = steps.length - 1;
   }
 
+  // An optional block of the step in its menu, ticked while it is on; a
+  // block that is off but holds something shows how much.
+  private _blockItem(step: EditorStep, key: "snooze_when" | "mute_when", name: string) {
+    const block = step[key];
+    const held = block.triggers.length + (block.actions.entity_action ? 1 : 0) + block.actions.ha_actions.length;
+    return html`<ha-dropdown-item value=${key}>
+      <ha-icon
+        slot="icon"
+        .icon=${block.enabled ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline"}
+      ></ha-icon>
+      ${name}${!block.enabled && held ? ` · ${held}` : ""}
+    </ha-dropdown-item>`;
+  }
+
   private async _stepMenu(action: string): Promise<void> {
     const draft = this._draft!;
     const index = this._step;
@@ -815,7 +832,7 @@ export class NcNotificationEditor extends LitElement {
         return;
       case "duplicate": {
         const copy = JSON.parse(JSON.stringify(step)) as EditorStep;
-        delete copy.id;
+        copy.id = newId();
         // A category's custom button is linked by its id: it keeps it.
         const linked = new Set(
           (this._category()?.buttons ?? []).filter((b) => b.type === "custom").map((b) => b.id),
@@ -840,6 +857,15 @@ export class NcNotificationEditor extends LitElement {
         steps[index] = { ...step, enabled: !step.enabled };
         this._change({ steps });
         return;
+      case "snooze_when":
+      case "mute_when": {
+        // Off, the block keeps what it holds, but nothing of it runs.
+        const on = !step[action].enabled;
+        steps[index] = { ...step, [action]: { ...step[action], enabled: on } };
+        this._change({ steps });
+        if (on) this._toggle(`step:${action === "snooze_when" ? "snooze" : "mute"}`, true);
+        return;
+      }
       case "delete":
         if (
           await confirmDialog(this, {

@@ -33,7 +33,7 @@ import "./builtin-forms";
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
 import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
-import { BLOCK_INTROS, block } from "./block";
+import { BLOCK_INTROS, TAB_INTROS, block, blockTabs, summaryOf } from "./block";
 import "./schedule-editor";
 import type {
   AudienceEntry,
@@ -45,6 +45,7 @@ import type {
   EffectiveButton,
   Mode,
   NotificationCenterConfig,
+  StatusActions,
 } from "../../shared/config";
 import "../audience-table";
 import "../channel-table";
@@ -56,7 +57,9 @@ import {
 } from "../../shared/live";
 import {
   INTERACTION_DEFAULTS,
-  actionsText,
+  buttonText,
+  STATE_BLOCKS,
+  type InteractionResult,
   pushButtonsWarning,
   runChoicesOf,
   runText,
@@ -121,13 +124,48 @@ export const STEP_BLOCKS = [
   "message",
   "interactions",
   "start",
-  "show",
   "done",
   "dismiss",
+  "snooze",
+  "mute",
   "audience",
   "channels",
 ] as const;
 export type StepBlock = (typeof STEP_BLOCKS)[number];
+
+// The status blocks after Activation, and their keys in the step.
+type WhenBlock = "done" | "dismiss" | "snooze" | "mute";
+const WHEN_KEYS = {
+  done: "done_when",
+  dismiss: "dismiss_when",
+  snooze: "snooze_when",
+  mute: "mute_when",
+} as const;
+
+// The status block of a button's Run … actions, by its key in the step.
+const GO_TO_BLOCKS: Record<string, WhenBlock> = {
+  done_when: "done",
+  dismiss_when: "dismiss",
+  snooze_when: "snooze",
+  mute_when: "mute",
+};
+
+// A tab of a status block, with the word of its summary part.
+type BlockTab = { key: string; label: string; count?: number; unit: string };
+
+function actionCount(actions: StatusActions | undefined): number {
+  return (actions?.entity_action ? 1 : 0) + (actions?.ha_actions.length ?? 0);
+}
+
+// The step's status blocks, as a button's Run … actions switch tells of them.
+function blocksOf(step: EditorStep) {
+  return Object.fromEntries(
+    Object.entries(STATE_BLOCKS).map(([type, block]) => {
+      const value = step[block.key] as { enabled?: boolean; actions: StatusActions };
+      return [type, { enabled: value.enabled ?? true, actions: actionCount(value.actions) }];
+    }),
+  );
+}
 
 @customElement("nc-step-editor")
 export class NcStepEditor extends LitElement {
@@ -189,6 +227,9 @@ export class NcStepEditor extends LitElement {
 
   @state() private _help?: keyof typeof HELP;
 
+  // The open tab of each status block.
+  @state() private _tabs: Record<string, string> = {};
+
   // The built-in rows that are open (by key).
   @state() private _openRows: Set<string> = new Set();
 
@@ -211,11 +252,14 @@ export class NcStepEditor extends LitElement {
     header: string,
     count: number | string | undefined,
     content: unknown,
+    more: { summary?: string; filled?: boolean } = {},
   ) {
     return block({
       icon,
       header,
       count,
+      ...more,
+      key,
       intro: BLOCK_INTROS[key],
       expanded: this.expanded.has(key),
       toggled: (expanded) =>
@@ -232,14 +276,16 @@ export class NcStepEditor extends LitElement {
     const step = this.step;
     if (!step) return nothing;
     const kind = this._kind(step);
-    const doneCount =
-      step.done_when.triggers.length +
-      (step.done_when.expires ? 1 : 0) +
-      (step.done_when.activation_conditions_no_longer_true &&
-      this._startCanEnd(step)
-        ? 1
-        : 0);
-    const stateCondition = pinnedState(step.conditions.conditions);
+    const status = (key: StepBlock, icon: string, header: string, tabs: BlockTab[], content: unknown) =>
+      this._panel(key, icon, header, undefined, content, {
+        summary: summaryOf(tabs.map((tab) => [tab.count ?? 0, tab.unit])),
+        filled: tabs.some((tab) => tab.count),
+      });
+    const startTabs = this._startTabs(step);
+    const doneTabs = this._whenTabs(step, "done");
+    const dismissTabs = this._whenTabs(step, "dismiss");
+    const snoozeTabs = this._whenTabs(step, "snooze");
+    const muteTabs = this._whenTabs(step, "mute");
     return html`
       ${this._panel(
         "message",
@@ -247,6 +293,7 @@ export class NcStepEditor extends LitElement {
         "Message",
         undefined,
         this._renderMessage(step),
+        { filled: !!step.message.trim() },
       )}
       ${this._panel(
         "interactions",
@@ -261,35 +308,38 @@ export class NcStepEditor extends LitElement {
         "start",
         "mdi:play-circle-outline",
         "Activation",
-        kind === "triggers"
-          ? this._startCount(step)
-          : kind === "repeat"
-            ? "Repeat"
-            : "Schedule",
-        this._renderStart(step),
+        undefined,
+        this._renderTabs("start", startTabs, step),
+        {
+          summary: [
+            kind === "triggers" ? "" : kind === "repeat" ? "Repeat" : "Schedule",
+            summaryOf(startTabs.map((tab) => [tab.count ?? 0, tab.unit])),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          filled: kind !== "triggers" || startTabs.some((tab) => tab.count),
+        },
       )}
-      ${this._panel(
-        "show",
-        "mdi:eye-outline",
-        "Conditions",
-        step.conditions.conditions.length -
-          (stateCondition && !stateFilled(stateCondition.options as Obj) ? 1 : 0),
-        this._renderShow(step),
-      )}
-      ${this._panel(
-        "done",
-        "mdi:check-circle-outline",
-        "Done when",
-        doneCount,
-        this._renderDone(step),
-      )}
-      ${this._panel(
+      ${status("done", "mdi:check-circle-outline", "Done when", doneTabs, this._renderTabs("done", doneTabs, step))}
+      ${status(
         "dismiss",
         "mdi:close-circle-outline",
         "Dismiss when",
-        step.dismiss_when.triggers.length + (step.dismiss_when.expires ? 1 : 0),
-        this._renderDismiss(step),
+        dismissTabs,
+        this._renderTabs("dismiss", dismissTabs, step),
       )}
+      ${step.snooze_when.enabled
+        ? status(
+            "snooze",
+            "mdi:alarm-snooze",
+            "Snooze when",
+            snoozeTabs,
+            this._renderTabs("snooze", snoozeTabs, step),
+          )
+        : nothing}
+      ${step.mute_when.enabled
+        ? status("mute", "mdi:volume-off", "Mute when", muteTabs, this._renderTabs("mute", muteTabs, step))
+        : nothing}
       <div class="group-gap"></div>
       ${this._panel(
         "channels",
@@ -313,6 +363,146 @@ export class NcStepEditor extends LitElement {
       ${this._help ? this._renderHelp(this._help) : nothing}
       ${this._interaction ? this._renderInteractionDialog(step) : nothing}
     `;
+  }
+
+  // -- Status blocks: their tabs --------------------------------------------
+
+  private _startTabs(step: EditorStep): BlockTab[] {
+    const kind = this._kind(step);
+    const stateCondition = pinnedState(step.conditions.conditions);
+    return [
+      {
+        key: "triggers",
+        label: kind === "triggers" ? "Triggers" : kind === "repeat" ? "Repeat" : "Schedule",
+        count: kind === "triggers" ? this._startCount(step) : undefined,
+        unit: "trigger",
+      },
+      {
+        key: "conditions",
+        label: "Conditions",
+        count:
+          step.conditions.conditions.length -
+          (stateCondition && !stateFilled(stateCondition.options as Obj) ? 1 : 0),
+        unit: "condition",
+      },
+      { key: "actions", label: "Actions", count: actionCount(step.activation.actions), unit: "action" },
+    ];
+  }
+
+  private _whenTabs(step: EditorStep, key: WhenBlock): BlockTab[] {
+    const value = step[WHEN_KEYS[key]];
+    let triggers = value.triggers.length;
+    if (key === "done" || key === "dismiss") {
+      const when = value as EditorStep["done_when"];
+      triggers += when.expires ? 1 : 0;
+      if (key === "done" && when.activation_conditions_no_longer_true && this._startCanEnd(step)) triggers += 1;
+    }
+    return [
+      { key: "triggers", label: "Triggers", count: triggers, unit: "trigger" },
+      { key: "actions", label: "Actions", count: actionCount(value.actions), unit: "action" },
+    ];
+  }
+
+  private _renderTabs(key: "start" | WhenBlock, tabs: BlockTab[], step: EditorStep) {
+    const active = this._tabs[key] ?? "triggers";
+    let content: unknown;
+    if (active === "actions") content = this._renderStatusActions(step, key);
+    else if (key === "start") content = active === "conditions" ? this._renderShow(step) : this._renderStart(step);
+    else if (key === "done") content = this._renderDone(step);
+    else if (key === "dismiss") content = this._renderDismiss(step);
+    else content = this._renderWhenTriggers(step, key);
+    return html`${blockTabs(tabs, active, (tab) => (this._tabs = { ...this._tabs, [key]: tab }))}
+      <p class="block-intro">${TAB_INTROS[key][active]}</p>
+      ${content}`;
+  }
+
+  // Open a status block on its Actions tab (from a button's Run … actions).
+  private _openActions(key: WhenBlock): void {
+    this._tabs = { ...this._tabs, [key]: "actions" };
+    this.dispatchEvent(new CustomEvent("block-toggled", { detail: { block: key, expanded: true } }));
+    window.setTimeout(() => {
+      this.renderRoot
+        .querySelector(`ha-expansion-panel[data-block="${key}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
+  // The Actions tab of a status block: they run when a card reaches its
+  // status, whatever caused it.
+  private _renderStatusActions(step: EditorStep, key: "start" | WhenBlock) {
+    const value = key === "start" ? step.activation : step[WHEN_KEYS[key]];
+    const actions = value.actions;
+    const set = (changes: Partial<StatusActions>) => {
+      const next = { ...actions, ...changes };
+      if (key === "start") this._change({ activation: { ...step.activation, actions: next } });
+      else this._change({ [WHEN_KEYS[key]]: { ...value, actions: next } });
+    };
+    const snooze = key === "snooze";
+    return html`<div class="block">
+      ${snooze
+        ? html`<ha-card outlined class="own-row">
+            <ha-icon
+              class="builtin ${step.snooze_when.rerun_activation ? "" : "off"}"
+              icon="mdi:play-circle-outline"
+            ></ha-icon>
+            <div class="own-text">Run the Activation actions again when the snooze ends</div>
+            <ha-switch
+              .checked=${step.snooze_when.rerun_activation}
+              @change=${(ev: Event) =>
+                this._change({
+                  snooze_when: {
+                    ...step.snooze_when,
+                    rerun_activation: (ev.target as HTMLInputElement).checked,
+                  },
+                })}
+            ></ha-switch>
+          </ha-card>`
+        : nothing}
+      <ha-card outlined class="own-row">
+        <ha-icon
+          class="builtin ${actions.entity_action ? "" : "off"}"
+          icon="mdi:format-list-checks"
+        ></ha-icon>
+        <div class="own-text">
+          <div>Run the entity action</div>
+          <div class="secondary">Set the action for each entity in the Entities block.</div>
+        </div>
+        <ha-switch
+          .checked=${actions.entity_action}
+          @change=${(ev: Event) => set({ entity_action: (ev.target as HTMLInputElement).checked })}
+        ></ha-switch>
+      </ha-card>
+      ${this._title("Actions", "actions")}
+      <ha-automation-action
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .actions=${actions.ha_actions}
+        @value-changed=${(ev: CustomEvent<{ value: unknown[] }>) => {
+          ev.stopPropagation();
+          set({ ha_actions: ev.detail.value });
+        }}
+      ></ha-automation-action>
+    </div>`;
+  }
+
+  // The Triggers tab of Snooze when and Mute when.
+  private _renderWhenTriggers(step: EditorStep, key: "snooze" | "mute") {
+    const field = WHEN_KEYS[key];
+    const value = step[field];
+    return html`<div class="block">
+      ${this._title("Triggers", key)}
+      <ha-automation-trigger
+        .hass=${this.hass}
+        .narrow=${this.narrow}
+        .triggers=${value.triggers}
+        @value-changed=${(ev: CustomEvent<{ value: Obj[] }>) => {
+          ev.stopPropagation();
+          this._change({
+            [field]: { ...value, triggers: withOwnSensor(value.triggers, ev.detail.value, this.sensor) },
+          });
+        }}
+      ></ha-automation-trigger>
+    </div>`;
   }
 
   private _startCount(step: EditorStep): number {
@@ -966,14 +1156,19 @@ export class NcStepEditor extends LitElement {
     );
   }
 
-  private _setEntry(step: EditorStep, entry: Button, inherited: boolean): void {
+  private _setEntry(
+    step: EditorStep,
+    entry: Button,
+    inherited: boolean,
+    extra: Partial<EditorStep> = {},
+  ): void {
     const buttons = [...step.buttons];
     const index = this._entryIndex(step, entry, inherited);
     // Empty values are not stored: they follow the category.
     if (inherited) entry = inheritedEntry(entry);
     if (index < 0) buttons.push(entry);
     else buttons[index] = entry;
-    this._change({ buttons });
+    this._change({ ...extra, buttons });
   }
 
   // The people whose states differ from the category's; the rest as there.
@@ -1080,7 +1275,7 @@ export class NcStepEditor extends LitElement {
     }
     const run = runText(button, effectiveButtons(this.category, step));
     if (run) parts.push(run);
-    else parts.push(...actionsText(this.hass, button.actions));
+    else parts.push(...buttonText(this.hass, button));
     const inherited = this._base(button);
     const entry = (): Button => {
       const index = this._entryIndex(step, button, button.category);
@@ -1154,14 +1349,17 @@ export class NcStepEditor extends LitElement {
       .isNew=${edit.isNew}
       .entityActionSet=${this.entityActions.has(edit.button.id)}
       .runChoices=${runChoicesOf(effectiveButtons(this.category, step))}
+      .blocks=${blocksOf(step)}
       .generalOpenOnTap=${this.config?.general?.open_on_tap}
-      @interaction-closed=${(
-        ev: CustomEvent<{ result?: Button | "delete" }>,
-      ) => {
+      @interaction-closed=${(ev: CustomEvent<InteractionResult>) => {
         ev.stopPropagation();
         this._interaction = undefined;
-        const result = ev.detail.result;
+        const { result, enableBlock, goTo } = ev.detail;
         if (!result) return;
+        // Run Snooze/Mute actions switched on also switches its block on.
+        const extra: Partial<EditorStep> = enableBlock
+          ? { [enableBlock]: { ...step[enableBlock], enabled: true } }
+          : {};
         if (result === "delete") {
           this._change({
             buttons: step.buttons.filter(
@@ -1174,7 +1372,8 @@ export class NcStepEditor extends LitElement {
           });
           return;
         }
-        this._setEntry(step, result, !!edit.inherited);
+        this._setEntry(step, result, !!edit.inherited, extra);
+        if (goTo) this._openActions(GO_TO_BLOCKS[goTo]);
       }}
     ></nc-interaction-dialog>`;
   }
