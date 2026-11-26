@@ -11,9 +11,6 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 Overlaps with the button actions: an action that should run whenever a notification is done (or dismissed, snoozed) could live here instead of on every button that leads there, and this can partly replace the button's own Home Assistant actions. When it is built, decide which actions stay on the buttons (only what depends on the button pressed, like the entity action) and how the editor shows the two together. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
 
-### Push swipe action
-*Area: Push.* What swiping a push away does: today nothing happens (the notification stays). A default for all notifications (in General), a category's and a notification's own, or derived from the buttons. Snooze is the obvious candidate (with its first time), but Dismiss or nothing should also be possible; to be thought through. Needs the Companion app's clear event (`mobile_app_notification_cleared`, Android only; iOS has no such event). *(Kristóf, 2026-11-24; feedback after v0.7.5)*
-
 ### Run snapshots (trace)
 *Area: Insight.* At each run event of a notification (a step becomes active; a trigger fires but the conditions are false; a notification is closed) store one snapshot: the time, the trigger with its entity and from/to states, the result of the conditions that were checked (as in Home Assistant's automation trace, checking stops at the first false one, so the rest show as not checked; likely recorded with Home Assistant's own condition trace), and the Status dialog's status and channel rows at that moment (which channels sent, to whom, and why the others held back). Keep the last N runs or X days per notification, in a Store key of its own. Shown as a History section in the Status dialog, one expandable row per snapshot. No visualisation of the whole logic chain. Builds on the Status dialog (0.7.x) and also covers "fired but the conditions were false" of the trigger statistics. Replaces the earlier *Why a notification is (not) active* and *Trace* ideas. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*
 
@@ -65,6 +62,9 @@ Overlaps with the button actions: an action that should run whenever a notificat
 *Area: Sound.* A speaker that cannot announce (Home Assistant's announce feature) stops what it plays to play a chime or a message. A speaker-level setting *While playing*: *Skip*, *Play anyway*, or *After it stops* (with a timeout). Highlighted notifications always play. The reason shows in the Status dialog and the Activity log. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
 
 ## Low priority
+
+### Snooze when the push is swiped away
+*Area: Push.* A fixed row at the top of the Snooze when block's Triggers tab: *Push swiped away (Android)*, a switch, off by default. A swiped push snoozes the notification for the Snooze button's *Snooze for* time. Android only: it needs the Companion app's clear event (`mobile_app_notification_cleared`); the iOS app sends no such event. Only Snooze, because Android's *Clear all* swipes every push at once. Pushes the integration removes itself (done, dismissed, a later step) are not counted. Stored as `snooze_when.push_swiped: true`; the person who swiped is found from the push device that sent the event, and the snooze runs the Snooze when actions like any other snooze. Replaces the earlier *Push swipe action* idea (a swipe setting per notification, category and General). *(Kristóf, 2026-11-24; reshaped 2026-11-26, pre-1.0 backlog review)*
 
 ### Hungarian frontend
 *Area: Panel.* The panel and the dashboard cards are English only; the backend strings already have a Hungarian translation. A translated frontend, following the user's Home Assistant language. *(Kristóf, 2026-11-23; v0.7.2 review)*
