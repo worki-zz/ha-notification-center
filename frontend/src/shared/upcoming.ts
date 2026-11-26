@@ -13,7 +13,8 @@ import {
   audienceOf,
   cardKey,
   categoryOf,
-  doneEarly,
+  closeEarly,
+  type EarlyButton,
   inAudience,
   liveCards,
   onDashboard,
@@ -102,7 +103,10 @@ export function scheduledSteps(
           icon: notification.icon || category?.icon || "mdi:calendar-clock",
           color: cssColor(colorCss(config, notification.color ?? category?.color)),
           muted: true,
-          buttons: [{ key: "done_early", label: "Done", icon: "mdi:check" }],
+          buttons: [
+            { key: "done_early", label: "Done", icon: "mdi:check" },
+            { key: "dismiss_early", label: "Dismiss", icon: "mdi:close" },
+          ],
         },
       });
     }
@@ -151,13 +155,17 @@ export function upcomingToday(
   ].sort((a, b) => a.at - b.at);
 }
 
-/** Mark a scheduled step done before it is due (its Done button). */
-export function doneEarlyOf(hass: HomeAssistant, item: Upcoming): Promise<void> {
-  return doneEarly(hass, item.notificationId, item.stepId);
+/** Close a scheduled step before it is due (its Done or Dismiss button). */
+export function closeEarlyOf(hass: HomeAssistant, item: Upcoming, key: EarlyButton): Promise<void> {
+  return closeEarly(hass, item.notificationId, item.stepId, key);
 }
 
-/** Render scheduled steps, each with its Done button (Done early). */
-export function renderScheduled(hass: HomeAssistant, items: Upcoming[], onDone: (item: Upcoming) => void) {
+/** Render scheduled steps, each with its Done and Dismiss buttons. */
+export function renderScheduled(
+  hass: HomeAssistant,
+  items: Upcoming[],
+  onButton: (item: Upcoming, key: EarlyButton) => void,
+) {
   return repeat(
     items,
     (item) => item.key,
@@ -166,7 +174,7 @@ export function renderScheduled(hass: HomeAssistant, items: Upcoming[], onDone: 
         class="upcoming"
         .hass=${hass}
         .view=${item.view}
-        @nc-button=${() => onDone(item)}
+        @nc-button=${(ev: CustomEvent<{ key: EarlyButton }>) => onButton(item, ev.detail.key)}
       ></notification-center-view>
     `,
   );
@@ -178,13 +186,13 @@ export function renderUpcoming(
   store: StoreData,
   entries: UpcomingEntry[],
   now: number,
-  onDone: (item: Upcoming) => void,
+  onButton: (item: Upcoming, key: EarlyButton) => void,
 ) {
   return repeat(
     entries,
     (entry) => entry.key,
     (entry) => {
-      if (!entry.live) return renderScheduled(hass, [entry.item!], onDone);
+      if (!entry.live) return renderScheduled(hass, [entry.item!], onButton);
       const live = entry.live;
       const until = live.card.snoozed_until;
       const when = live.held

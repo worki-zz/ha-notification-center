@@ -11,7 +11,7 @@ import { cardKey, liveCards, navigate, personOf, type LiveCard } from "../shared
 import "../shared/live-card";
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
-import { doneEarlyOf, renderUpcoming, upcomingToday, type UpcomingEntry } from "../shared/upcoming";
+import { closeEarlyOf, renderUpcoming, upcomingToday, type UpcomingEntry } from "../shared/upcoming";
 import type { HomeAssistant } from "../shared/types";
 import { loadDashboardElements } from "./elements";
 
@@ -226,8 +226,8 @@ export class NotificationCenterListCard extends LitElement {
           : nothing}
         ${upcoming.length
           ? html`<div class="title">Upcoming</div>
-              ${renderUpcoming(this.hass, this._store, upcoming, this._now, (item) => {
-                void doneEarlyOf(this.hass!, item).catch(() => undefined);
+              ${renderUpcoming(this.hass, this._store, upcoming, this._now, (item, key) => {
+                void closeEarlyOf(this.hass!, item, key).catch(() => undefined);
               })}`
           : nothing}
       </div>

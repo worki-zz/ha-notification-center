@@ -19,13 +19,14 @@ import {
   navigate,
   personOf,
   pressButton,
+  type EarlyButton,
   type LiveCard,
 } from "../shared/live";
 import "../shared/live-card";
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
 import {
-  doneEarlyOf,
+  closeEarlyOf,
   endOfToday,
   renderScheduled,
   renderUpcoming,
@@ -228,8 +229,8 @@ export class NotificationCenterPanel extends LitElement {
     return this.hass ? scheduledSteps(this.hass, this._store, this._now) : [];
   }
 
-  private _doneEarly = (item: Upcoming): void => {
-    void this._run(() => doneEarlyOf(this.hass!, item));
+  private _closeEarly = (item: Upcoming, key: EarlyButton): void => {
+    void this._run(() => closeEarlyOf(this.hass!, item, key));
   };
 
   // -- Render --------------------------------------------------------------
@@ -321,7 +322,7 @@ export class NotificationCenterPanel extends LitElement {
   }
 
   private _renderUpcoming(items: Upcoming[]) {
-    return renderScheduled(this.hass!, items, this._doneEarly);
+    return renderScheduled(this.hass!, items, this._closeEarly);
   }
 
   // The active cards, then Upcoming: what is due today and the snoozed
@@ -348,7 +349,7 @@ export class NotificationCenterPanel extends LitElement {
           </ha-card>`}
       ${timed.length
         ? html`<h2>Upcoming</h2>
-            ${renderUpcoming(this.hass!, this._store, timed, this._now, this._doneEarly)}`
+            ${renderUpcoming(this.hass!, this._store, timed, this._now, this._closeEarly)}`
         : nothing}
       ${later || done
         ? html`<div class="pages">

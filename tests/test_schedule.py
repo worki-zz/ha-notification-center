@@ -490,6 +490,100 @@ async def test_done_early(
     )
 
 
+async def test_dismiss_early_calendar(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """Dismiss early skips a calendar occurrence without marking it done."""
+    center = await load(hass, config_entry)
+    waste = await center.add("Mixed waste", _scheduled(WEEKLY_WASTE))
+    step_id = center.engine.step_id_of(waste, 1)
+    center.engine.dismiss_early(waste, step_id)
+    await hass.async_block_till_done()
+    assert center.state("sensor.nc_mixed_waste") == "idle"
+    assert center.attrs("sensor.nc_mixed_waste")["last_done"] is None
+    assert _fmt(center.attrs("sensor.nc_mixed_waste")["next_due"]) == (
+        "2026-11-25 Wed 19:00"
+    )
+    await _move(hass, freezer, "2026-11-18 19:00")
+    assert center.state("sensor.nc_mixed_waste") != "active"
+    await _move(hass, freezer, "2026-11-25 19:00")
+    assert center.state("sensor.nc_mixed_waste") == "active"
+
+
+async def test_dismiss_early_after_last_done(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """Dismiss early moves the next due one interval on from the original due."""
+    center = await load(hass, config_entry)
+    watering = await center.add(
+        "Watering",
+        _scheduled(
+            {"type": "after_last_done", "every": 3, "unit": "days", "at": "22:00"}
+        ),
+    )
+    step_id = center.engine.step_id_of(watering, 1)
+    due = center.attrs("sensor.nc_watering")["next_due"]
+    last_done = center.attrs("sensor.nc_watering")["last_done"]
+    original = _local(_fmt(due)[:10] + " 22:00")
+    freezer.move_to(original - timedelta(days=2))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    center.engine.dismiss_early(watering, step_id)
+    await hass.async_block_till_done()
+    attrs = center.attrs("sensor.nc_watering")
+    assert attrs["last_done"] == last_done
+    expected = _fmt(original + timedelta(days=3))
+    assert _fmt(attrs["next_due"]) == expected
+
+    # A restart keeps it.
+    assert await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+    center = Center(hass, config_entry)
+    assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == expected
+
+    # A later Done counts from its own time.
+    center.engine.done_early(watering, step_id)
+    await hass.async_block_till_done()
+    assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == _fmt(
+        _local(_fmt(dt_util.utcnow())[:10] + " 22:00") + timedelta(days=3)
+    )
+
+
+async def test_done_and_clear_services_on_a_scheduled_step(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """With nothing open, done and clear work like the Upcoming buttons."""
+    center = await load(hass, config_entry)
+    waste = await center.add("Mixed waste", _scheduled(WEEKLY_WASTE))
+    await center.call("done", "sensor.nc_mixed_waste")
+    assert center.state("sensor.nc_mixed_waste") == "done"
+    assert _fmt(center.attrs("sensor.nc_mixed_waste")["next_due"]) == (
+        "2026-11-25 Wed 19:00"
+    )
+    await _move(hass, freezer, "2026-11-24 12:00")
+    await center.call("clear", "sensor.nc_mixed_waste")
+    assert _fmt(center.attrs("sensor.nc_mixed_waste")["next_due"]) == (
+        "2026-12-02 Wed 19:00"
+    )
+    await _move(hass, freezer, "2026-11-25 19:00")
+    assert center.state("sensor.nc_mixed_waste") != "active"
+    # An open notification is closed as before.
+    await _move(hass, freezer, "2026-12-02 19:00")
+    assert center.state("sensor.nc_mixed_waste") == "active"
+    await center.call("clear", "sensor.nc_mixed_waste")
+    assert center.state("sensor.nc_mixed_waste") == "idle"
+    assert center.engine.has_schedule(waste, center.engine.step_id_of(waste, 1))
+
+
 async def test_switched_on_again_reopens_a_due_card(
     hass: HomeAssistant,
     config_entry: MockConfigEntry,

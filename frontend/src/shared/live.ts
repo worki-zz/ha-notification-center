@@ -546,14 +546,18 @@ export function navigate(path: string, replace = false): void {
   window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace } }));
 }
 
-/** Mark a scheduled step done before it is due. */
-export async function doneEarly(
+/** The buttons of a scheduled step that is not due yet. */
+export type EarlyButton = "done_early" | "dismiss_early";
+
+/** Close a scheduled step before it is due: done, or dismissed (the occurrence is skipped). */
+export async function closeEarly(
   hass: HomeAssistant,
   notificationId: string,
   stepId: string,
+  key: EarlyButton,
 ): Promise<void> {
   await hass.callWS({
-    type: `${DOMAIN}/step/done_early`,
+    type: `${DOMAIN}/step/${key}`,
     notification_id: notificationId,
     step_id: stepId,
   });

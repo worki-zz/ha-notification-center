@@ -141,11 +141,14 @@ class StepSchedule:
             if due is not None and due == self._skipped():
                 due = calendar_after(self.config, n, due)
             return due
+        skipped = self._skipped()
         due = after_last_done_due(
-            self.config, n, self._last_done(), self._last_due(), now
+            self.config, n, self._last_done(), self._last_due(), now, skipped
         )
         while due <= now:
-            due = after_last_done_due(self.config, n, self._last_done(), due, now)
+            due = after_last_done_due(
+                self.config, n, self._last_done(), due, now, skipped
+            )
         return due
 
     def _plan(self) -> None:
@@ -187,7 +190,9 @@ class StepSchedule:
             return
         last_done = self._last_done()
         for _ in range(_MAX_CATCH_UP):
-            due = after_last_done_due(self.config, n, last_done, last, now)
+            due = after_last_done_due(
+                self.config, n, last_done, last, now, self._skipped()
+            )
             if due > now:
                 self._reopen(last, now)
                 return

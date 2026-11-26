@@ -444,6 +444,12 @@ class EngineActions:
                     return str(button["id"])
         return f"{card.step_id}.activation"
 
+    def has_schedule(self: Engine, notification_id: str, step_id: str) -> bool:
+        """Return whether a step runs on a schedule."""
+        runner = self.runners.get(notification_id)
+        step = runner.steps.get(step_id) if runner else None
+        return step is not None and step.schedule is not None
+
     @callback
     def done_early(
         self: Engine, notification_id: str, step_id: str, context: Context | None = None
@@ -453,6 +459,27 @@ class EngineActions:
         An after-last-done step counts from now; a calendar step skips its
         next occurrence.
         """
+        self._close_early(notification_id, step_id, CLOSED_DONE, context)
+
+    @callback
+    def dismiss_early(
+        self: Engine, notification_id: str, step_id: str, context: Context | None = None
+    ) -> None:
+        """Skip the next occurrence of a scheduled step without doing it.
+
+        A calendar step comes back at the following occurrence. An
+        after-last-done step keeps its last done and comes back one interval
+        after the occurrence that was skipped.
+        """
+        self._close_early(notification_id, step_id, CLOSED_DISMISSED, context)
+
+    def _close_early(
+        self: Engine,
+        notification_id: str,
+        step_id: str,
+        reason: str,
+        context: Context | None,
+    ) -> None:
         runner = self.runners.get(notification_id)
         step = runner.steps.get(step_id) if runner else None
         if step is None or step.schedule is None:
@@ -460,10 +487,11 @@ class EngineActions:
         if self.select(notification_id, step_id, None):
             raise ServiceValidationError("The step has an open notification")
         schedule = step.schedule
-        if schedule.is_calendar and schedule.next is not None:
+        skip = schedule.is_calendar or reason == CLOSED_DISMISSED
+        if skip and schedule.next is not None:
             self._record(notification_id, step_id, HISTORY_SKIPPED, schedule.next)
-        # A done card, as if it had been done on the card: it shows as done
-        # today and the Activity log tells who did it.
+        # A closed card, as if it had been closed on the card: the Activity
+        # log tells who did it, and a done one shows as done today.
         now = dt_util.utcnow()
         if (old := self.cards.get((notification_id, step_id, ""))) is not None:
             self.forget(old, notify=False)
@@ -475,7 +503,10 @@ class EngineActions:
             since=now,
             state_since=now,
             source=SOURCE_BUTTON,
-            closed_reason=CLOSED_DISMISSED,
+            # The other way, so that closing it below is a change.
+            closed_reason=CLOSED_DONE
+            if reason == CLOSED_DISMISSED
+            else CLOSED_DISMISSED,
         )
         self.cards[card.key] = card
         self._render(card)
@@ -483,8 +514,8 @@ class EngineActions:
             card,
             source=SOURCE_BUTTON,
             context=context,
-            closed_reason=CLOSED_DONE,
+            closed_reason=reason,
             closed_at=now,
         )
-        if schedule.is_calendar:
+        if skip:
             schedule.reschedule()
