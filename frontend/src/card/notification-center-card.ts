@@ -28,7 +28,7 @@ import { type Highlight, type NotificationViewData } from "../shared/notificatio
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
 import { TemplateTexts } from "../shared/text";
-import { doneEarlyOf, renderScheduled } from "../shared/upcoming";
+import { closeEarlyOf, renderScheduled } from "../shared/upcoming";
 import type { ActionConfig, HassEntity, HomeAssistant } from "../shared/types";
 import { loadDashboardElements } from "./elements";
 
@@ -275,7 +275,7 @@ export class NotificationCenterCard extends LitElement {
       ></notification-center-view>`;
     }
     if (status.status === "upcoming") {
-      return renderScheduled(hass, status.upcoming, (item) => void doneEarlyOf(hass, item));
+      return renderScheduled(hass, status.upcoming, (item, key) => void closeEarlyOf(hass, item, key));
     }
     const snoozed = status.status === "snoozed";
     const when = snoozed ? statusText(hass, status, this._now) : undefined;

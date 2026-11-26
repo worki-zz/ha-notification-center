@@ -134,18 +134,21 @@ def async_setup_services(hass: HomeAssistant) -> None:
             cards = engine.select(notification_id, step_id, call.data.get("entity"))
             if cards:
                 engine.close_cards(cards, CLOSED_DONE, SOURCE_ACTION, call.context)
+            elif engine.has_schedule(notification_id, step_id):
+                # Nothing is open: as the Done button of Upcoming.
+                engine.done_early(notification_id, step_id, call.context)
             else:
                 # Nothing is open: the task was done anyway, so it counts.
                 engine.set_last_done(notification_id, step_id, dt_util.utcnow())
 
     async def clear(call: ServiceCall) -> None:
         for engine, notification_id, step_id in await _targets(hass, call):
-            engine.close_cards(
-                engine.select(notification_id, step_id, call.data.get("entity")),
-                CLOSED_DISMISSED,
-                SOURCE_ACTION,
-                call.context,
-            )
+            cards = engine.select(notification_id, step_id, call.data.get("entity"))
+            if cards:
+                engine.close_cards(cards, CLOSED_DISMISSED, SOURCE_ACTION, call.context)
+            elif engine.has_schedule(notification_id, step_id):
+                # Nothing is open: as the Dismiss button of Upcoming.
+                engine.dismiss_early(notification_id, step_id, call.context)
 
     async def snooze(call: ServiceCall) -> None:
         until: datetime | None = None

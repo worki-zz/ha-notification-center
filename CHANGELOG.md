@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Dismiss on a scheduled step that is not due yet**: Upcoming and Schedule rows have a *Dismiss* button next to *Done*. It skips the occurrence without marking it done: a calendar step comes back at the following occurrence; an "after last done" step keeps its last done time and is next due one interval after the skipped due time (due Thursday, every 3 days, dismissed on Tuesday: next Sunday). It does not show in Done today.
+
+### Changed
+
+- **The Done and Clear actions on a scheduled step with nothing open** work like the buttons: *Done* also skips a calendar step's next occurrence (it only set the last done time before), and *Clear* skips the next occurrence like *Dismiss* (it did nothing). Steps without a schedule are unchanged.
+
 ## 0.7.11
 
 ### Added

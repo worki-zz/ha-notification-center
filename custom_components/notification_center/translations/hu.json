@@ -117,7 +117,7 @@
     },
     "done": {
       "name": "Kész",
-      "description": "Késznek jelöli a lépést, és beírja az elvégzés idejét.",
+      "description": "Késznek jelöli a lépést, és beírja az elvégzés idejét. Ha egy ütemezett lépésnél nincs nyitott értesítés, úgy működik, mint a Done gomb az Upcoming listán: a naptár szerinti lépés kihagyja a következő alkalmat.",
       "fields": {
         "step": {
           "name": "Lépés",
@@ -131,7 +131,7 @@
     },
     "clear": {
       "name": "Elvetés",
-      "description": "Lezárja a lépést anélkül, hogy késznek jelölné, mint a Dismiss.",
+      "description": "Lezárja a lépést anélkül, hogy késznek jelölné, mint a Dismiss. Ha egy ütemezett lépésnél nincs nyitott értesítés, kihagyja a következő alkalmat, mint a Dismiss gomb az Upcoming listán.",
       "fields": {
         "step": {
           "name": "Lépés",

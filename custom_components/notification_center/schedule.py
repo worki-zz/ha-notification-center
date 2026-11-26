@@ -257,12 +257,14 @@ def after_last_done_due(
     last_done: datetime | None,
     last_due: datetime | None,
     now: datetime,
+    skipped: datetime | None = None,
 ) -> datetime:
     """Return when an after-last-done step is due.
 
     Never done: at the next At time, or now without one. After a due time
     that passed without the step being done (it was dismissed),
-    it is due again a day later.
+    it is due again a day later. A due time that was skipped (dismissed
+    early) moves one interval on, counted from that due time.
     """
     at = _at(schedule)
     if last_done is None:
@@ -271,6 +273,11 @@ def after_last_done_due(
         local = dt_util.as_local(last_done)
         day = add_units(local.date(), n, schedule["unit"])
         due = _local(day, at or local.time())
+        if skipped is not None and skipped >= due:
+            due = _local(
+                add_units(dt_util.as_local(skipped).date(), n, schedule["unit"]),
+                at or dt_util.as_local(skipped).time(),
+            )
     if last_due is not None and last_due >= due:
         due = _next_day(last_due, at)
     return due

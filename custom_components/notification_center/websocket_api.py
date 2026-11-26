@@ -128,6 +128,7 @@ def async_register(hass: HomeAssistant) -> None:
         ws_card_action,
         ws_card_press,
         ws_step_done_early,
+        ws_step_dismiss_early,
         ws_schedule_preview,
         ws_step_set_next,
         ws_text_preview,
@@ -696,6 +697,36 @@ def ws_step_done_early(
         return
     try:
         engine.done_early(
+            msg["notification_id"], msg["step_id"], connection.context(msg)
+        )
+    except HomeAssistantError as err:
+        connection.send_error(msg["id"], ERR_INVALID, str(err))
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/step/dismiss_early",
+        vol.Required("notification_id"): str,
+        vol.Required("step_id"): str,
+    }
+)
+@callback
+def ws_step_dismiss_early(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Skip the next occurrence of a scheduled step (any user)."""
+    engine = async_get_engine(hass)
+    if engine is None:
+        connection.send_error(
+            msg["id"], "not_loaded", "Notification Center is not loaded"
+        )
+        return
+    try:
+        engine.dismiss_early(
             msg["notification_id"], msg["step_id"], connection.context(msg)
         )
     except HomeAssistantError as err:

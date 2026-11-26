@@ -117,7 +117,7 @@
     },
     "done": {
       "name": "Done",
-      "description": "Marks a step done and saves the time it was done.",
+      "description": "Marks a step done and saves the time it was done. With nothing open on a scheduled step, it works like Done on the Upcoming list: a calendar step skips its next occurrence.",
       "fields": {
         "step": {
           "name": "Step",
@@ -131,7 +131,7 @@
     },
     "clear": {
       "name": "Clear",
-      "description": "Closes a step without marking it done, like Dismiss.",
+      "description": "Closes a step without marking it done, like Dismiss. With nothing open on a scheduled step, it skips the next occurrence, like Dismiss on the Upcoming list.",
       "fields": {
         "step": {
           "name": "Step",
