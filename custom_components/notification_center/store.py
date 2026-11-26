@@ -13,6 +13,7 @@ import asyncio
 from collections.abc import Callable, Coroutine
 import copy
 from functools import wraps
+import logging
 from typing import Any, Final, cast
 
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
@@ -54,7 +55,9 @@ STORAGE_VERSION: Final = 1
 # 8: button values stored equal to the category's are left out, once: a
 #    value chosen equal to the category's is kept from now on (0.7.10).
 # 9: a person's notify and device_type are a list of push devices (0.7.11).
-STORAGE_MINOR_VERSION: Final = 9
+# 10: status actions in the status blocks, Snooze when and Mute when, a
+#     button's actions and navigation inherited key by key.
+STORAGE_MINOR_VERSION: Final = 10
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -68,7 +71,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # 6: a schedule's Expires is the Expires row of Dismiss when.
 # 7: button values equal to the category's are chosen ones, not leftovers.
 # 8: a person's notify and device_type are a list of push devices.
-EXPORT_VERSION: Final = 8
+# 9: status actions, Snooze when and Mute when, button keys inherited one by one.
+EXPORT_VERSION: Final = 9
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -100,6 +104,8 @@ class _ConfigStore(Store[ConfigData]):
             drop_inherited_values(old_data)
         if old_major_version == 1 and old_minor_version < 9:
             upgrade_push_devices(old_data)
+        if old_major_version == 1 and old_minor_version < 10:
+            upgrade_status_actions(old_data)
         return old_data
 
 
@@ -118,6 +124,208 @@ _OLD_ACTIONS: Final[dict[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {
         "navigation": {"type": "navigate", "path": old.get("path") or ""}
     },
 }
+
+
+_LOGGER = logging.getLogger(__name__)
+
+# The status block that runs what a built-in button's own actions did.
+_BUTTON_BLOCKS: Final = {
+    "done": "done_when",
+    "dismiss": "dismiss_when",
+    "snooze": "snooze_when",
+    "mute": "mute_when",
+}
+
+
+def _upgrade_button(button: dict[str, Any], where: str) -> dict[str, Any] | None:
+    """Bring one button to the key by key form, in place.
+
+    The navigation leaves the actions, the Snooze time of the Snooze state is
+    the button's Snooze for, Mute is a notification state, a Tap's Open on
+    tap is its Navigation. A built-in Done, Dismiss, Snooze or Mute button
+    loses its own actions: they are returned, for its status block.
+    """
+    kind = button.get("type")
+    page = button.pop("open_on_tap", None)
+    actions = button.get("actions")
+    if not isinstance(actions, dict):
+        actions = None
+    if actions is not None:
+        navigation = actions.pop("navigation", None)
+        if navigation and "navigation" not in button:
+            button["navigation"] = navigation
+        state = actions.get("notification_state")
+        if isinstance(state, dict) and "snooze" in state:
+            snooze = state.pop("snooze")
+            if snooze and state.get("type") == "snooze":
+                button.setdefault("snooze_for", snooze)
+        if not state:
+            actions.pop("notification_state", None)
+        if actions.pop("mute", False) and kind in ("custom", "tap"):
+            if not state:
+                actions["notification_state"] = {"type": "mute"}
+            else:
+                _LOGGER.warning(
+                    "%s: the button set %s and Mute; it now only sets %s",
+                    where,
+                    state.get("type"),
+                    state.get("type"),
+                )
+    if kind == "tap" and page and "navigation" not in button:
+        button["navigation"] = {"type": "navigate", "path": page}
+    if kind in _BUTTON_BLOCKS and actions is not None:
+        button.pop("actions")
+        return {
+            "entity_action": bool(actions.get("entity_action")),
+            "ha_actions": list(actions.get("ha_actions") or []),
+        }
+    return None
+
+
+def _button_ref(button: dict[str, Any]) -> Any:
+    """Return how a step's button finds its category's: type, or custom id."""
+    return button.get("id") if button.get("type") == "custom" else button.get("type")
+
+
+def _has_value(key: str, value: Any) -> bool:
+    """Return whether an inherited value does something (is not off)."""
+    if key == "notification_state":
+        return bool(value) and value.get("type") != "unchanged"
+    if key == "navigation":
+        return bool(value) and value.get("type") != "none"
+    return bool(value)
+
+
+def _keep_own_block(button: dict[str, Any], base: dict[str, Any] | None) -> None:
+    """Keep a step's own actions block as it was, now that keys inherit.
+
+    Before, a step's button that stored its actions had all of them: what it
+    left out was off. Each key the category has a value for is stored off.
+    """
+    actions = button.setdefault("actions", {})
+    base = base or {}
+    inherited = base.get("actions") or {}
+    for key, off in (
+        ("entity_action", False),
+        ("notification_state", {"type": "unchanged"}),
+        ("ha_actions", []),
+    ):
+        if key not in actions and _has_value(key, inherited.get(key)):
+            actions[key] = off
+    if "navigation" not in button and _has_value("navigation", base.get("navigation")):
+        button["navigation"] = {"type": "none"}
+    if (
+        button.get("type") == "tap"
+        and "run_button" not in button
+        and base.get("run_button")
+    ):
+        # Its own actions, not the category's Run button.
+        button["run_button"] = ""
+
+
+def _move_to_block(step: dict[str, Any], kind: str, moved: dict[str, Any]) -> None:
+    if not moved["entity_action"] and not moved["ha_actions"]:
+        return
+    block = step.get(_BUTTON_BLOCKS[kind])
+    if not isinstance(block, dict):
+        block = step[_BUTTON_BLOCKS[kind]] = {}
+    block["actions"] = moved
+    if kind in ("snooze", "mute"):
+        block["enabled"] = True
+
+
+def upgrade_status_actions(data: dict[str, Any]) -> None:
+    """Move to status actions and key by key button inheritance.
+
+    What every button does stays the same: the own actions of the built-in
+    Done, Dismiss, Snooze and Mute buttons (a step's, else its category's)
+    go to the step's Done when, Dismiss when, Snooze when and Mute when
+    (switched on), Mute on an own button is its notification state, the
+    navigation and the Snooze time leave the actions. A Tap that showed more
+    info by default stores it. The Snooze button's first time is its
+    Snooze for.
+    """
+    categories: dict[Any, dict[str, Any]] = {}
+    moved_by_category: dict[Any, dict[str, dict[str, Any]]] = {}
+    # Categories whose switched off Tap still showed more info by default.
+    default_taps: set[Any] = set()
+    for category in data.get("categories") or []:
+        if not isinstance(category, dict):
+            continue
+        categories[category.get("id")] = category
+        moved: dict[str, dict[str, Any]] = {}
+        for button in category.get("buttons") or []:
+            if not isinstance(button, dict):
+                continue
+            if (
+                button.get("type") == "tap"
+                and "actions" not in button
+                and not button.get("run_button")
+            ):
+                # The built-in Tap showed more info; now it does nothing.
+                if button.get("enabled"):
+                    button.setdefault("navigation", {"type": "more_info"})
+                else:
+                    default_taps.add(category.get("id"))
+            if (
+                result := _upgrade_button(button, f"Category {category.get('id')}")
+            ) is not None:
+                moved[str(button.get("type"))] = result
+            if button.get("type") == "snooze":
+                times = button.get("snooze") or ["1h"]
+                if times[0] != "1h":
+                    button.setdefault("snooze_for", times[0])
+        moved_by_category[category.get("id")] = moved
+    for notification in data.get("notifications") or []:
+        if not isinstance(notification, dict):
+            continue
+        category_id = notification.get("category", GENERAL_CATEGORY_ID)
+        category = categories.get(category_id) or {}
+        bases = {
+            _button_ref(button): button
+            for button in category.get("buttons") or []
+            if isinstance(button, dict)
+        }
+        for step in notification.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            where = f"{notification.get('name', notification.get('id'))}"
+            own_blocks: set[str] = set()
+            for button in step.get("buttons") or []:
+                if not isinstance(button, dict):
+                    continue
+                kind = str(button.get("type"))
+                base = bases.get(_button_ref(button))
+                had_actions = "actions" in button
+                if (
+                    kind == "tap"
+                    and not had_actions
+                    and "run_button" not in button
+                    and "navigation" not in button
+                    and button.get("enabled", False)
+                    and (base is None or category_id in default_taps)
+                ):
+                    # Switched on here, it showed more info by default.
+                    button["navigation"] = {"type": "more_info"}
+                result = _upgrade_button(button, where)
+                if result is not None:
+                    own_blocks.add(kind)
+                    _move_to_block(step, kind, result)
+                if kind == "snooze" and button.get("snooze"):
+                    first = button["snooze"][0]
+                    if first != ((base or {}).get("snooze_for") or "1h"):
+                        button.setdefault("snooze_for", first)
+                if had_actions and kind in ("custom", "tap"):
+                    _keep_own_block(button, base)
+                elif (
+                    had_actions
+                    and "navigation" not in button
+                    and _has_value("navigation", (base or {}).get("navigation"))
+                ):
+                    button["navigation"] = {"type": "none"}
+            for kind, result in moved_by_category.get(category_id, {}).items():
+                if kind not in own_blocks:
+                    _move_to_block(step, kind, result)
 
 
 def upgrade_push_devices(data: dict[str, Any]) -> None:
@@ -620,7 +828,7 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, 3, 4, 5, 6, 7, EXPORT_VERSION):
+        if version not in (1, 2, 3, 4, 5, 6, 7, 8, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
@@ -636,6 +844,8 @@ class ConfigManager:
             drop_inherited_values(data)
         if version < 8:
             upgrade_push_devices(data)
+        if version < 9:
+            upgrade_status_actions(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(

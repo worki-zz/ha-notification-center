@@ -6,11 +6,6 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## High priority
 
-### Actions on every status change
-*Area: Notification editor.* Run Home Assistant actions when a notification's status changes, for every status: becomes active, done, dismissed, snoozed, muted (and back). For example: turn off the plug when the washing machine notification is done, or log a dismiss. Today an automation with the Notification state trigger can do it. *(Kristóf, 2026-11-24; feedback after v0.7.3)*
-
-Overlaps with the button actions: an action that should run whenever a notification is done (or dismissed, snoozed) could live here instead of on every button that leads there, and this can partly replace the button's own Home Assistant actions. When it is built, decide which actions stay on the buttons (only what depends on the button pressed, like the entity action) and how the editor shows the two together. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
-
 ### Push swipe action
 *Area: Push.* What swiping a push away does: today nothing happens (the notification stays). A default for all notifications (in General), a category's and a notification's own, or derived from the buttons. Snooze is the obvious candidate (with its first time), but Dismiss or nothing should also be possible; to be thought through. Needs the Companion app's clear event (`mobile_app_notification_cleared`, Android only; iOS has no such event). *(Kristóf, 2026-11-24; feedback after v0.7.5)*
 
@@ -30,9 +25,6 @@ Overlaps with the button actions: an action that should run whenever a notificat
 *Area: Insight.* Simple statistics per notification, such as how often it fired and how long it took until it was done. Built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*
 
 ## Medium priority
-
-### Snooze and Mute status triggers and action blocks
-*Area: Notification editor.* Snooze and Mute as triggers of their own (for example: snooze or mute the notification when something happens, as Done when does for done) and as blocks of a step, like Done when. Kristóf's idea: a *Show … block* checkbox in the step menu that adds the block; to weigh against a built-in Mute button. Goes with the open Dismiss trigger question (item 8 of the feedback after v0.7.3). *(Kristóf, 2026-11-24; feedback after v0.7.3)*
 
 ### Live condition badges in the editor
 *Area: Notification editor.* Home Assistant's automation editor marks each condition with a live green or orange badge (true or false right now). It renders that badge only when the conditions open their options in the sidebar; the notification editor shows them inline, so they get no badge. Show the live result next to each condition of a step, Notification state and Notification entities included. *(Kristóf, 2026-11-23; M1 of the v0.7.2 review)*

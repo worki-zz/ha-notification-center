@@ -1,4 +1,4 @@
-version: 3
+version: 9
 modes:
 - id: away
   name: Away
@@ -270,7 +270,7 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      actions: {navigation: {type: more_info}}
+      navigation: {type: more_info}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     activation:
@@ -292,7 +292,7 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      actions: {navigation: {type: more_info}}
+      navigation: {type: more_info}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     activation:
@@ -436,11 +436,11 @@ notifications:
     buttons:
     - type: tap
       enabled: true
-      actions: {navigation: {type: more_info, entity_id: camera.front_door}}
+      navigation: {type: more_info, entity_id: camera.front_door}
     - type: custom
       label: Camera
       icon: mdi:cctv
-      actions: {navigation: {type: more_info, entity_id: camera.front_door}}
+      navigation: {type: more_info, entity_id: camera.front_door}
     - {type: dismiss, enabled: true}
     - {type: done, enabled: false}
     - {type: snooze, enabled: false}

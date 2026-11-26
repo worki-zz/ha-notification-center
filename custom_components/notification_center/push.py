@@ -38,16 +38,16 @@ from homeassistant.core import Context, Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import PANEL_URL_PATH
+from .const import PANEL_URL_PATH, SOURCE_PUSH
 from .device_base import Device
 from .device_colors import color_of, parse_color
 from .device_speaker import _token
 from .devices import DeviceManager
 from .model import (
-    BUTTON_EFFECTS,
     CHANNEL_PUSH,
     PUSH_PRIORITY_DEFAULT,
     SYSTEM_COLORS,
+    button_state,
     run_button_of,
 )
 
@@ -506,32 +506,30 @@ class PushDevice(Device):
     def tap_url(self, card: Card) -> str:
         """Return what a tap on a card's push opens.
 
-        The Tap's page (or the category's, or General's). When the Tap does
-        something, the panel presses it first; a Tap that navigates opens its
-        own page.
+        General's page, unless the Tap is switched on: when it does
+        something, the panel presses it first; a Tap that only navigates
+        opens its page (or the Status dialog) at once.
         """
-        tap = next(
-            (
-                button
-                for button in self.manager.engine.buttons_of(card)
-                if button["type"] == "tap"
-            ),
-            None,
-        )
-        page = (tap or {}).get("open_on_tap") or self.default_url()
+        buttons = self.manager.engine.buttons_of(card)
+        tap = next((button for button in buttons if button["type"] == "tap"), None)
+        page = self.default_url()
         if tap is None or not tap.get("enabled"):
             return page
         # A Tap that runs another button does what that button does.
-        target = run_button_of(self.manager.engine.buttons_of(card), tap) or tap
+        target = run_button_of(buttons, tap) or tap
         actions = target.get("actions") or {}
-        if not actions and target["type"] not in BUTTON_EFFECTS:
-            return page
-        navigation = actions.get("navigation") or {}
-        # Only a page to open: no need to press it.
-        if set(actions) == {"navigation"} and target["type"] not in BUTTON_EFFECTS:
-            if navigation.get("type") == "navigate":
-                return str(navigation["path"])
-            if navigation.get("type") == "notification_info":
+        navigation = target.get("navigation") or {}
+        does = (
+            button_state(target) != "unchanged"
+            or actions.get("entity_action")
+            or actions.get("ha_actions")
+        )
+        if navigation.get("type") == "navigate":
+            page = str(navigation["path"])
+        if not does:
+            if not navigation or navigation["type"] == "navigate":
+                return page
+            if navigation["type"] == "notification_info":
                 return info_url(card.notification_id)
         return press_url(action_id(card, tap["id"]), page)
 
@@ -549,7 +547,7 @@ class PushDevice(Device):
                 button.get("label") or DEFAULT_LABELS.get(button["type"]) or "Button"
             )
             identifier = action_id(card, button["id"])
-            if (button.get("actions") or {}).get("navigation"):
+            if button.get("navigation"):
                 # It opens a page: the panel presses it and opens the page.
                 actions.append(
                     {"action": "URI", "title": title, "uri": press_url(identifier)}
@@ -577,7 +575,9 @@ class PushDevice(Device):
 
     async def _async_press(self, card: Card, button_id: str, context: Context) -> None:
         try:
-            await self.manager.engine.async_press(card, button_id, None, context)
+            await self.manager.engine.async_press(
+                card, button_id, None, context, origin=SOURCE_PUSH
+            )
         except HomeAssistantError as err:
             _LOGGER.warning("Push button %s: %s", button_id, err)
 

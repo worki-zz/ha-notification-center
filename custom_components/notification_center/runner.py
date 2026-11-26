@@ -44,10 +44,13 @@ from .const import (
     SOURCE_DISMISS_WHEN,
     SOURCE_DONE_WHEN,
     SOURCE_ENTITY,
+    SOURCE_MUTE_WHEN,
+    SOURCE_SNOOZE_WHEN,
     SOURCE_TRIGGER,
 )
 from .listed import EntityList, ListedTracker
 from .model import (
+    DEFAULT_SNOOZE_FOR,
     ENTITIES_KINDS,
     TRIGGER_NOTIFICATION_STATE,
     entities_references,
@@ -294,6 +297,20 @@ class StepRunner:
             self._dismiss_fired,
             (self._dismiss_listed, self._done_unmatched),
         )
+        snooze_when = self.step.get("snooze_when") or {}
+        if snooze_when.get("enabled"):
+            await self._async_setup_triggers(
+                snooze_when.get("triggers", []),
+                self._snooze_fired,
+                (self._snooze_listed, self._done_unmatched),
+            )
+        mute_when = self.step.get("mute_when") or {}
+        if mute_when.get("enabled"):
+            await self._async_setup_triggers(
+                mute_when.get("triggers", []),
+                self._mute_fired,
+                (self._mute_listed, self._done_unmatched),
+            )
 
     @callback
     def async_stop(self) -> None:
@@ -504,6 +521,46 @@ class StepRunner:
         context = trigger_context(trigger, context)
         for card in own or cards:
             self.engine.close(card, closed, source, context=context)
+
+    def _fired_cards(self, trigger: dict[str, Any]) -> list[Card]:
+        """Return the active cards of the step (the trigger entity's own)."""
+        cards = [
+            card
+            for card in self.engine.cards_of(self.notification.id, self.step_id)
+            if card.phase == PHASE_OPEN
+        ]
+        entity_id = trigger.get("entity_id")
+        own = [card for card in cards if card.entity_id == entity_id]
+        return own or cards
+
+    @callback
+    def _snooze_fired(self, trigger: dict[str, Any], context: Context | None) -> None:
+        """Snooze the active cards for the Snooze for of the Snooze button."""
+        context = trigger_context(trigger, context)
+        for card in self._fired_cards(trigger):
+            snooze = next(
+                button
+                for button in self.engine.buttons_of(card)
+                if button["type"] == "snooze"
+            )
+            until = self.engine.snooze_choice(
+                card, snooze.get("snooze_for") or DEFAULT_SNOOZE_FOR
+            )
+            self.engine.snooze(card, until, SOURCE_SNOOZE_WHEN, context)
+
+    @callback
+    def _snooze_listed(self, entity_id: str, trigger: dict[str, Any]) -> None:
+        self._snooze_fired(trigger, None)
+
+    @callback
+    def _mute_fired(self, trigger: dict[str, Any], context: Context | None) -> None:
+        """Mute the active cards: they stay, their channels stop."""
+        context = trigger_context(trigger, context)
+        self.engine.mute_cards(self._fired_cards(trigger), SOURCE_MUTE_WHEN, context)
+
+    @callback
+    def _mute_listed(self, entity_id: str, trigger: dict[str, Any]) -> None:
+        self._mute_fired(trigger, None)
 
     @callback
     def _done_listed(self, entity_id: str, trigger: dict[str, Any]) -> None:

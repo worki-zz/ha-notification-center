@@ -536,7 +536,7 @@ async def test_siren_follows_a_change_and_stops(
 
 
 async def test_mute_button(center: Center, hass: HomeAssistant) -> None:
-    """A button with the Mute action keeps the card and stops the siren."""
+    """A button with the Mute state keeps the card and stops the siren."""
     await center.set("switch.siren", "off")
     on = async_mock_service(hass, "switch", "turn_on")
     off = async_mock_service(hass, "switch", "turn_off")
@@ -550,7 +550,7 @@ async def test_mute_button(center: Center, hass: HomeAssistant) -> None:
                     "id": "quiet",
                     "type": "custom",
                     "label": "Quiet",
-                    "actions": {"mute": True},
+                    "actions": {"notification_state": {"type": "mute"}},
                 }
             ]
         ),
