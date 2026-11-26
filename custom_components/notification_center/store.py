@@ -56,7 +56,7 @@ STORAGE_VERSION: Final = 1
 #    value chosen equal to the category's is kept from now on (0.7.10).
 # 9: a person's notify and device_type are a list of push devices (0.7.11).
 # 10: status actions in the status blocks, Snooze when and Mute when, a
-#     button's actions and navigation inherited key by key.
+#     button's actions and navigation inherited key by key (0.7.11).
 STORAGE_MINOR_VERSION: Final = 10
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
