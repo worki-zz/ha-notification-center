@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Notification entities numeric state ignores unavailable and unknown values**, like Home Assistant's own numeric state trigger. A notification that is open stays open (for example Low battery with Done when *activation no longer true*), a notification that is not open does not start, and a wait for *for* is cancelled. Nothing closes or reopens when the entity drops out and comes back.
+
 ### Changed
 
 - **A person's push devices are a list** (the data model only, nothing changes in the UI): `push_devices` with an id, the notify action, the device type and `enabled` replace `notify` and `device_type`. The People page still shows one device. A person without an enabled device gets no push, as before, and a switched-off device raises no Repairs issue. The pushes on the phones are followed per device. The stored settings and an export of 0.7.10 or earlier are migrated once.
