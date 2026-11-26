@@ -609,3 +609,49 @@ async def test_upcoming_leaves_out_steps_whose_conditions_are_not_met(
     await hass.async_block_till_done()
     assert upcoming() == [put_out]
     assert _fmt(center.attrs("sensor.nc_bin")["next_due"]) == "2026-11-25 Wed 19:00"
+
+
+async def test_upcoming_checks_within_for_the_due_time(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """A Notification state's Within is checked for when the step is due."""
+    center = await load(hass, config_entry)
+    bring_back = {**WEEKLY_WASTE, "weekdays": ["thu"], "at": "07:00"}
+    bin_id = await center.add(
+        "Bin",
+        _scheduled(WEEKLY_WASTE, message="Put out the bin"),
+        _scheduled(
+            bring_back,
+            message="Bring back the bin",
+            conditions=[
+                {
+                    "condition": "notification_center.notification_state",
+                    "notification": "bin",
+                    "step": 1,
+                    "state": "done",
+                    "within": {"hours": 6},
+                }
+            ],
+        ),
+        id="bin",
+    )
+    put_out = center.engine.step_id_of(bin_id, 1)
+    bring = center.engine.step_id_of(bin_id, 2)
+
+    def upcoming() -> list[str]:
+        items = center.engine.snapshot()["notifications"][bin_id]["upcoming"]
+        return [item["step_id"] for item in items]
+
+    await _move(hass, freezer, "2026-11-18 19:00")
+    await center.call("done", "sensor.nc_bin")
+    # Done within 6 hours now, but not any more at 7:00 tomorrow.
+    assert upcoming() == [put_out]
+
+    # Done at 2:00: within 6 hours of 7:00.
+    await _move(hass, freezer, "2026-11-25 19:00")
+    await _move(hass, freezer, "2026-11-26 02:00")
+    await center.call("done", "sensor.nc_bin")
+    assert bring in upcoming()

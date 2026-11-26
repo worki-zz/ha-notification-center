@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- Upcoming and Schedule checked a Notification state condition's *Within* for now, not for when the step is due: *Bring back the bin* (Put out the bin done within 24 hours) showed although at its next time the done was already too long ago. *Within* and *done today* are now checked for the due time.
 - The pencil of a switched-off button in Interactions is no longer faded: it opens the dialog as on any other row.
 
 ## 0.7.9

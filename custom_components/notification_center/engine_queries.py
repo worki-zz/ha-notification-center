@@ -62,8 +62,13 @@ class EngineQueries:
         condition: Mapping[str, Any],
         notification: NotificationRunner,
         variables: Mapping[str, Any],
+        at: datetime | None = None,
     ) -> bool:
-        """Check a Notification entities or Notification state condition."""
+        """Check a Notification entities or Notification state condition.
+
+        ``at``: a later time to check a Notification state's time window
+        (Within, done today) for, such as when a scheduled step is due.
+        """
         kind = condition["condition"]
         if kind in ENTITIES_KINDS:
             entities = notification.entities_of(condition.get("notification"))
@@ -73,10 +78,12 @@ class EngineQueries:
                     self.hass.states.get(entity_id)
                 )
             return any(True for _ in matching_entities(self.hass, entities, condition))
-        return self.check_notification_state(condition)
+        return self.check_notification_state(condition, at)
 
-    def check_notification_state(self: Engine, condition: Mapping[str, Any]) -> bool:
-        """Check a Notification state condition."""
+    def check_notification_state(
+        self: Engine, condition: Mapping[str, Any], at: datetime | None = None
+    ) -> bool:
+        """Check a Notification state condition, now or at a later time."""
         notification_id = self.resolve_notification(condition["notification"])
         if notification_id is None:
             return False
@@ -92,10 +99,12 @@ class EngineQueries:
         state: str = condition["state"]
         if (within := as_period(condition.get("within"))) is not None:
             reached = self.last_reached(notification_id, step_id, state)
-            return reached is not None and dt_util.utcnow() - reached <= within
+            return reached is not None and (at or dt_util.utcnow()) - reached <= within
         needed = as_period(condition.get("for")) or timedelta()
-        now = dt_util.utcnow()
-        start = dt_util.start_of_local_day()
+        now = at or dt_util.utcnow()
+        start = dt_util.start_of_local_day(
+            dt_util.as_local(at).date() if at is not None else None
+        )
         for card in self.cards_of(notification_id, step_id):
             if card.status != state:
                 continue
@@ -144,8 +153,8 @@ class EngineQueries:
     ) -> list[tuple[StepRunner, datetime]]:
         """Return the scheduled steps of a notification and when each is due.
 
-        A step whose Conditions are not met now is left out, as it would be
-        held back when due (the Status dialog says Hidden the same way).
+        A step whose Conditions are not met when it is due is left out, as it
+        would be held back then (the Status dialog says Hidden the same way).
         """
         runner = self.runners.get(notification_id)
         if runner is None:
@@ -165,7 +174,7 @@ class EngineQueries:
             for step in runner.steps.values()
             if step.schedule is not None
             and step.schedule.next is not None
-            and not step.waits_for_conditions(variables)
+            and not step.waits_for_conditions(variables, step.schedule.next)
         ]
 
     def upcoming(self: Engine, notification_id: str) -> list[dict[str, str]]:
