@@ -20,6 +20,10 @@
 - The stored settings and an export of 0.7.10 or earlier are migrated once, so that every button does what it did: own actions of the built-in buttons go to the status blocks (a category's to each step that inherited them), Mute on a custom button becomes its Notification state, a Tap that showed more info by default keeps it, the Snooze button's first time becomes its *Snooze for*, and a step's own actions block stores *off* for what it left out.
 - **A person's push devices are a list** (the data model only, nothing changes in the UI): `push_devices` with an id, the notify action, the device type and `enabled` replace `notify` and `device_type`. The People page still shows one device. A person without an enabled device gets no push, as before, and a switched-off device raises no Repairs issue. The pushes on the phones are followed per device. The stored settings and an export of 0.7.10 or earlier are migrated once.
 
+### Fixed
+
+- **Notification entities numeric state ignores unavailable and unknown values**, like Home Assistant's own numeric state trigger. A notification that is open stays open (for example Low battery with Done when *activation no longer true*), a notification that is not open does not start, and a wait for *for* is cancelled. Nothing closes or reopens when the entity drops out and comes back.
+
 ## 0.7.10
 
 ### Changed

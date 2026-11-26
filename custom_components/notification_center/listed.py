@@ -123,6 +123,11 @@ class ListedMatcher:
         state = self._hass.states.get(str(limit))
         return _float(state.state) if state is not None else None
 
+    @property
+    def numeric(self) -> bool:
+        """Return whether this is a numeric state test (above and/or below)."""
+        return self.above is not None or self.below is not None
+
     def matches(self, state: State | None) -> bool:
         """Return whether a state passes the test."""
         if state is None:
@@ -410,6 +415,18 @@ class ListedTracker:
         *,
         initial: bool = False,
     ) -> None:
+        if (
+            self.matcher.numeric
+            and new_state is not None
+            and new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+        ):
+            # Like Home Assistant's numeric_state trigger: no value is no
+            # change. A match that is already active stays; one still waiting
+            # for its ``for`` time is dropped, as it never became active.
+            if entity_id in self._timers:
+                self._matching.discard(entity_id)
+                self._timers.pop(entity_id)()
+            return
         if not self.matcher.matches(new_state):
             if entity_id in self._matching:
                 self._stop_matching(entity_id, _context(new_state))

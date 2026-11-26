@@ -293,3 +293,68 @@ async def test_switched_on_again_entities_match(
     await center.manager.async_set_enabled(nid, True)
     await hass.async_block_till_done()
     assert center.state("sensor.nc_doors") == "active"
+
+
+def _low_battery(**extra: object) -> dict[str, object]:
+    return step(
+        activation={
+            "type": "triggers",
+            "triggers": [
+                {
+                    "trigger": "notification_center.entities_numeric_state",
+                    "below": 20,
+                    **extra,
+                }
+            ],
+        },
+        done_when={"activation_conditions_no_longer_true": True},
+    )
+
+
+async def test_numeric_unavailable_keeps_card(center: Center) -> None:
+    """An unavailable value is no change: the card stays and does not reopen."""
+    await center.set("sensor.battery", "50")
+    await center.add(
+        "Battery", _low_battery(), entities=[{"entity_id": "sensor.battery"}]
+    )
+    await center.set("sensor.battery", "10")
+    assert center.state("sensor.nc_battery") == "active"
+    await center.set("sensor.battery", "unavailable")
+    assert center.state("sensor.nc_battery") == "active"
+    await center.set("sensor.battery", "unknown")
+    assert center.state("sensor.nc_battery") == "active"
+    # Back with a value above the limit: the card closes as before.
+    await center.set("sensor.battery", "60")
+    assert center.state("sensor.nc_battery") != "active"
+
+
+async def test_numeric_unavailable_does_not_start(center: Center) -> None:
+    """An entity that is not matching does not start on unavailable."""
+    await center.set("sensor.battery", "50")
+    await center.add(
+        "Battery", _low_battery(), entities=[{"entity_id": "sensor.battery"}]
+    )
+    await center.set("sensor.battery", "unavailable")
+    assert center.state("sensor.nc_battery") == "idle"
+
+
+async def test_numeric_unavailable_cancels_for(
+    hass: HomeAssistant, center: Center, freezer: FrozenDateTimeFactory
+) -> None:
+    """Unavailable during ``for`` drops the wait: it restarts with a value."""
+    await center.set("sensor.battery", "50")
+    await center.add(
+        "Battery",
+        _low_battery(**{"for": {"minutes": 5}}),
+        entities=[{"entity_id": "sensor.battery"}],
+    )
+    await center.set("sensor.battery", "10")
+    await tick(hass, freezer, timedelta(minutes=3))
+    await center.set("sensor.battery", "unavailable")
+    await tick(hass, freezer, timedelta(minutes=10))
+    assert center.state("sensor.nc_battery") == "idle"
+    await center.set("sensor.battery", "10")
+    await tick(hass, freezer, timedelta(minutes=4))
+    assert center.state("sensor.nc_battery") == "idle"
+    await tick(hass, freezer, timedelta(minutes=2))
+    assert center.state("sensor.nc_battery") == "active"
