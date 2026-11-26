@@ -1628,8 +1628,48 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
                     ),
                 )
     order_modes(config["modes"])
+    categories = {category["id"]: category for category in config["categories"]}
+    for notification in config["notifications"]:
+        category = categories.get(notification["category"])
+        for step in notification["steps"]:
+            _drop_inherited_values(category, step)
     _check_references(config)
     return config
+
+
+def _drop_inherited_values(
+    category: dict[str, Any] | None, step: dict[str, Any]
+) -> None:
+    """Leave out what a step's button stores equal to the category's button.
+
+    Such a value follows the category again, also when the category changes
+    later (older versions stored the switches and empty actions of every
+    button). What the step does now stays the same.
+    """
+    if not category:
+        return
+
+    def ref(button: dict[str, Any]) -> str:
+        return str(button["id"] if button["type"] == "custom" else button["type"])
+
+    bases = {ref(button): button for button in category.get("buttons", [])}
+    for button in step.get("buttons", []):
+        kind = button["type"]
+        base = bases.get(ref(button))
+        if base is None or base["type"] != kind:
+            continue
+        for name in ("enabled", "show_in_push", "label", "icon"):
+            if name in button and button[name] == base.get(name):
+                button.pop(name)
+        if kind == "snooze" and button.get("snooze") == base.get("snooze"):
+            button.pop("snooze", None)
+        # The Tap's actions are its own Tap behavior: they stay.
+        if (
+            kind != "tap"
+            and "actions" in button
+            and button["actions"] == base.get("actions", {})
+        ):
+            button.pop("actions")
 
 
 def order_modes(modes: list[dict[str, Any]]) -> None:
