@@ -66,12 +66,37 @@ const STATES: { value: ButtonState["type"]; label: string }[] = [
 /** The status block of each state a button sets. */
 export const STATE_BLOCKS: Record<
   Exclude<ButtonState["type"], "unchanged">,
-  { key: "done_when" | "dismiss_when" | "snooze_when" | "mute_when"; name: string; run: string }
+  {
+    key: "done_when" | "dismiss_when" | "snooze_when" | "mute_when";
+    name: string;
+    run: string;
+    show: string;
+  }
 > = {
-  done: { key: "done_when", name: "Done when", run: "Run Done actions" },
-  dismiss: { key: "dismiss_when", name: "Dismiss when", run: "Run Dismiss actions" },
-  snooze: { key: "snooze_when", name: "Snooze when", run: "Run Snooze actions" },
-  mute: { key: "mute_when", name: "Mute when", run: "Run Mute actions" },
+  done: {
+    key: "done_when",
+    name: "Done when",
+    run: "Run Done actions",
+    show: "Show Done actions",
+  },
+  dismiss: {
+    key: "dismiss_when",
+    name: "Dismiss when",
+    run: "Run Dismiss actions",
+    show: "Show Dismiss actions",
+  },
+  snooze: {
+    key: "snooze_when",
+    name: "Snooze when",
+    run: "Run Snooze actions",
+    show: "Show Snooze actions",
+  },
+  mute: {
+    key: "mute_when",
+    name: "Mute when",
+    run: "Run Mute actions",
+    show: "Show Mute actions",
+  },
 };
 
 /** A status block of the step, as the Run … actions switch tells of it. */
@@ -570,8 +595,8 @@ export class NcInteractionDialog extends LitElement {
 
   // The built-in Snooze button: the times the dashboard offers besides
   // Snooze for, only the ticked ones. With none ticked the button snoozes
-  // at once for its Snooze for, which a short line shows (it opens the
-  // Actions tab, where Snooze for is set).
+  // at once for its Snooze for, which a short line under the title shows
+  // (it opens the Actions tab, where Snooze for is set).
   private _snoozeOptions(button: Button) {
     const base =
       (this._inherits ? this.inherited?.snooze : undefined) ?? DEFAULT_SNOOZE;
@@ -596,6 +621,7 @@ export class NcInteractionDialog extends LitElement {
           ? restoreButton("Restore the snooze options", () => this._set({ snooze: undefined }))
           : nothing}
       </div>
+      ${chosen.size ? nothing : this._snoozeForLine(button)}
       <div class="times">
         ${SNOOZE_CHOICES.map(
           (choice) =>
@@ -609,7 +635,6 @@ export class NcInteractionDialog extends LitElement {
             </label>`,
         )}
       </div>
-      ${chosen.size ? nothing : this._snoozeForLine(button)}
     </ha-card>`;
   }
 
@@ -797,7 +822,7 @@ export class NcInteractionDialog extends LitElement {
       on
         ? html`<div>
             <ha-button appearance="plain" size="s" @click=${() => this._close(this._button, block.key)}>
-              Open ${block.name}
+              ${block.show}
             </ha-button>
           </div>`
         : undefined,
