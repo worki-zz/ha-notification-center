@@ -86,7 +86,23 @@ export interface BlockInfo {
 export interface InteractionResult {
   result?: Button | "delete";
   enableBlock?: "snooze_when" | "mute_when";
+  // Open this status block's Actions after saving.
+  goTo?: "done_when" | "dismiss_when" | "snooze_when" | "mute_when";
 }
+
+// The icon and the line of a built-in button's own notification state.
+const OWN_STATE_ICONS: Partial<Record<ButtonState["type"], string>> = {
+  done: "mdi:check",
+  dismiss: "mdi:close",
+  snooze: "mdi:alarm-snooze",
+  mute: "mdi:volume-off",
+};
+const OWN_STATE_TEXTS: Partial<Record<ButtonState["type"], string>> = {
+  done: "Closes the notification as done.",
+  dismiss: "Closes the notification without marking it done.",
+  snooze: "Hides the notification for a while.",
+  mute: "Stops the notification lights, speakers and sirens.",
+};
 
 // The sentinel of a Tap that runs its own actions (an empty run_button).
 const OWN_ACTIONS = "__own__";
@@ -232,6 +248,8 @@ export class NcInteractionDialog extends LitElement {
   @state() private _enableBlock?: "snooze_when" | "mute_when";
 
   private _result?: Button | "delete";
+
+  private _goTo?: InteractionResult["goTo"];
 
   protected override willUpdate(): void {
     if (!this._button && this.button) this._button = structuredClone(this.button);
@@ -578,9 +596,6 @@ export class NcInteractionDialog extends LitElement {
           ? restoreButton("Restore the snooze options", () => this._set({ snooze: undefined }))
           : nothing}
       </div>
-      <div class="secondary">
-        Offered besides Snooze for, when the Snooze button is pressed on the dashboard.
-      </div>
       <div class="times">
         ${SNOOZE_CHOICES.map(
           (choice) =>
@@ -603,7 +618,11 @@ export class NcInteractionDialog extends LitElement {
   private _snoozeForLine(button: Button) {
     const base = (this._inherits ? this.inherited?.snooze_for : undefined) || DEFAULT_SNOOZE_FOR;
     const text = button.snooze_for ? snoozeLabel(button.snooze_for) : `Default (${snoozeLabel(base)})`;
-    return html`<button class="link" @click=${() => (this._tab = "actions")}>${text}</button>`;
+    return html`<div>
+      <ha-button appearance="plain" size="s" @click=${() => (this._tab = "actions")}>
+        ${text}
+      </ha-button>
+    </div>`;
   }
 
   // Required for a custom button defined here (in the category, or a
@@ -689,15 +708,7 @@ export class NcInteractionDialog extends LitElement {
     const type = buttonState(effective);
     const builtin = button.type !== "custom" && button.type !== "tap";
     const ownState = button.actions?.notification_state?.type;
-    const stateControl = builtin
-      ? html`<ha-select
-          class="control"
-          .label=${"State"}
-          .value=${type}
-          .options=${[{ value: type, label: stateLabel(type) }]}
-          disabled
-        ></ha-select>`
-      : this._inherits
+    const stateControl = this._inherits
         ? html`<div class="control">
             ${inheritField(
               hass,
@@ -725,7 +736,22 @@ export class NcInteractionDialog extends LitElement {
                 ),
             )}
           </div>`;
-    const rows = [this._row("Notification state", "", stateControl)];
+    // A built-in button's own state, as before: titled by its type, with a
+    // switch that is always on.
+    const rows = [
+      builtin
+        ? html`<div class="setting">
+            <div class="setting-head">
+              <ha-icon class="builtin" .icon=${OWN_STATE_ICONS[type]}></ha-icon>
+              <div class="setting-text">
+                <div>${stateLabel(type)}</div>
+                <div class="secondary">${OWN_STATE_TEXTS[type]}</div>
+              </div>
+              <ha-switch .checked=${true} disabled .label=${stateLabel(type)}></ha-switch>
+            </div>
+          </div>`
+        : this._row("Notification state", "", stateControl),
+    ];
     if (type === "snooze") rows.push(this._snoozeForRow(button));
     if (this.mode === "step" && type !== "unchanged") rows.push(this._runRow(button, type));
     return html`<ha-card outlined class="settings">${rows}</ha-card>`;
@@ -758,20 +784,23 @@ export class NcInteractionDialog extends LitElement {
     const optional = block.key === "snooze_when" || block.key === "mute_when";
     const blockOff = optional && !info?.enabled && this._enableBlock !== block.key;
     const on = !blockOff && button.run_state_actions !== false;
-    const count = info?.actions ?? 0;
-    const secondary = blockOff
-      ? `${block.name} is off in this step. Switching this on turns it on.`
-      : count
-        ? `${count} ${count === 1 ? "action" : "actions"} in ${block.name}`
-        : `No actions in ${block.name} yet`;
     return this._row(
       block.run,
-      secondary,
+      `Set in ${block.name}`,
       this._switch(block.run, on, (checked) => {
         if (checked && blockOff) this._enableBlock = block.key as "snooze_when" | "mute_when";
         else if (!checked && this._enableBlock === block.key) this._enableBlock = undefined;
         this._set({ run_state_actions: checked ? undefined : false });
       }),
+      // As the Snooze for line of the Settings tab: it saves the button and
+      // opens the block's Actions.
+      on
+        ? html`<div>
+            <ha-button appearance="plain" size="s" @click=${() => this._close(this._button, block.key)}>
+              Open ${block.name}
+            </ha-button>
+          </div>`
+        : undefined,
     );
   }
 
@@ -824,8 +853,9 @@ export class NcInteractionDialog extends LitElement {
       ></ha-automation-action>`;
   }
 
-  private _close(result?: Button | "delete"): void {
+  private _close(result?: Button | "delete", goTo?: InteractionResult["goTo"]): void {
     this._result = result;
+    this._goTo = goTo;
     this._open = false;
   }
 
@@ -833,6 +863,7 @@ export class NcInteractionDialog extends LitElement {
     if (ev.target !== ev.currentTarget) return;
     ev.stopPropagation();
     const detail: InteractionResult = { result: this._result };
+    if (this._result && this._result !== "delete" && this._goTo) detail.goTo = this._goTo;
     if (this._result && this._result !== "delete" && this._enableBlock) {
       detail.enableBlock = this._enableBlock;
     }
@@ -905,6 +936,10 @@ export class NcInteractionDialog extends LitElement {
       align-items: center;
       gap: 4px;
     }
+    ha-icon.builtin {
+      flex: none;
+      color: var(--amber-color, #ffc107);
+    }
     .end .restore {
       color: var(--secondary-text-color);
     }
@@ -923,16 +958,6 @@ export class NcInteractionDialog extends LitElement {
       gap: 8px;
       min-height: 40px;
       cursor: pointer;
-    }
-    .link {
-      background: none;
-      border: none;
-      padding: 0;
-      font: inherit;
-      font-size: var(--ha-font-size-s, 12px);
-      color: var(--primary-color);
-      cursor: pointer;
-      text-align: start;
     }
     /* The restore button beside a title. */
     .section-head .restore {

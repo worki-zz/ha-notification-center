@@ -23,6 +23,8 @@ export interface BlockOptions {
   filled?: boolean;
   // Always open, without the arrow (the category editor).
   fixed?: boolean;
+  // Names the block on the page (data-block), so it can be scrolled to.
+  key?: string;
 }
 
 export function block(options: BlockOptions) {
@@ -31,6 +33,7 @@ export function block(options: BlockOptions) {
   return html`<ha-expansion-panel
     outlined
     class="nc-block ${filled ? "filled" : "empty"}"
+    data-block=${options.key ?? nothing}
     .expanded=${options.fixed || options.expanded}
     .noCollapse=${options.fixed ?? false}
     @expanded-will-change=${(ev: CustomEvent<{ expanded: boolean }>) => {
@@ -97,6 +100,34 @@ export function blockTabs(tabs: BlockTab[], active: string, changed: (key: strin
   </ha-tab-group>`;
 }
 
+/**
+ * The line at the top of each tab of a status block, under the tabs, by the
+ * block's key and the tab's.
+ */
+export const TAB_INTROS: Record<string, Record<string, string>> = {
+  start: {
+    triggers: "When the notification becomes active",
+    conditions: "When the notification can become active, or when it is shown",
+    actions: "Runs when the notification becomes active",
+  },
+  done: {
+    triggers: "When the notification is done by itself, without a button",
+    actions: "Runs when the notification is done",
+  },
+  dismiss: {
+    triggers: "When the notification is dismissed by itself, without a button",
+    actions: "Runs when the notification is dismissed",
+  },
+  snooze: {
+    triggers: "When the notification is snoozed by itself, without a button",
+    actions: "Runs when the notification is snoozed",
+  },
+  mute: {
+    triggers: "When the notification is muted by itself, without a button",
+    actions: "Runs when the notification is muted",
+  },
+};
+
 /** "2 triggers · 1 condition": the parts that are not 0. */
 export function summaryOf(parts: [number, string][]): string {
   return parts
@@ -109,11 +140,7 @@ export function summaryOf(parts: [number, string][]): string {
 export const BLOCK_INTROS: Record<string, string> = {
   message: "What the notification says",
   interactions: "What people can do with the notification",
-  start: "When the notification becomes active, and what runs then",
-  done: "When the notification is done by itself, and what runs when it is done",
-  dismiss: "When the notification is dismissed by itself, and what runs when it is dismissed",
-  snooze: "When the notification is snoozed by itself, and what runs when it is snoozed",
-  mute: "When the notification is muted by itself, and what runs when it is muted",
+
   audience: "Who gets the notification in each state",
   channels: "How the notification is delivered in each home mode",
   entities: "Which entities the notification is about",
@@ -171,7 +198,7 @@ export const BLOCK_STYLES = css`
   }
   ha-tab-group.block-tabs {
     display: block;
-    margin: 0 -16px 16px;
+    margin: -16px -16px 16px;
   }
   .block-count {
     color: var(--secondary-text-color);

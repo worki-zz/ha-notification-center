@@ -33,7 +33,7 @@ import "./builtin-forms";
 import { type EntitiesKind, entitiesFilled } from "./entities-form";
 import "./entities-form";
 import { defaultSchedule } from "./schedule-editor";
-import { BLOCK_INTROS, block, blockTabs, summaryOf } from "./block";
+import { BLOCK_INTROS, TAB_INTROS, block, blockTabs, summaryOf } from "./block";
 import "./schedule-editor";
 import type {
   AudienceEntry,
@@ -141,6 +141,14 @@ const WHEN_KEYS = {
   snooze: "snooze_when",
   mute: "mute_when",
 } as const;
+
+// The status block of a button's Run … actions, by its key in the step.
+const GO_TO_BLOCKS: Record<string, WhenBlock> = {
+  done_when: "done",
+  dismiss_when: "dismiss",
+  snooze_when: "snooze",
+  mute_when: "mute",
+};
 
 // A tab of a status block, with the word of its summary part.
 type BlockTab = { key: string; label: string; count?: number; unit: string };
@@ -251,6 +259,7 @@ export class NcStepEditor extends LitElement {
       header,
       count,
       ...more,
+      key,
       intro: BLOCK_INTROS[key],
       expanded: this.expanded.has(key),
       toggled: (expanded) =>
@@ -403,7 +412,19 @@ export class NcStepEditor extends LitElement {
     else if (key === "dismiss") content = this._renderDismiss(step);
     else content = this._renderWhenTriggers(step, key);
     return html`${blockTabs(tabs, active, (tab) => (this._tabs = { ...this._tabs, [key]: tab }))}
+      <p class="block-intro">${TAB_INTROS[key][active]}</p>
       ${content}`;
+  }
+
+  // Open a status block on its Actions tab (from a button's Run … actions).
+  private _openActions(key: WhenBlock): void {
+    this._tabs = { ...this._tabs, [key]: "actions" };
+    this.dispatchEvent(new CustomEvent("block-toggled", { detail: { block: key, expanded: true } }));
+    window.setTimeout(() => {
+      this.renderRoot
+        .querySelector(`ha-expansion-panel[data-block="${key}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   }
 
   // The Actions tab of a status block: they run when a card reaches its
@@ -1333,7 +1354,7 @@ export class NcStepEditor extends LitElement {
       @interaction-closed=${(ev: CustomEvent<InteractionResult>) => {
         ev.stopPropagation();
         this._interaction = undefined;
-        const { result, enableBlock } = ev.detail;
+        const { result, enableBlock, goTo } = ev.detail;
         if (!result) return;
         // Run Snooze/Mute actions switched on also switches its block on.
         const extra: Partial<EditorStep> = enableBlock
@@ -1352,6 +1373,7 @@ export class NcStepEditor extends LitElement {
           return;
         }
         this._setEntry(step, result, !!edit.inherited, extra);
+        if (goTo) this._openActions(GO_TO_BLOCKS[goTo]);
       }}
     ></nc-interaction-dialog>`;
   }
