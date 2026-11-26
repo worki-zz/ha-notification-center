@@ -116,6 +116,10 @@ export const STEP_EDITOR_STYLES = css`
     ha-icon.builtin {
       color: var(--amber-color, #ffc107);
     }
+    /* Grey while the built-in row is not in use. */
+    ha-icon.builtin.off {
+      color: var(--disabled-text-color);
+    }
     /* Side by side where there is room. */
     .show-switches {
       display: grid;
@@ -140,9 +144,12 @@ export const STEP_EDITOR_STYLES = css`
       background-color: var(--secondary-background-color);
       outline: none;
     }
-    .interaction.off .own-text,
-    .interaction.off ha-icon {
+    /* Off: the text faded and the icon grey; the pencil still works. */
+    .interaction.off .own-text {
       opacity: 0.6;
+    }
+    .interaction.off > ha-icon {
+      color: var(--disabled-text-color);
     }
     .interaction ha-icon {
       flex: none;
