@@ -1,7 +1,7 @@
 {
   "name": "notification-center-frontend",
   "private": true,
-  "version": "0.7.9",
+  "version": "0.7.10",
   "description": "Panel and dashboard card of the Notification Center integration",
   "type": "module",
   "scripts": {
