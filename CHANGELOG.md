@@ -9,6 +9,7 @@
 ### Changed
 
 - **The Done and Clear actions on a scheduled step with nothing open** work like the buttons: *Done* also skips a calendar step's next occurrence (it only set the last done time before), and *Clear* skips the next occurrence like *Dismiss* (it did nothing). Steps without a schedule are unchanged.
+- **Button dialog**: the button under *Run … actions* is *Show Done actions* (*Show Dismiss actions*, and so on) instead of *Open Done when*. With no Snooze options ticked, the *Default (…)* line is right under the card's title.
 
 ## 0.7.11
 
