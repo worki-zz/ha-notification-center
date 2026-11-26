@@ -14,14 +14,23 @@ export interface BlockOptions {
   content: unknown;
   // One line above the content: what the block is about.
   intro?: string;
+  // Under the name while the block is closed: what it holds (status
+  // blocks, which have no count).
+  summary?: string;
+  // Has content: the name in the primary text colour and the icon in the
+  // primary colour; empty, both secondary. Left out: when the count is not
+  // 0 (a block without a count has content).
+  filled?: boolean;
   // Always open, without the arrow (the category editor).
   fixed?: boolean;
 }
 
 export function block(options: BlockOptions) {
+  const filled = options.filled ?? countFilled(options.count);
+  const open = options.fixed || options.expanded;
   return html`<ha-expansion-panel
     outlined
-    class="nc-block"
+    class="nc-block ${filled ? "filled" : "empty"}"
     .expanded=${options.fixed || options.expanded}
     .noCollapse=${options.fixed ?? false}
     @expanded-will-change=${(ev: CustomEvent<{ expanded: boolean }>) => {
@@ -37,26 +46,74 @@ export function block(options: BlockOptions) {
     }}
   >
     <ha-icon slot="leading-icon" .icon=${options.icon}></ha-icon>
-    <div slot="header" class="block-header">
-      ${options.header}
-      ${options.count === undefined || options.count === ""
-        ? nothing
-        : html`<span class="block-count">${options.count}</span>`}
+    <div slot="header" class="block-heading">
+      <div class="block-header">
+        ${options.header}
+        ${options.count === undefined || options.count === ""
+          ? nothing
+          : html`<span class="block-count">${options.count}</span>`}
+      </div>
+      ${options.summary && !open
+        ? html`<div class="block-summary">${options.summary}</div>`
+        : nothing}
     </div>
-    ${options.fixed || options.expanded ? html`<div class="block-content">
+    ${open ? html`<div class="block-content">
           ${options.intro ? html`<p class="block-intro">${options.intro}</p>` : nothing}${options.content}
         </div>` : nothing}
   </ha-expansion-panel>`;
+}
+
+// A count of 0 (or 0/5) means an empty block.
+function countFilled(count: number | string | undefined): boolean {
+  if (count === undefined || count === "") return true;
+  return !/^0(\/|$)/.test(String(count));
+}
+
+/** One tab of a block: its name and, when it has content, a count. */
+export interface BlockTab {
+  key: string;
+  label: string;
+  count?: number;
+}
+
+/**
+ * The tabs of a status block (Triggers, Conditions, Actions), with the
+ * count of each that has content: "Actions · 2".
+ */
+export function blockTabs(tabs: BlockTab[], active: string, changed: (key: string) => void) {
+  return html`<ha-tab-group
+    class="block-tabs"
+    @wa-tab-show=${(ev: CustomEvent<{ name: string }>) => {
+      ev.stopPropagation();
+      changed(ev.detail.name);
+    }}
+  >
+    ${tabs.map(
+      (tab) =>
+        html`<ha-tab-group-tab slot="nav" panel=${tab.key} .active=${tab.key === active}>
+          ${tab.count ? `${tab.label} · ${tab.count}` : tab.label}
+        </ha-tab-group-tab>`,
+    )}
+  </ha-tab-group>`;
+}
+
+/** "2 triggers · 1 condition": the parts that are not 0. */
+export function summaryOf(parts: [number, string][]): string {
+  return parts
+    .filter(([count]) => count > 0)
+    .map(([count, name]) => `${count} ${name}${count === 1 ? "" : "s"}`)
+    .join(" · ");
 }
 
 /** The line at the top of each block, by the block's key. */
 export const BLOCK_INTROS: Record<string, string> = {
   message: "What the notification says",
   interactions: "What people can do with the notification",
-  start: "When the notification becomes active",
-  show: "When the notification can become active, or when it is shown",
-  done: "When the notification is done by itself, without a button",
-  dismiss: "When the notification is dismissed by itself, without a button",
+  start: "When the notification becomes active, and what runs then",
+  done: "When the notification is done by itself, and what runs when it is done",
+  dismiss: "When the notification is dismissed by itself, and what runs when it is dismissed",
+  snooze: "When the notification is snoozed by itself, and what runs when it is snoozed",
+  mute: "When the notification is muted by itself, and what runs when it is muted",
   audience: "Who gets the notification in each state",
   channels: "How the notification is delivered in each home mode",
   entities: "Which entities the notification is about",
@@ -86,15 +143,35 @@ export const BLOCK_STYLES = css`
     border-bottom: 1px solid var(--divider-color);
   }
   ha-expansion-panel.nc-block > ha-icon[slot="leading-icon"] {
-    color: var(--secondary-text-color);
+    color: var(--primary-color);
     margin-inline-end: 12px;
   }
-  .block-header {
+  /* An empty block: its icon and name in the secondary colour. */
+  ha-expansion-panel.nc-block.empty > ha-icon[slot="leading-icon"],
+  ha-expansion-panel.nc-block.empty .block-header {
+    color: var(--secondary-text-color);
+  }
+  .block-heading {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+  .block-header {
     display: flex;
     align-items: baseline;
     gap: 12px;
+    color: var(--primary-text-color);
     font-weight: var(--ha-font-weight-medium, 500);
+  }
+  .block-summary {
+    color: var(--secondary-text-color);
+    font-size: var(--ha-font-size-s, 12px);
+  }
+  ha-tab-group.block-tabs {
+    display: block;
+    margin: 0 -16px 16px;
   }
   .block-count {
     color: var(--secondary-text-color);

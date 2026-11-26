@@ -26,11 +26,12 @@ export interface CategoryButton {
   label?: string | null;
   icon?: string | null;
   snooze?: string[] | null;
+  snooze_for?: string | null;
   show_in_push?: boolean;
-  open_on_tap?: string | null;
-  // The actions its notifications' button runs until they set their own
-  // (left out: the built-in default; the Tap shows more info). An Entity
-  // action means each notification's own entities.
+  navigation?: ButtonNavigation | null;
+  // Custom buttons and the Tap: the actions its notifications' button runs
+  // until they set their own, key by key. An Entity action means each
+  // notification's own entities.
   actions?: ButtonActions;
   // Tap: the button its notifications' Tap runs (a built-in one by its
   // type, a custom one by its id; empty: their own actions).
@@ -95,38 +96,44 @@ export function sortedCategories<T extends { name: string }>(categories: readonl
 
 export type ButtonType = "tap" | "done" | "snooze" | "dismiss" | "mute" | "custom";
 
-/** Where a button takes the user, on the device it was pressed on. */
+/**
+ * Where a button takes the user, on the device it was pressed on. "none":
+ * switched off (stored to stop inheriting the category's).
+ */
 export type ButtonNavigation =
+  | { type: "none" }
   | { type: "more_info"; entity_id?: string | null }
   | { type: "navigate"; path: string }
   // The notification's Status dialog, on the Overview.
   | { type: "notification_info" };
 
-/** The notification state an own button or the Tap sets. */
+/** The notification state a custom button or the Tap sets. */
 export interface ButtonState {
-  type: "done" | "dismiss" | "snooze";
-  // Snooze: how long (a key of SNOOZE_CHOICES).
-  snooze?: string;
+  type: "unchanged" | "done" | "dismiss" | "snooze" | "mute";
 }
 
 /**
- * The actions of a button. They run in this fixed order: the entity
- * action, Mute, the notification state, the Home Assistant actions, then
- * the navigation. Left out: not used.
+ * The own actions of a custom button or the Tap, each key inherited on its
+ * own (step, category, off). They run before the state the button sets.
+ * The built-in Done, Dismiss, Snooze and Mute buttons have none: their
+ * status block has the actions.
  */
 export interface ButtonActions {
   entity_action?: boolean;
-  // Not on the built-in Done, Dismiss and Snooze: they have their own.
   notification_state?: ButtonState;
-  // Stop the lights, speakers and sirens; the card stays.
-  mute?: boolean;
   ha_actions?: unknown[];
-  navigation?: ButtonNavigation;
+}
+
+/** The Actions of a status block: they run when a card reaches it. */
+export interface StatusActions {
+  entity_action: boolean;
+  ha_actions: unknown[];
 }
 
 /**
  * A button of a step. Left out fields come from the category's button of
- * the same type (a custom button: the same id); see `effectiveButtons`.
+ * the same type (a custom button: the same id), key by key; see
+ * `effectiveButtons`.
  */
 export interface Button {
   id: string;
@@ -134,18 +141,21 @@ export interface Button {
   enabled?: boolean;
   label?: string | null;
   icon?: string | null;
-  // Left out on a step's Tap: the category's Tap behavior.
+  // Custom buttons and the Tap.
   actions?: ButtonActions;
-  // The Snooze button's times (keys of SNOOZE_CHOICES): one snoozes at
-  // once, more are offered on the card.
+  navigation?: ButtonNavigation | null;
+  // The Snooze button, or a button with the Snooze state: how long.
+  snooze_for?: string | null;
+  // The Snooze button: the other times offered on the dashboard.
   snooze?: string[] | null;
+  // Run the actions of the status block of the state it sets (stored only
+  // when off; not inherited).
+  run_state_actions?: boolean;
   // Shown in the push notification (takes effect with the push channel).
   show_in_push?: boolean;
-  /** Tap behavior: the page a tap on the push opens (empty: the default). */
-  open_on_tap?: string | null;
   /**
-   * Tap behavior: run this button instead of its own actions (left out:
-   * the category's; empty: its own actions). See `runButtonOf`.
+   * Tap: run this button instead of its own actions (left out: the
+   * category's; empty: its own actions). See `runButtonOf`.
    */
   run_button?: string | null;
 }
@@ -153,7 +163,11 @@ export interface Button {
 /** A button as it works: the step's settings over the category's. */
 export interface EffectiveButton extends Button {
   enabled: boolean;
+  // Every key on a custom button and the Tap; empty on the others.
   actions: ButtonActions;
+  // Null: no navigation.
+  navigation: ButtonNavigation | null;
+  run_state_actions: boolean;
   // Inherited from the category (built-in buttons and its custom ones).
   category: boolean;
 }

@@ -14,6 +14,7 @@ import {
   type AudienceState,
   type Button,
   type ButtonActions,
+  type ButtonState,
   type CategoryButton,
   type EffectiveButton,
   type CardState,
@@ -50,13 +51,44 @@ export const SNOOZE_CHOICES: { key: string; text: string; label: string }[] = [
 ];
 
 export const DEFAULT_SNOOZE = ["1h", "3h", "tomorrow"];
+/** How long a button snoozes when nothing sets it. */
+export const DEFAULT_SNOOZE_FOR = "1h";
 
-/** The Snooze button's times, in the fixed order. */
+/**
+ * The times a Snooze button offers, as `snooze_options` in Home Assistant:
+ * its Snooze for first, then the other chosen ones in the fixed order.
+ */
 export function snoozeChoices(button: {
+  snooze_for?: string | null;
   snooze?: string[] | null;
 }): typeof SNOOZE_CHOICES {
-  const chosen = button.snooze?.length ? button.snooze : DEFAULT_SNOOZE;
-  return SNOOZE_CHOICES.filter((choice) => chosen.includes(choice.key));
+  const first = button.snooze_for || DEFAULT_SNOOZE_FOR;
+  const others = button.snooze ?? [];
+  return [
+    ...SNOOZE_CHOICES.filter((choice) => choice.key === first),
+    ...SNOOZE_CHOICES.filter((choice) => choice.key !== first && others.includes(choice.key)),
+  ];
+}
+
+/** The built-in buttons that set a state of their own; they have no own actions. */
+export const BUTTON_EFFECTS: Record<string, ButtonState["type"]> = {
+  done: "done",
+  dismiss: "dismiss",
+  snooze: "snooze",
+  mute: "mute",
+};
+/** The buttons that can snooze for a time of their own. */
+export const SNOOZE_FOR_TYPES: Button["type"][] = ["snooze", "custom", "tap"];
+/** The keys of a button's actions and their value when nothing sets them. */
+export const BUTTON_ACTION_DEFAULTS: Required<ButtonActions> = {
+  entity_action: false,
+  notification_state: { type: "unchanged" },
+  ha_actions: [],
+};
+
+/** The notification state a button sets ("unchanged": none). */
+export function buttonState(button: Pick<Button, "type" | "actions">): ButtonState["type"] {
+  return BUTTON_EFFECTS[button.type] ?? button.actions?.notification_state?.type ?? "unchanged";
 }
 
 /** A button of a live card, as it is shown. */
@@ -155,8 +187,10 @@ export function categoryButtons(category: Category | undefined): CategoryButton[
 
 /**
  * A step's buttons as they work: the category's buttons (the built-in ones
- * and its custom ones) with what the step changes, then the step's own
- * custom buttons. The same as `effective_buttons` in Home Assistant.
+ * and its custom ones) with what the step changes, key by key, then the
+ * step's own custom buttons. The same as `effective_buttons` in Home
+ * Assistant: `navigation` is null when off; `actions` has every key on a
+ * custom button and the Tap, and is empty on the other built-in buttons.
  */
 export function effectiveButtons(
   category: Category | undefined,
@@ -172,42 +206,60 @@ export function effectiveButtons(
           ? button.type === "custom" && button.id === base.id
           : button.type === base.type,
       ) ?? {};
-    const merged: EffectiveButton = {
-      id: entry.id || base.id,
-      type: base.type,
-      enabled: entry.enabled ?? base.enabled,
-      label: entry.label || base.label,
-      icon: entry.icon || base.icon,
-      // Left out: the category's, else the built-in button's default (the
-      // Tap shows more info).
-      actions:
-        entry.actions ??
-        (base.type === "tap" ? undefined : base.actions) ??
-        (base.type === "tap" ? { navigation: { type: "more_info" } } : {}),
-      category: true,
-    };
-    // The Tap behavior is one block: the step's, or the category's.
-    const ownTap = base.type === "tap" && tapBehaviorOwn(entry);
-    if (base.type === "tap" && !ownTap && base.actions) merged.actions = base.actions;
-    if (base.type === "snooze") merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze;
-    if (base.type === "tap") {
-      merged.open_on_tap = entry.open_on_tap || base.open_on_tap;
-      merged.run_button = (ownTap ? entry.run_button : base.run_button) || null;
-    }
-    else merged.show_in_push = entry.show_in_push ?? base.show_in_push;
-    return merged;
+    return mergeButton(base, entry, true);
   });
   for (const entry of own) {
     if (entry.type !== "custom" || linked.has(entry.id)) continue;
-    result.push({
-      ...entry,
-      enabled: entry.enabled ?? true,
-      actions: entry.actions ?? {},
-      show_in_push: entry.show_in_push ?? true,
-      category: false,
-    });
+    result.push(
+      mergeButton({ id: entry.id, type: "custom", enabled: true, show_in_push: true }, entry, false),
+    );
   }
   return result;
+}
+
+/** A step's button over its category's, key by key (`_merge_button`). */
+export function mergeButton(
+  base: CategoryButton,
+  entry: Partial<Button>,
+  inherited: boolean,
+): EffectiveButton {
+  const kind = base.type;
+  // Left out or null: the category's (an empty Tap run_button is its own).
+  const pick = <K extends "navigation" | "snooze_for" | "run_button">(key: K) =>
+    entry[key] != null ? entry[key] : base[key];
+  const navigation = pick("navigation");
+  const merged: EffectiveButton = {
+    id: entry.id || base.id,
+    type: kind,
+    enabled: entry.enabled ?? base.enabled ?? true,
+    label: entry.label || base.label,
+    icon: entry.icon || base.icon,
+    actions: {},
+    navigation: !navigation || navigation.type === "none" ? null : { ...navigation },
+    run_state_actions: entry.run_state_actions ?? true,
+    category: inherited,
+  };
+  if (!BUTTON_EFFECTS[kind]) {
+    const ownActions: ButtonActions = entry.actions ?? {};
+    const baseActions: ButtonActions = base.actions ?? {};
+    merged.actions = {
+      entity_action:
+        ownActions.entity_action ?? baseActions.entity_action ?? BUTTON_ACTION_DEFAULTS.entity_action,
+      notification_state:
+        ownActions.notification_state ??
+        baseActions.notification_state ??
+        BUTTON_ACTION_DEFAULTS.notification_state,
+      ha_actions:
+        ownActions.ha_actions ?? baseActions.ha_actions ?? BUTTON_ACTION_DEFAULTS.ha_actions,
+    };
+  }
+  if (SNOOZE_FOR_TYPES.includes(kind)) merged.snooze_for = pick("snooze_for") || DEFAULT_SNOOZE_FOR;
+  if (kind === "snooze") {
+    merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze?.length ? base.snooze : DEFAULT_SNOOZE;
+  }
+  if (kind === "tap") merged.run_button = pick("run_button") || null;
+  else merged.show_in_push = entry.show_in_push ?? base.show_in_push ?? true;
+  return merged;
 }
 
 /** The buttons a card shows, in their fixed order. */
@@ -230,22 +282,13 @@ export function liveButtons(live: LiveCard): LiveButton[] {
 }
 
 /** The tap of the card, when it is switched on and does something. */
-export function tapButton(live: LiveCard): Button | undefined {
+export function tapButton(live: LiveCard): EffectiveButton | undefined {
   const buttons = effectiveButtons(live.category, live.step);
   const tap = buttons.find((button) => button.type === "tap" && button.enabled);
   if (!tap) return undefined;
-  const target = runButtonOf(buttons, tap);
-  if (target) return tap;
-  if (!hasActions(tap.actions)) return undefined;
+  if (runButtonOf(buttons, tap)) return tap;
+  if (!hasActions(tap) && !tap.navigation) return undefined;
   return tap;
-}
-
-/**
- * Whether a step's Tap has its own Tap behavior (its actions, or the button
- * it runs), as `tap_behavior_own` in Home Assistant. Else the category's.
- */
-export function tapBehaviorOwn(tap: Partial<Pick<Button, "actions" | "run_button">>): boolean {
-  return tap.actions !== undefined || tap.run_button !== undefined;
 }
 
 /** The key a Tap names a button by: a built-in one's type, a custom one's id. */
@@ -421,25 +464,25 @@ export function liveCards(
   return result;
 }
 
-/** Whether a button's actions do anything. */
-export function hasActions(actions: ButtonActions | undefined): boolean {
+/**
+ * Whether a button does anything in Home Assistant: its own actions or the
+ * state it sets (the navigation runs here).
+ */
+export function hasActions(button: Pick<Button, "type" | "actions">): boolean {
+  const actions = button.actions;
   return (
-    !!actions &&
-    (!!actions.entity_action ||
-      !!actions.notification_state ||
-      !!actions.mute ||
-      !!actions.ha_actions?.length ||
-      !!actions.navigation)
+    buttonState(button) !== "unchanged" ||
+    (!!actions && (!!actions.entity_action || !!actions.ha_actions?.length))
   );
 }
 
 /**
  * Press a button of a card.
  *
- * Its actions run in the order of its Actions list: the entity action, Mute,
- * the notification state and the Home Assistant actions in Home Assistant, then the
- * navigation (More info or Navigate) here, from the given element. One that
- * cannot run is skipped; the navigation still happens.
+ * Its own actions (the entity action, then the Home Assistant actions) and
+ * the state it sets run in Home Assistant, then the navigation (More info
+ * or Navigate) here, from the given element. One that cannot run is
+ * skipped; the navigation still happens.
  */
 export async function pressButton(
   hass: HomeAssistant,
@@ -453,12 +496,7 @@ export async function pressButton(
   if (button.type === "tap") {
     button = runButtonOf(effectiveButtons(live.category, live.step), button) ?? button;
   }
-  const actions = button.actions ?? {};
-  // Done, Dismiss, Snooze and Mute change the card in Home Assistant,
-  // where the other actions but the navigation run too.
-  const backend =
-    ["done", "dismiss", "snooze", "mute"].includes(button.type) ||
-    hasActions({ ...actions, navigation: undefined });
+  const backend = hasActions(button);
   let failed: unknown;
   if (backend) {
     try {
@@ -474,7 +512,7 @@ export async function pressButton(
       failed = err;
     }
   }
-  const navigation = actions.navigation;
+  const navigation = button.navigation;
   if (navigation?.type === "more_info") {
     const entityId = navigation.entity_id || card.entity_id || live.entityId;
     if (entityId) {
