@@ -226,7 +226,7 @@ export function inheritedEntry(entry: Button): Button {
   if (!copy.label) delete copy.label;
   if (!copy.icon) delete copy.icon;
   if (copy.show_in_push === undefined || copy.show_in_push === null) delete copy.show_in_push;
-  if (!copy.snooze?.length) delete copy.snooze;
+  if (copy.snooze === undefined || copy.snooze === null) delete copy.snooze;
   if (!copy.snooze_for) delete copy.snooze_for;
   if (!copy.navigation) delete copy.navigation;
   if (copy.run_state_actions !== false) delete copy.run_state_actions;

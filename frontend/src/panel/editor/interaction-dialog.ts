@@ -551,13 +551,13 @@ export class NcInteractionDialog extends LitElement {
   }
 
   // The built-in Snooze button: the times the dashboard offers besides
-  // Snooze for. Snooze for is always offered; with no other time the
-  // button snoozes at once.
+  // Snooze for, only the ticked ones. With none ticked the button snoozes
+  // at once for its Snooze for, which a short line shows (it opens the
+  // Actions tab, where Snooze for is set).
   private _snoozeOptions(button: Button) {
-    const effective = this._effective(button);
-    const first = effective.snooze_for || DEFAULT_SNOOZE_FOR;
-    const base = this._inherits && this.inherited?.snooze?.length ? this.inherited.snooze : DEFAULT_SNOOZE;
-    const chosen = new Set([...(button.snooze?.length ? button.snooze : base), first]);
+    const base =
+      (this._inherits ? this.inherited?.snooze : undefined) ?? DEFAULT_SNOOZE;
+    const chosen = new Set(button.snooze ?? base);
     const toggle = (key: string, on: boolean) => {
       if (on) chosen.add(key);
       else chosen.delete(key);
@@ -569,7 +569,7 @@ export class NcInteractionDialog extends LitElement {
       this._set({ snooze: same ? undefined : snooze });
     };
     const own =
-      !!button.snooze?.length &&
+      !!button.snooze &&
       (this.mode === "step" ? this._inherits : button.snooze.join() !== DEFAULT_SNOOZE.join());
     return html`<ha-card outlined class="snooze">
       <div class="section-head">
@@ -587,7 +587,6 @@ export class NcInteractionDialog extends LitElement {
             html`<label class="time">
               <ha-checkbox
                 .checked=${chosen.has(choice.key)}
-                .disabled=${choice.key === first}
                 @change=${(ev: Event) =>
                   toggle(choice.key, (ev.target as HTMLInputElement).checked)}
               ></ha-checkbox>
@@ -595,10 +594,16 @@ export class NcInteractionDialog extends LitElement {
             </label>`,
         )}
       </div>
-      <button class="link" @click=${() => (this._tab = "actions")}>
-        Snooze for: ${snoozeLabel(first)}, set on the Actions tab
-      </button>
+      ${chosen.size ? nothing : this._snoozeForLine(button)}
     </ha-card>`;
+  }
+
+  // Snooze for as its dropdown shows it ("Default (1 hour)"); a click opens
+  // the Actions tab, where it is set.
+  private _snoozeForLine(button: Button) {
+    const base = (this._inherits ? this.inherited?.snooze_for : undefined) || DEFAULT_SNOOZE_FOR;
+    const text = button.snooze_for ? snoozeLabel(button.snooze_for) : `Default (${snoozeLabel(base)})`;
+    return html`<button class="link" @click=${() => (this._tab = "actions")}>${text}</button>`;
   }
 
   // Required for a custom button defined here (in the category, or a

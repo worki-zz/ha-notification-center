@@ -168,7 +168,7 @@ A notification's buttons work the same in the Overview and on both dashboard car
 
 - **Enabled** and **Show in push** (on by default for every button; Android shows at most 3).
 - **Navigation** (`navigation`): off, or where the button takes the user on the device where it was pressed: *More info* opens the entity's dialog (the chosen entity, else the notification's entity, else the notification's sensor), *Navigate* opens a page, *Notification info* opens the notification's Status dialog on the Overview (`/notification-center?info=<notification id>`, a notification's sensor works too; read-only, so for everyone). The Tap's Navigation is also what a tap on the push opens.
-- **Snooze options in the Dashboard** (the Snooze button, `snooze`): the times offered besides *Snooze for* when the button is pressed on the dashboard: 15 and 30 minutes, 1, 2, 3, 6 and 12 hours, Tomorrow, 2 and 3 days, 1 and 2 weeks and 1 month (by default 3 hours and Tomorrow besides 1 hour). With none, the button snoozes at once.
+- **Snooze options in the Dashboard** (the Snooze button, `snooze`): the times offered besides *Snooze for* when the button is pressed on the dashboard: 15 and 30 minutes, 1, 2, 3, 6 and 12 hours, Tomorrow, 2 and 3 days, 1 and 2 weeks and 1 month (by default 3 hours and Tomorrow besides 1 hour). With none ticked, the button snoozes at once, and a short line shows its Snooze for (*Default (1 hour)*), which opens the Actions tab.
 - **Label** and **Icon** (empty: the category's, else the default, shown as the placeholder).
 
 **Actions** (what it does), in the order they run:

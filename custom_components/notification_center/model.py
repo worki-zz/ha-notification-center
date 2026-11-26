@@ -159,7 +159,7 @@ SNOOZE_CHOICES: Final = (
     "2w",
     "1mo",
 )
-DEFAULT_SNOOZE_CHOICES: Final = ("1h", "3h", "tomorrow")
+DEFAULT_SNOOZE_CHOICES: Final = ("3h", "tomorrow")
 # How long a Snooze button, or an own button with the Snooze state, snoozes
 # when nothing else is chosen (its Snooze for).
 DEFAULT_SNOOZE_FOR: Final = "1h"
@@ -909,7 +909,8 @@ def _buttons(value: Any) -> list[dict[str, Any]]:
     buttons = missing + buttons if missing else buttons
     for button in buttons:
         _clean_button(button, category=False)
-        if button["type"] != "snooze" or not button.get("snooze"):
+        # An empty list is the step's own: only Snooze for (at once).
+        if button["type"] != "snooze" or button.get("snooze") is None:
             button.pop("snooze", None)
         else:
             button["snooze"] = _sorted_snooze(button["snooze"])
@@ -947,8 +948,9 @@ def _category_buttons(value: Any) -> list[dict[str, Any]]:
         button.setdefault("enabled", CATEGORY_BUTTON_DEFAULTS.get(kind, True))
         _clean_button(button, category=True)
         if kind == "snooze":
+            given = button.get("snooze")
             button["snooze"] = _sorted_snooze(
-                button.get("snooze") or DEFAULT_SNOOZE_CHOICES
+                DEFAULT_SNOOZE_CHOICES if given is None else given
             )
         else:
             button.pop("snooze", None)
@@ -1102,8 +1104,16 @@ def _merge_button(base: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]
     if kind in SNOOZE_FOR_BUTTONS:
         button["snooze_for"] = pick("snooze_for", None) or DEFAULT_SNOOZE_FOR
     if kind == "snooze":
-        button["snooze"] = (
-            entry.get("snooze") or base.get("snooze") or list(DEFAULT_SNOOZE_CHOICES)
+        # Left out (None): the category's; an empty list offers only
+        # Snooze for.
+        own_times = entry.get("snooze")
+        base_times = base.get("snooze")
+        button["snooze"] = list(
+            own_times
+            if own_times is not None
+            else base_times
+            if base_times is not None
+            else DEFAULT_SNOOZE_CHOICES
         )
     if kind == "tap":
         button["run_button"] = pick("run_button", None) or None

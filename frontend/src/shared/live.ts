@@ -50,7 +50,8 @@ export const SNOOZE_CHOICES: { key: string; text: string; label: string }[] = [
   { key: "1mo", text: "1 mo", label: "1 month" },
 ];
 
-export const DEFAULT_SNOOZE = ["1h", "3h", "tomorrow"];
+// The times offered besides Snooze for, when a category sets none.
+export const DEFAULT_SNOOZE = ["3h", "tomorrow"];
 /** How long a button snoozes when nothing sets it. */
 export const DEFAULT_SNOOZE_FOR = "1h";
 
@@ -173,12 +174,8 @@ export function categoryButtons(category: Category | undefined): CategoryButton[
     (button) => ({
       ...button,
       enabled: button.enabled ?? CATEGORY_ENABLED[button.type] ?? true,
-      snooze:
-        button.type === "snooze"
-          ? button.snooze?.length
-            ? button.snooze
-            : DEFAULT_SNOOZE
-          : undefined,
+      // An empty list offers only Snooze for.
+      snooze: button.type === "snooze" ? (button.snooze ?? DEFAULT_SNOOZE) : undefined,
       show_in_push:
         button.type === "tap" ? undefined : (button.show_in_push ?? true),
     }),
@@ -255,7 +252,8 @@ export function mergeButton(
   }
   if (SNOOZE_FOR_TYPES.includes(kind)) merged.snooze_for = pick("snooze_for") || DEFAULT_SNOOZE_FOR;
   if (kind === "snooze") {
-    merged.snooze = entry.snooze?.length ? entry.snooze : base.snooze?.length ? base.snooze : DEFAULT_SNOOZE;
+    // Left out (or null): the category's; an empty list offers only Snooze for.
+    merged.snooze = entry.snooze ?? base.snooze ?? DEFAULT_SNOOZE;
   }
   if (kind === "tap") merged.run_button = pick("run_button") || null;
   else merged.show_in_push = entry.show_in_push ?? base.show_in_push ?? true;

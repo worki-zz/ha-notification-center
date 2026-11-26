@@ -15,6 +15,7 @@ from custom_components.notification_center.model import (
     default_config,
     drop_inherited_values,
     effective_buttons,
+    snooze_options,
 )
 from custom_components.notification_center.store import (
     move_schedule_expires,
@@ -111,7 +112,7 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
     assert done["actions"] == {}
     snooze = next(button for button in buttons if button["type"] == "snooze")
     assert snooze["enabled"] is False
-    assert snooze["snooze"] == ["1h", "3h", "tomorrow"]
+    assert snooze["snooze"] == ["3h", "tomorrow"]
     assert snooze["snooze_for"] == "1h"
 
 
@@ -566,6 +567,17 @@ async def test_step_values_equal_to_the_category_are_kept(
     assert stored["tap"]["actions"] == {"ha_actions": []}
 
 
+async def test_snooze_options_can_be_empty(hass: HomeAssistant) -> None:
+    """An empty list is kept: the Snooze button offers only its Snooze for."""
+    config = _with_notification(buttons=[{"type": "snooze", "snooze": []}])
+    config["categories"][0]["buttons"] = [{"type": "snooze", "snooze": []}]
+    validated = await async_validate_config(hass, config)
+    assert validated["categories"][0]["buttons"][3]["snooze"] == []
+    [snooze] = [b for b in _effective(validated) if b["type"] == "snooze"]
+    assert snooze["snooze"] == []
+    assert snooze_options(snooze) == ["1h"]
+
+
 async def test_run_state_actions_is_stored_only_when_off(
     hass: HomeAssistant,
 ) -> None:
@@ -722,6 +734,8 @@ async def test_upgrade_status_actions(hass: HomeAssistant) -> None:
     assert "actions" not in buttons["done"]
     assert buttons["done"]["navigation"] == page
     assert buttons["snooze"]["snooze_for"] == "3h"
+    # The first time is Snooze for; the others stay on the dashboard.
+    assert buttons["snooze"]["snooze"] == ["tomorrow"]
     assert buttons["door"]["actions"] == {
         "entity_action": True,
         "notification_state": {"type": "snooze"},
@@ -753,6 +767,7 @@ async def test_upgrade_status_actions(hass: HomeAssistant) -> None:
         "navigation": {"type": "more_info"},
     }
     assert own["b-snooze"]["snooze_for"] == "30m"
+    assert own["b-snooze"]["snooze"] == ["1h"]
     other = config["notifications"][1]["steps"][0]["buttons"][0]
     assert other["navigation"] == {"type": "more_info"}
 

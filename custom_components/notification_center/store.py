@@ -272,9 +272,12 @@ def upgrade_status_actions(data: dict[str, Any]) -> None:
             ) is not None:
                 moved[str(button.get("type"))] = result
             if button.get("type") == "snooze":
-                times = button.get("snooze") or ["1h"]
+                # The first time becomes Snooze for; the others stay the
+                # times offered on the dashboard.
+                times = button.get("snooze") or ["1h", "3h", "tomorrow"]
                 if times[0] != "1h":
                     button.setdefault("snooze_for", times[0])
+                button["snooze"] = list(times[1:])
         moved_by_category[category.get("id")] = moved
     for notification in data.get("notifications") or []:
         if not isinstance(notification, dict):
@@ -315,6 +318,7 @@ def upgrade_status_actions(data: dict[str, Any]) -> None:
                     first = button["snooze"][0]
                     if first != ((base or {}).get("snooze_for") or "1h"):
                         button.setdefault("snooze_for", first)
+                    button["snooze"] = list(button["snooze"][1:])
                 if had_actions and kind in ("custom", "tap"):
                     _keep_own_block(button, base)
                 elif (
