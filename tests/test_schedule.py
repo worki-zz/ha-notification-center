@@ -547,3 +547,65 @@ async def test_snooze_wins_over_a_new_occurrence(
     assert card.expires_at == expires_at
     await _move(hass, freezer, "2026-11-18 10:01")
     assert center.state("sensor.nc_plants") == "active"
+
+
+async def test_upcoming_leaves_out_steps_whose_conditions_are_not_met(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """A scheduled step shows under Upcoming only while its Conditions are met.
+
+    Conditions that change with time are checked when the step is due.
+    """
+    center = await load(hass, config_entry)
+    hass.states.async_set("input_boolean.bins", "off")
+    bring_back = {**WEEKLY_WASTE, "weekdays": ["thu"], "at": "07:00"}
+    bin_id = await center.add(
+        "Bin",
+        _scheduled(WEEKLY_WASTE, message="Put out the bin"),
+        _scheduled(
+            bring_back,
+            message="Bring back the bin",
+            conditions=[
+                {
+                    "condition": "notification_center.notification_state",
+                    "notification": "bin",
+                    "step": 1,
+                    "state": "done",
+                    "within": {"hours": 24},
+                },
+                {
+                    "condition": "state",
+                    "entity_id": "input_boolean.bins",
+                    "state": "on",
+                },
+                {"condition": "time", "after": "23:00:00"},
+            ],
+        ),
+        id="bin",
+    )
+    put_out = center.engine.step_id_of(bin_id, 1)
+    bring = center.engine.step_id_of(bin_id, 2)
+
+    def upcoming() -> list[str]:
+        items = center.engine.snapshot()["notifications"][bin_id]["upcoming"]
+        return [item["step_id"] for item in items]
+
+    assert upcoming() == [put_out]
+    hass.states.async_set("input_boolean.bins", "on")
+    await hass.async_block_till_done()
+    # Put out the bin is not done yet.
+    assert upcoming() == [put_out]
+
+    await _move(hass, freezer, "2026-11-18 19:00")
+    await center.call("done", "sensor.nc_bin")
+    # The time condition (after 23:00) does not count before it is due.
+    assert upcoming() == [put_out, bring]
+    assert _fmt(center.attrs("sensor.nc_bin")["next_due"]) == "2026-11-19 Thu 07:00"
+
+    hass.states.async_set("input_boolean.bins", "off")
+    await hass.async_block_till_done()
+    assert upcoming() == [put_out]
+    assert _fmt(center.attrs("sensor.nc_bin")["next_due"]) == "2026-11-25 Wed 19:00"

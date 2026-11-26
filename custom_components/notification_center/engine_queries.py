@@ -38,7 +38,7 @@ from .schedule import calendar_between
 
 if TYPE_CHECKING:
     from .engine import Engine
-    from .runner import NotificationRunner
+    from .runner import NotificationRunner, StepRunner
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -136,25 +136,43 @@ class EngineQueries:
         runner = self.runners.get(notification_id)
         if runner is None:
             return None
-        times = [
-            step.schedule.next
-            for step in runner.steps.values()
-            if step.schedule is not None and step.schedule.next is not None
-        ]
+        times = [due for _, due in self._due_steps(notification_id)]
         return min(times) if times else None
 
-    def upcoming(self: Engine, notification_id: str) -> list[dict[str, str]]:
-        """Return when each scheduled step of a notification is next due."""
+    def _due_steps(
+        self: Engine, notification_id: str
+    ) -> list[tuple[StepRunner, datetime]]:
+        """Return the scheduled steps of a notification and when each is due.
+
+        A step whose Conditions are not met now is left out, as it would be
+        held back when due (the Status dialog says Hidden the same way).
+        """
         runner = self.runners.get(notification_id)
         if runner is None:
             return []
+        variables = {
+            "entity": None,
+            "trigger": {},
+            "data": {},
+            "notification": {
+                "id": notification_id,
+                "name": runner.name,
+                "entity_id": self.entity_id_of(notification_id),
+            },
+        }
         return [
-            {
-                "step_id": step.step_id,
-                "due": dt_util.as_utc(step.schedule.next).isoformat(),
-            }
+            (step, step.schedule.next)
             for step in runner.steps.values()
-            if step.schedule is not None and step.schedule.next is not None
+            if step.schedule is not None
+            and step.schedule.next is not None
+            and not step.waits_for_conditions(variables)
+        ]
+
+    def upcoming(self: Engine, notification_id: str) -> list[dict[str, str]]:
+        """Return when each scheduled step of a notification is next due."""
+        return [
+            {"step_id": step.step_id, "due": dt_util.as_utc(due).isoformat()}
+            for step, due in self._due_steps(notification_id)
         ]
 
     def _visible_cards(self: Engine, notification_id: str) -> list[Card]:

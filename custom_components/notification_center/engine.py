@@ -427,6 +427,11 @@ class Engine(EngineQueries, EngineActions):
         return remove
 
     @callback
+    def async_changed(self) -> None:
+        """Tell the listeners that something they show changed."""
+        self._notify()
+
+    @callback
     def _notify(self) -> None:
         self._schedule_delay_timer()
         for listener in [*self._listeners, *self._late_listeners]:
