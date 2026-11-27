@@ -44,9 +44,6 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### Resume Cast music after a chime
 *Area: Channels.* A Google Cast speaker cannot announce, so a chime stops what it plays. Resume the music (or the stream) after the chime instead of leaving it stopped. *(Kristóf, 2026-11-22; phase 6.1)*
 
-### Keep when done
-*Area: Channels (Push).* A *Keep when done* switch of the push: when the notification ends, the push is not removed but silently replaced by a closing line, such as *Ended at 14:32*, *Done by Dóra at 14:32* or *Muted by Kristóf*. Until then the push follows the card (Mute keeps it). *(Kristóf, 2026-11-23; phase 6.2)*
-
 ### Speaker without announce while playing
 *Area: Sound.* A speaker that cannot announce (Home Assistant's announce feature) stops what it plays to play a chime or a message. A speaker-level setting *While playing*: *Skip*, *Play anyway*, or *After it stops* (with a timeout). Highlighted notifications always play. The reason shows in the Status dialog and the Activity log. *(Kristóf, 2026-11-24; feedback after v0.7.4)*
 
