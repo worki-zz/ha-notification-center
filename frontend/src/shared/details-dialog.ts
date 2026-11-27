@@ -277,49 +277,48 @@ export class NcDetailsDialog extends LitElement {
   private _renderControls(data: DetailsData) {
     const live = data.live;
     const order = effectiveButtons(live.category, live.step).map((button) => button.id);
-    const buttons = liveButtons(live).sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
-    if (!buttons.length) return nothing;
+    const shown = liveButtons(live).sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+    // Snooze with one time is a button of the group; with several, a menu under it.
+    const buttons = shown.filter((button) => !button.ask);
+    const snooze = shown.find((button) => button.ask);
+    if (!buttons.length && !snooze) return nothing;
     return html`<div class="controls">
-      <ha-control-button-group class="buttons">
-        ${buttons.map((button) =>
-          button.ask
-            ? this._renderSnooze(data, button)
-            : html`<ha-control-button
+      ${buttons.length
+        ? html`<ha-control-button-group class="buttons">
+            ${buttons.map(
+              (button) => html`<ha-control-button
                 .label=${button.label}
                 title=${button.label}
                 @click=${() => this._press(data, button)}
               >
                 <ha-icon .icon=${button.icon}></ha-icon>
               </ha-control-button>`,
-        )}
-      </ha-control-button-group>
+            )}
+          </ha-control-button-group>`
+        : nothing}
+      ${snooze ? this._renderSnooze(data, snooze) : nothing}
     </div>`;
   }
 
-  // Snooze with several times: its button opens them in Home Assistant's
-  // dropdown menu.
+  // Snooze with several times: a menu that shows only its icon and "Snooze"
+  // while closed.
   private _renderSnooze(data: DetailsData, snooze: LiveButton) {
     const choices = snoozeChoices(snooze.button);
-    return html`<ha-dropdown
-      placement="bottom"
+    return html`<ha-control-select-menu
+      class="snooze"
+      .label=${snooze.label}
+      .options=${choices.map((choice) => ({
+        value: choice.key,
+        label: choice.label,
+        icon: /\d+[mh]$/.test(choice.key) ? "mdi:timer-outline" : "mdi:calendar-today",
+      }))}
       @wa-select=${(ev: CustomEvent<{ item?: { value?: string } }>) => {
         const choice = ev.detail.item?.value;
         if (choice) this._press(data, snooze, choice);
       }}
     >
-      <ha-control-button slot="trigger" .label=${snooze.label} title=${snooze.label}>
-        <ha-icon .icon=${snooze.icon}></ha-icon>
-      </ha-control-button>
-      ${choices.map(
-        (choice) => html`<ha-dropdown-item .value=${choice.key}>
-          <ha-icon
-            slot="icon"
-            .icon=${/\d+[mh]$/.test(choice.key) ? "mdi:timer-outline" : "mdi:calendar-today"}
-          ></ha-icon>
-          ${choice.label}
-        </ha-dropdown-item>`,
-      )}
-    </ha-dropdown>`;
+      <ha-icon slot="icon" .icon=${snooze.icon}></ha-icon>
+    </ha-control-select-menu>`;
   }
 
   // A scheduled step not due yet: Done and Dismiss (early), as on Upcoming.
@@ -492,11 +491,10 @@ export class NcDetailsDialog extends LitElement {
       --control-button-border-radius: var(--ha-border-radius-lg, 12px);
       flex: none;
     }
-    .buttons ha-dropdown {
-      flex: none;
-    }
-    .buttons ha-dropdown ha-control-button {
-      height: var(--control-button-group-thickness);
+    .snooze {
+      width: 100%;
+      max-width: 320px;
+      --control-select-menu-border-radius: 16px;
     }
     /* Several cards: the rows of the Overview. */
     .picker {
