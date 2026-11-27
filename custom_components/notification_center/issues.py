@@ -9,7 +9,9 @@ itself as soon as the problem does:
 - the message or the info line has a template error;
 - a trigger or condition could not be set up;
 - the notify action of a person's push device does not exist;
-- the entity of a light, speaker or siren channel does not exist.
+- the entity of a light, speaker or siren channel does not exist;
+- the action of an entity group calls an entity action without saying which
+  entity (the group's action does not pick the member it runs for).
 
 The description ends with a link to the place that fixes it (the editor of
 the notification, or the settings page of the device).
@@ -37,6 +39,7 @@ ISSUE_TEMPLATE_ERROR: Final = "template_error"
 ISSUE_SETUP_ERROR: Final = "setup_error"
 ISSUE_MISSING_PUSH: Final = "missing_push_service"
 ISSUE_MISSING_DEVICE: Final = "missing_device"
+ISSUE_UNTARGETED_ACTION: Final = "untargeted_group_action"
 
 _CHECK_INTERVAL: Final = timedelta(minutes=15)
 _LINK: Final = f"/{PANEL_URL_PATH}"
@@ -47,6 +50,13 @@ _DEVICES: Final = (
     ("speakers", "sound", "Speaker"),
     ("sirens", "sound", "Siren"),
 )
+
+# Actions of these domains do not act on entities.
+_NO_TARGET_DOMAINS: Final = frozenset(
+    {"notify", "persistent_notification", "logbook", "system_log"}
+)
+_ENTITY_NAMES: Final = frozenset({"turn_on", "turn_off", "toggle", "trigger"})
+_TARGET_KEYS: Final = ("target", "entity_id", "device_id", "area_id")
 
 type Issue = tuple[str, dict[str, str]]
 
@@ -146,6 +156,26 @@ class IssueTracker:
             or er.async_get(self._hass).async_get(entity_id) is not None
         )
 
+    def _untargeted(self, action: Any) -> bool:
+        """Return whether an action calls an entity action with no target."""
+        if not isinstance(action, dict):
+            return False
+        service = action.get("action") or action.get("service")
+        if not isinstance(service, str) or "." not in service:
+            return False
+        domain, _, name = service.partition(".")
+        if domain in _NO_TARGET_DOMAINS or (
+            domain in ("script", "automation") and name not in _ENTITY_NAMES
+        ):
+            return False
+        if not self._hass.states.async_entity_ids(domain) and domain != "homeassistant":
+            return False
+        data = action.get("data")
+        return not any(
+            action.get(key) or (isinstance(data, dict) and data.get(key))
+            for key in _TARGET_KEYS
+        )
+
     def _problems(self) -> dict[str, Issue]:
         engine = self._engine
         problems: dict[str, Issue] = {}
@@ -206,6 +236,22 @@ class IssueTracker:
                     "error": error,
                 },
             )
+        for notification in engine.manager.config["notifications"]:
+            for number, group in enumerate(notification["entity_groups"], start=1):
+                if not any(
+                    self._untargeted(action)
+                    for actions in group["actions"].values()
+                    for action in actions
+                ):
+                    continue
+                issue_id = (
+                    f"{ISSUE_UNTARGETED_ACTION}_{notification['id']}_{group['id']}"
+                )
+                links[issue_id] = f"{_LINK}/settings/notifications/{notification['id']}"
+                problems[issue_id] = (
+                    ISSUE_UNTARGETED_ACTION,
+                    {"name": notification["name"], "group": str(number)},
+                )
         for person in engine.manager.config.get("people", []):
             state = self._hass.states.get(person["person"])
             if state is None:

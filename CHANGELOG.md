@@ -5,6 +5,8 @@
 ### Added
 
 - **Image of a step** (Message block): a camera or image entity whose still is taken when the notification becomes active and kept for a week. The Notification details show it in place of the icon (a click opens the entity; a camera has *Live* for its live view), and the push carries it (*Show in push*, on by default; the push waits for the still, at most 10 seconds). Without a Data or an Image the picker is at the end of the Info row; once set it has its own row. The still is served behind the login at `/api/notification_center/image/<id>` (the push uses a signed address that works for a week).
+- **Repairs**: an entity group whose action calls an action on entities without a target is listed (the group's action does not pick the member it runs for).
+- The Activation block says *Starts only with the Trigger action* while its Triggers list is empty.
 
 ### Changed
 
@@ -12,6 +14,7 @@
 
 ### Fixed
 
+- Actions of the Entities block for a button the notification no longer has (a deleted button) are dropped when the configuration is loaded or saved.
 - A tap on a notification's icon did not open its details on a phone or tablet (touch).
 
 ## 0.8.1

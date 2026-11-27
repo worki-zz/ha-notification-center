@@ -801,6 +801,9 @@ export class NcStepEditor extends LitElement {
       ${kind === "triggers" ? this._renderPinned(step) : nothing}
       ${kind === "triggers" ? this._renderStateTrigger(step) : nothing}
       ${this._title(HELP[kind].title, kind)}
+      ${kind === "triggers" && this._startCount(step) === 0
+        ? html`<ha-alert alert-type="info">Starts only with the Trigger action</ha-alert>`
+        : nothing}
       ${kind === "triggers"
         ? html`<ha-automation-trigger
             .hass=${this.hass}
