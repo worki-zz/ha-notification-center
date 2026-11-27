@@ -389,6 +389,10 @@
     "missing_device": {
       "title": "{kind} {entity} is missing",
       "description": "The {kind} channel uses {entity}, but there is no such entity, so the channel does nothing. Choose the entity again in Notification Center, or bring it back.\n\n[Open in Notification Center]({link})"
+    },
+    "untargeted_group_action": {
+      "title": "{name}: an action of entity group {group} has no target",
+      "description": "The action of entity group {group} of **{name}** calls an action on entities without saying which entity. A group's action does not pick the member it runs for, so it does nothing. Add a target to it (for example the entity of the notification), or give the member its own action.\n\n[Open in Notification Center]({link})"
     }
   }
 }

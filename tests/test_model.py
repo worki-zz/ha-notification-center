@@ -806,3 +806,40 @@ async def test_upgrade_details_navigation(hass: HomeAssistant) -> None:
     assert config["categories"][0]["buttons"][0]["navigation"] == {"type": "details"}
     validated = await async_validate_config(hass, config)
     assert "open_on_tap" not in validated["general"]
+
+
+async def test_orphan_entity_actions_are_dropped(hass: HomeAssistant) -> None:
+    """Entity actions of a button the notification lacks are removed."""
+    data = default_config()
+    data["notifications"] = [
+        {
+            "id": "n1",
+            "name": "N",
+            "steps": [
+                {
+                    "id": "s1",
+                    "message": "x",
+                    "buttons": [{"id": "b1", "type": "custom"}],
+                }
+            ],
+            "entities": [
+                {
+                    "entity_id": "switch.a",
+                    "actions": {"b1": [{"action": "x.y"}], "mute": []},
+                }
+            ],
+            "entity_groups": [
+                {
+                    "domain": "switch",
+                    "actions": {"s1.activation": [{"action": "x.y"}], "gone": []},
+                    "member_actions": {"switch.a": {"gone": []}},
+                }
+            ],
+        }
+    ]
+    config = await async_validate_config(hass, data)
+    notification = config["notifications"][0]
+    assert list(notification["entities"][0]["actions"]) == ["b1"]
+    group = notification["entity_groups"][0]
+    assert list(group["actions"]) == ["s1.activation"]
+    assert group["member_actions"] == {}

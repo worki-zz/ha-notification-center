@@ -135,3 +135,41 @@ async def test_diagnostics(
     assert device["device_type"] == "other"
     assert [card["status"] for card in data["cards"]] == ["active"]
     assert len(data["steps"]) == 1
+
+
+async def test_untargeted_group_action_issue(
+    hass: HomeAssistant, center: Center
+) -> None:
+    """A group action on entities without a target is listed."""
+    await center.set("light.hall", "off")
+    nid = await center.add(
+        "Doors",
+        step(buttons=[{"id": "b1", "type": "custom"}, {"id": "b2", "type": "custom"}]),
+        entity_groups=[
+            {
+                "domain": "binary_sensor",
+                "actions": {
+                    "b1": [{"action": "light.turn_off"}],
+                    "b2": [
+                        {
+                            "action": "light.turn_off",
+                            "target": {"entity_id": "light.hall"},
+                        }
+                    ],
+                },
+            }
+        ],
+    )
+    center.engine.issues.refresh()
+    issues = [
+        issue
+        for issue in _issues(hass).values()
+        if issue.translation_key == "untargeted_group_action"
+    ]
+    assert len(issues) == 1
+    assert issues[0].translation_placeholders is not None
+    assert issues[0].translation_placeholders["name"] == "Doors"
+    assert issues[0].translation_placeholders["group"] == "1"
+    assert (
+        issues[0].learn_more_url == f"/notification-center/settings/notifications/{nid}"
+    )

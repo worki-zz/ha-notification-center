@@ -1689,6 +1689,7 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     if not isinstance(data, dict):
         raise ConfigValidationError("the configuration must be a mapping")
     config: ConfigData = _structure(CONFIG_SCHEMA, data, "configuration")
+    drop_orphan_entity_actions(config)
     for notification in config["notifications"]:
         for number, step in enumerate(notification["steps"], start=1):
             await _validate_step_automation(
@@ -1732,6 +1733,36 @@ async def async_validate_config(hass: HomeAssistant, data: Any) -> ConfigData:
     order_modes(config["modes"])
     _check_references(config)
     return config
+
+
+def drop_orphan_entity_actions(config: ConfigData) -> None:
+    """Drop entity actions of buttons the notification does not have.
+
+    The keys of the Entities block's actions are a button id of one of the
+    notification's steps (with what it inherits from its category) or
+    ``<step id>.activation``. A key that matches none is left over from a
+    deleted button and never runs.
+    """
+    categories = {category["id"]: category for category in config["categories"]}
+    for notification in config["notifications"]:
+        category = categories.get(notification["category"])
+        keys: set[str] = set()
+        for step in notification["steps"]:
+            keys.add(f"{step['id']}.activation")
+            keys.update(button["id"] for button in effective_buttons(category, step))
+        for entity in notification["entities"]:
+            _keep_keys(entity["actions"], keys)
+        for group in notification["entity_groups"]:
+            _keep_keys(group["actions"], keys)
+            for entity_id, buttons in list(group["member_actions"].items()):
+                _keep_keys(buttons, keys)
+                if not buttons:
+                    del group["member_actions"][entity_id]
+
+
+def _keep_keys(actions: dict[str, Any], keys: set[str]) -> None:
+    for key in [key for key in actions if key not in keys]:
+        del actions[key]
 
 
 def drop_inherited_values(data: dict[str, Any]) -> None:
