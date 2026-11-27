@@ -206,6 +206,14 @@ export function detailsOf(store: StoreData, target: DetailsTarget): DetailsData 
   };
 }
 
+/** A step not due yet: Upcoming when due today (as on the Overview), else Scheduled. */
+export function upcomingName(data: DetailsData, now: number): "Upcoming" | "Scheduled" {
+  if (!data.due) return "Upcoming";
+  const end = new Date(now);
+  end.setHours(24, 0, 0, 0);
+  return data.due.getTime() < end.getTime() ? "Upcoming" : "Scheduled";
+}
+
 /** The status in a few words, as the lists write it: "Snoozed until 13:00". */
 export function statusLabel(hass: HomeAssistant, data: DetailsData, now: number): string {
   const card = data.card;
@@ -225,7 +233,7 @@ export function statusLabel(hass: HomeAssistant, data: DetailsData, now: number)
     case "dismissed":
       return `Dismissed ${time(card?.closed_at)}`.trim();
     case "upcoming":
-      return data.due ? `Shows ${formatWhen(hass, data.due, now)}` : "Upcoming";
+      return data.due ? `${upcomingName(data, now)} ${formatWhen(hass, data.due, now)}` : "Upcoming";
     case "disabled":
       return "Disabled";
     default:

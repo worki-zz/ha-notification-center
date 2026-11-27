@@ -41,6 +41,8 @@ export interface NotificationViewData {
   // buttons are grey; the icon and the label keep the colour.
   muted?: boolean;
   clickable?: boolean;
+  // The icon opens the Notification details (`nc-icon`), whatever the tap does.
+  iconTap?: boolean;
   // Only the icon and the buttons: the texts give their room to a choice.
   compact?: boolean;
   buttons?: ViewButton[];
@@ -49,8 +51,8 @@ export interface NotificationViewData {
 export const VIEW_ELEMENT = "notification-center-view";
 
 /**
- * Events: `nc-tap` when the card is clicked, `nc-button` with
- * `detail.key` when a button is pressed.
+ * Events: `nc-tap` when the card is clicked, `nc-icon` when its icon is
+ * (with `iconTap`), `nc-button` with `detail.key` when a button is pressed.
  */
 export class NotificationCenterView extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -79,7 +81,13 @@ export class NotificationCenterView extends LitElement {
           @keydown=${this._keydown}
         >
           ${view.clickable ? html`<ha-ripple></ha-ripple>` : nothing}
-          <ha-tile-icon>
+          <ha-tile-icon
+            class=${view.iconTap ? "icon-tap" : ""}
+            .interactive=${!!view.iconTap}
+            role=${view.iconTap ? "button" : nothing}
+            aria-label=${view.iconTap ? "Notification details" : nothing}
+            @click=${this._iconTap}
+          >
             <ha-state-icon
               slot="icon"
               .hass=${this.hass}
@@ -135,6 +143,12 @@ export class NotificationCenterView extends LitElement {
   private _tap(): void {
     if (!this.view?.clickable) return;
     this.dispatchEvent(new CustomEvent("nc-tap", { bubbles: true, composed: true }));
+  }
+
+  private _iconTap(ev: Event): void {
+    if (!this.view?.iconTap) return;
+    ev.stopPropagation();
+    this.dispatchEvent(new CustomEvent("nc-icon", { bubbles: true, composed: true }));
   }
 
   private _keydown(ev: KeyboardEvent): void {
@@ -271,6 +285,9 @@ export class NotificationCenterView extends LitElement {
       --tile-icon-color: var(--nc-color);
       flex: none;
       align-self: flex-start;
+    }
+    ha-tile-icon.icon-tap {
+      cursor: pointer;
     }
     .text {
       flex: 1;

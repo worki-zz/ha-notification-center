@@ -37,6 +37,7 @@ import { liveView } from "./live-card";
 import "./notification-view";
 import { renderStatus } from "./status-view";
 import { subscribeStore, type StoreData } from "./store";
+import { TemplateTexts } from "./text";
 import type { HomeAssistant } from "./types";
 
 // How often relative times are written again.
@@ -66,6 +67,9 @@ export class NcDetailsDialog extends LitElement {
 
   private _timer?: number;
 
+  // The steps' own texts while they have no card: templates rendered.
+  private _texts = new TemplateTexts(() => this.requestUpdate());
+
   public showDialog(params: DetailsParams): void {
     this._params = params;
     this._view = params.view ?? "details";
@@ -89,6 +93,7 @@ export class NcDetailsDialog extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.clearInterval(this._timer);
+    this._texts.clear();
     this._unsubscribe?.();
     this._unsubscribe = undefined;
   }
@@ -144,7 +149,8 @@ export class NcDetailsDialog extends LitElement {
   protected override render() {
     const params = this._params;
     if (!params || !this.hass) return nothing;
-    const data = this._target ? detailsOf(this._store, this._target) : undefined;
+    const found = this._target ? detailsOf(this._store, this._target) : undefined;
+    const data = found ? this._withTexts(found) : undefined;
     const targets = !this._target && this._store.state ? resolveAddress(this._store, params) : [];
     const name =
       data?.notification.name ??
@@ -183,6 +189,21 @@ export class NcDetailsDialog extends LitElement {
               ${this._store.error ?? (this._store.state ? "This notification is not there anymore." : "Loading…")}
             </div>`}
     </ha-dialog>`;
+  }
+
+  // Without a card the step's own message: rendered, no placeholders.
+  private _withTexts(data: DetailsData): DetailsData {
+    this._texts.update(
+      this.hass!,
+      data.notification.steps.map((step) => step.message),
+      data.target.entityId ?? undefined,
+    );
+    if (data.card) return data;
+    return { ...data, message: this._text(data.live.step?.message) };
+  }
+
+  private _text(text: string | undefined): string {
+    return this._texts.get(this.hass!, text, true);
   }
 
   // Several open cards match the address: one row each, as on the Overview.
@@ -286,8 +307,10 @@ export class NcDetailsDialog extends LitElement {
     const choices = snoozeChoices(snooze.button);
     if (!snooze.ask) {
       return html`<ha-control-button class="snooze" .label=${snooze.label} @click=${() => this._press(data, snooze)}>
-        <ha-icon .icon=${snooze.icon}></ha-icon>
-        <span>${snooze.label}</span>
+        <div class="snooze-content">
+          <ha-icon .icon=${snooze.icon}></ha-icon>
+          <span>${snooze.label}</span>
+        </div>
       </ha-control-button>`;
     }
     return html`<ha-control-select-menu
@@ -364,6 +387,7 @@ export class NcDetailsDialog extends LitElement {
           now: this._now,
           select: (target) => (this._target = target),
           moreInfo: (entityId) => this._moreInfo(entityId),
+          text: (text) => this._text(text),
         })}
       </div>`;
   }
@@ -481,12 +505,22 @@ export class NcDetailsDialog extends LitElement {
     .snooze {
       width: 100%;
       max-width: 320px;
-      height: 56px;
       --control-select-menu-border-radius: 16px;
       --control-button-border-radius: 16px;
     }
-    ha-control-button.snooze span {
-      margin-inline-start: 12px;
+    /* One time only: a button of the menu's size and look. */
+    ha-control-button.snooze {
+      height: var(--control-select-menu-height, 48px);
+    }
+    .snooze-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 0 4px;
+      box-sizing: border-box;
+      font-size: var(--ha-font-size-m, 14px);
+      font-weight: var(--ha-font-weight-normal, 400);
     }
     /* Several cards: the rows of the Overview. */
     .picker {

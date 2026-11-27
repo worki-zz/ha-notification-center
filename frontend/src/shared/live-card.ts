@@ -7,6 +7,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 
 import { defineElement } from "./define";
+import { openDetails } from "./details";
 import { cssColor } from "./format";
 import {
   snoozeChoices,
@@ -106,6 +107,7 @@ export class NotificationCenterLiveCard extends LitElement {
       highlight: this.muted ? "none" : view.highlight,
       muted: this.muted,
       clickable: this.interactive && !!tapButton(live),
+      iconTap: true,
       compact: this._asking,
       buttons,
     };
@@ -132,6 +134,13 @@ export class NotificationCenterLiveCard extends LitElement {
     const tap = live ? tapButton(live) : undefined;
     if (!hass || !live || !tap) return;
     void this._run(() => pressButton(hass, this, live, tap));
+  }
+
+  // The icon: the Notification details of the card, always.
+  private _details(): void {
+    const card = this.live?.card;
+    if (!card) return;
+    openDetails(this, { notification: card.notification_id, step: card.step_id, entity: card.entity_id });
   }
 
   private _button(key: string): void {
@@ -164,6 +173,7 @@ export class NotificationCenterLiveCard extends LitElement {
         .hass=${this.hass}
         .view=${view}
         @nc-tap=${this._tap}
+        @nc-icon=${this._details}
         @nc-button=${(ev: CustomEvent<{ key: string }>) => this._button(ev.detail.key)}
       ></notification-center-view>
       ${this._error ? html`<div class="error">${this._error}</div>` : nothing}

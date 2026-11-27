@@ -7,6 +7,8 @@
 // ours) move in the history themselves: while one is open, and a moment
 // after, Back is theirs; then our entries are put back as needed.
 
+import { DETAILS_DIALOG } from "../shared/details";
+
 type Dialog = HTMLElement & { open: boolean };
 
 const openDialogs: Dialog[] = [];
@@ -50,14 +52,18 @@ function isDialog(ev: Event): HTMLElement | undefined {
   return dialog instanceof HTMLElement && dialog.tagName === "HA-DIALOG" ? dialog : undefined;
 }
 
+// The Notification details open through Home Assistant's dialog manager,
+// which moves in the history itself: they count as Home Assistant's.
+const MANAGED = new Set([DETAILS_DIALOG.toUpperCase()]);
+
 function isOurs(ev: Event): boolean {
-  return ev
-    .composedPath()
-    .some(
-      (item) =>
-        item instanceof HTMLElement &&
-        (item.tagName.startsWith("NC-") || item.tagName.startsWith("NOTIFICATION-CENTER-")),
-    );
+  const path = ev.composedPath();
+  if (path.some((item) => item instanceof HTMLElement && MANAGED.has(item.tagName))) return false;
+  return path.some(
+    (item) =>
+      item instanceof HTMLElement &&
+      (item.tagName.startsWith("NC-") || item.tagName.startsWith("NOTIFICATION-CENTER-")),
+  );
 }
 
 function depth(): number {
