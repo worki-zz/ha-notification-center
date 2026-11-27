@@ -389,6 +389,10 @@
     "missing_device": {
       "title": "{kind}: hiányzik a(z) {entity}",
       "description": "A(z) {kind} csatorna a(z) {entity} entitást használja, de ilyen entitás nincs, ezért a csatorna nem csinál semmit. Válaszd ki újra az entitást a Notification Centerben, vagy hozd vissza.\n\n[Megnyitás a Notification Centerben]({link})"
+    },
+    "untargeted_group_action": {
+      "title": "{name}: a(z) {group}. entitáscsoport akciójának nincs célja",
+      "description": "**{name}** {group}. entitáscsoportjának akciója entitásokon hív meg egy actiont, de nem mondja meg, melyik entitáson. A csoport akciója nem választja ki azt a tagot, amelyikre fut, ezért nem csinál semmit. Adj neki célt (például az értesítés entitását), vagy adj a tagnak saját akciót.\n\n[Megnyitás a Notification Centerben]({link})"
     }
   }
 }
