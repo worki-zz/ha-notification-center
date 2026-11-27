@@ -8,6 +8,7 @@ import { repeat } from "lit/directives/repeat.js";
 
 import { effectiveChannel, modeColumns, sleepersOf } from "./channels";
 import { CHANNEL_DASHBOARD, colorCss, type AudienceEntry, type AudienceState } from "./config";
+import { openDetails } from "./details";
 import { cssColor, formatWhen } from "./format";
 import {
   audienceOf,
@@ -178,7 +179,9 @@ export function renderScheduled(
       <notification-center-view
         class="upcoming"
         .hass=${hass}
-        .view=${item.view}
+        .view=${{ ...item.view, iconTap: true }}
+        @nc-icon=${(ev: Event) =>
+          openDetails(ev.currentTarget as HTMLElement, { notification: item.notificationId, step: item.stepId })}
         @nc-button=${(ev: CustomEvent<{ key: EarlyButton }>) => onButton(item, ev.detail.key)}
       ></notification-center-view>
     `,

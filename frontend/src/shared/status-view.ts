@@ -9,7 +9,7 @@ import { avatar } from "./avatar";
 import { channelIcon, channelsOf, type ChannelInfo, type ChannelKind } from "./channel-info";
 import { effectiveChannel, modeColumns } from "./channels";
 import type { AudienceState, CardState, ChannelView } from "./config";
-import { detailsOf, statusLabel, type DetailsData, type DetailsTarget } from "./details";
+import { detailsOf, statusLabel, upcomingName, type DetailsData, type DetailsTarget } from "./details";
 import { entityState, formatTime, formatWhen } from "./format";
 import { audienceOf, inAudience } from "./live";
 import type { StoreData } from "./store";
@@ -24,6 +24,8 @@ export interface StatusContext {
   select: (target: DetailsTarget) => void;
   // Open an entity's more info.
   moreInfo: (entityId: string) => void;
+  // A step's own text ready to show (templates rendered, no placeholders).
+  text: (text: string | undefined) => string;
 }
 
 type Tone = "sends" | "waits" | "off";
@@ -127,12 +129,11 @@ export function scheduleText(hass: HomeAssistant, schedule: StoredSchedule): str
   const unit = schedule.unit;
   const singular = unit.slice(0, -1);
   let every: string;
-  if (typeof schedule.every === "string") {
-    const stateObj = hass.states[schedule.every];
-    every = `Every ${stateObj ? entityState(hass, stateObj) : "?"} ${unit}`;
-  } else {
-    every = schedule.every === 1 ? `Every ${singular}` : `Every ${schedule.every} ${unit}`;
-  }
+  // From an entity: its number now (its unit is the schedule's).
+  const count =
+    typeof schedule.every === "string" ? Number.parseFloat(hass.states[schedule.every]?.state ?? "") : schedule.every;
+  if (Number.isNaN(count)) every = `Every ? ${unit}`;
+  else every = count === 1 ? `Every ${singular}` : `Every ${count} ${unit}`;
   const parts = [every];
   if (schedule.type === "calendar") {
     if (unit === "weeks" && schedule.weekdays?.length) {
@@ -181,31 +182,29 @@ function block(title: string, rows: unknown[]) {
   </ha-card>`;
 }
 
-/** The status in a line: "Snoozed · until 13:00". */
-function statusValue(ctx: StatusContext): string {
+/** The status's name and what goes with it: "Snoozed", "until 13:00". */
+function statusValue(ctx: StatusContext): [string, string] {
   const { hass, data, now } = ctx;
   const card = data.card;
   const time = (iso: string | null | undefined) =>
     iso ? formatTime(hass, new Date(iso), "time", now) : "";
   switch (data.status) {
     case "active":
-      return card?.muted ? "Active · muted" : "Active";
+      return ["Active", card?.muted ? "Muted" : ""];
     case "hidden":
-      return "Hidden · the conditions are not met";
+      return ["Hidden", "The conditions are not met"];
     case "snoozed":
-      return card?.snoozed_until
-        ? `Snoozed · until ${formatWhen(hass, new Date(card.snoozed_until), now)}`
-        : "Snoozed";
+      return ["Snoozed", card?.snoozed_until ? `Until ${formatWhen(hass, new Date(card.snoozed_until), now)}` : ""];
     case "done":
-      return `Done · ${time(card?.closed_at)}`;
+      return ["Done", time(card?.closed_at)];
     case "dismissed":
-      return `Dismissed · ${time(card?.closed_at)}`;
+      return ["Dismissed", time(card?.closed_at)];
     case "upcoming":
-      return data.due ? `Upcoming · shows ${formatWhen(hass, data.due, now)}` : "Upcoming";
+      return [upcomingName(data, now), data.due ? formatWhen(hass, data.due, now) : ""];
     case "disabled":
-      return "Disabled";
+      return ["Disabled", ""];
     default:
-      return "Idle";
+      return ["Idle", ""];
   }
 }
 
@@ -213,7 +212,8 @@ function statusValue(ctx: StatusContext): string {
 function renderStatusBlock(ctx: StatusContext) {
   const { hass, store, data, now } = ctx;
   const card = data.card;
-  const rows = [row(STATUS_ICONS[data.status], "Status", statusValue(ctx))];
+  const [name, text] = statusValue(ctx);
+  const rows = [row(STATUS_ICONS[data.status], name, text)];
   const open = card && (card.status === "active" || card.status === "hidden" || card.status === "snoozed");
   const since = open ? (card.active_since ?? card.state_since) : undefined;
   if (since) rows.push(row("mdi:clock-start", "Active since", formatWhen(hass, new Date(since), now)));
@@ -234,21 +234,28 @@ function renderStartBlock(ctx: StatusContext) {
   if (activation?.type === "schedule" && activation.schedule) {
     const schedule = activation.schedule;
     const repeat = schedule.type === "after_last_done";
-    rows.push(row(repeat ? "mdi:repeat" : "mdi:calendar-clock", repeat ? "Repeat" : "Schedule", scheduleText(hass, schedule)));
-    if (typeof schedule.every === "string" && schedule.every) {
-      const entityId = schedule.every;
-      rows.push(linkRow("mdi:counter", "Frequency", entityText(hass, entityId), () => ctx.moreInfo(entityId)));
-    }
+    const icon = repeat ? "mdi:repeat" : "mdi:calendar-clock";
+    const title = repeat ? "Repeat" : "Schedule";
+    const every = schedule.every;
+    // How often comes from an entity: the row opens it.
+    rows.push(
+      typeof every === "string" && every
+        ? linkRow(icon, title, scheduleText(hass, schedule), () => ctx.moreInfo(every))
+        : row(icon, title, scheduleText(hass, schedule)),
+    );
   } else if (typeof trigger?.entity_id === "string" && hass.states[trigger.entity_id]) {
     const entityId = trigger.entity_id;
     rows.push(linkRow("mdi:flash-outline", "Trigger", entityText(hass, entityId), () => ctx.moreInfo(entityId)));
   } else {
     const triggers = activation?.triggers?.length ?? 0;
-    const conditions = step?.conditions?.conditions?.length ?? 0;
-    const summary = [triggers ? plural(triggers, "trigger") : "", conditions ? plural(conditions, "condition") : ""]
-      .filter(Boolean)
-      .join(" · ");
-    rows.push(row("mdi:flash-outline", "Trigger", summary || "No trigger"));
+    rows.push(row("mdi:flash-outline", "Trigger", triggers ? plural(triggers, "trigger") : "No trigger"));
+  }
+  // The Conditions, under what starts the step.
+  const conditions = step?.conditions;
+  const count = conditions?.conditions?.length ?? 0;
+  if (count) {
+    const text = [plural(count, "condition"), card?.status === "hidden" ? "Not met now" : ""].filter(Boolean).join(" · ");
+    rows.push(row("mdi:filter-outline", "Conditions", text));
   }
   const entityId = data.target.entityId;
   if (entityId && entityId !== trigger?.entity_id) {
@@ -282,7 +289,8 @@ function renderSteps(ctx: StatusContext) {
   const rows = steps.map((step, index) => {
     const target = step.id === data.target.stepId ? data.target : stepTarget(ctx, step.id);
     const item = detailsOf(store, target);
-    const headline = `${index + 1}. ${item?.message || `Step ${index + 1}`}`;
+    const message = item?.card ? item.message : ctx.text(step.message);
+    const headline = `${index + 1}. ${message || `Step ${index + 1}`}`;
     const text = item ? statusLabel(hass, item, now) : "";
     const icon = STATUS_ICONS[item?.status ?? "idle"];
     if (step.id === data.target.stepId) {

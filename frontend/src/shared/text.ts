@@ -139,9 +139,11 @@ export class TemplateTexts {
     }
   }
 
-  public get(hass: HomeAssistant, text: string | null | undefined): string {
+  // `plain`: without an entity the placeholders read as words ({Area}: Area).
+  public get(hass: HomeAssistant, text: string | null | undefined, plain = false): string {
     if (!text) return "";
     const rendered = isTemplate(text) ? (this._subs.get(text)?.value ?? "") : text;
+    if (plain && !this._entityId) return plainPlaceholders(rendered);
     return replacePlaceholders(rendered, placeholderValues(hass, this._entityId));
   }
 

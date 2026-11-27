@@ -197,7 +197,10 @@ export class NotificationCenterListCard extends LitElement {
           icon: PANEL_ICON,
           color: "var(--state-inactive-color)",
           muted: true,
+          // Opens the Overview, as the rows after "more" do.
+          clickable: !this.preview,
         }}
+        @nc-tap=${this._openPanel}
       ></notification-center-view>`;
     }
     const list = cards ?? [];

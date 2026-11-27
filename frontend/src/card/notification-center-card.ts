@@ -27,6 +27,7 @@ import "../shared/live-card";
 import { type Highlight, type NotificationViewData } from "../shared/notification-view";
 import "../shared/notification-view";
 import { subscribeStore, type StoreData } from "../shared/store";
+import { openDetails } from "../shared/details";
 import { TemplateTexts } from "../shared/text";
 import { closeEarlyOf, renderScheduled } from "../shared/upcoming";
 import type { ActionConfig, HassEntity, HomeAssistant } from "../shared/types";
@@ -271,7 +272,8 @@ export class NotificationCenterCard extends LitElement {
     if (status.status === "idle") {
       return html`<notification-center-view
         .hass=${hass}
-        .view=${this._idleView(status)}
+        .view=${{ ...this._idleView(status), iconTap: true }}
+        @nc-icon=${() => openDetails(this, { notification: status.notification.id })}
       ></notification-center-view>`;
     }
     if (status.status === "upcoming") {

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Notification details and Status**: a step not due yet is *Upcoming 19:00* when due today and *Scheduled Tue 10:00* when later (no *Shows*). The Status's first row is the status itself (*Active*, *Snoozed* with *Until 13:00*). A Repeat or Schedule whose frequency comes from an entity is one row that opens the entity (*Every 3 days after it was done at 22:00*; it read *Every 0 day days*). The Conditions show under the Trigger with their number. Without a notification the step's message has its templates rendered and its placeholders as words. With one Snooze time the button is the size of the menu.
+- **The icon of a notification opens its details**, on the Overview, in Upcoming and on the dashboard cards, whatever its Tap does. The Notification Center card's *All done* opens the Overview.
+
+### Fixed
+
+- Closing the Status opened from the Notifications list or the editor went back to the page before (the Overview).
+
 ## 0.8.0
 
 ### Added
