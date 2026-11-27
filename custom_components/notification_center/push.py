@@ -58,6 +58,7 @@ from .device_base import Device
 from .device_colors import color_of, parse_color
 from .device_speaker import _token
 from .devices import DeviceManager
+from .images import image_in_push
 from .model import (
     CHANNEL_PUSH,
     PUSH_PRIORITY_DEFAULT,
@@ -68,6 +69,7 @@ from .model import (
 
 if TYPE_CHECKING:
     from .cards import Card
+    from .engine import Engine
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -190,6 +192,11 @@ def details_url(card: Card) -> str:
     return url
 
 
+def wants_image(engine: Engine, card: Card) -> bool:
+    """Return whether the push of a card carries the still of its step's Image."""
+    return image_in_push(engine.step_config(card.notification_id, card.step_id))
+
+
 def push_body(message: str | None, info: str | None) -> str:
     """Return the text of a push: the message, and the Info on its own line."""
     parts = [part.strip() for part in (message, info) if part and part.strip()]
@@ -226,6 +233,8 @@ class Content:
     group: str
     category_name: str
     url: str
+    # The still of the step's Image (a signed address), when the push carries it.
+    image: str | None = None
 
 
 def phones_of(config: Mapping[str, Any]) -> dict[str, list[Phone]]:
@@ -264,6 +273,9 @@ def build_payload(
         "notification_icon": content.icon,
         "color": content.color,
     }
+    if content.image:
+        # The Companion app downloads it when the push arrives.
+        data["image"] = content.image
     if actions:
         data["actions"] = (
             actions[:ANDROID_BUTTONS] if phone.device_type == "android" else actions
@@ -406,6 +418,9 @@ class PushDevice(Device):
                 del self._sent[card_key]
                 changed = True
         for card in cards:
+            if card.image_pending and wants_image(engine, card):
+                # Sent once its still is taken (or failed).
+                continue
             view = engine.channel_view(card, CHANNEL_PUSH)
             card_key = _join_key(card.key)
             token = _token(card)
@@ -577,6 +592,7 @@ class PushDevice(Device):
     ) -> Content:
         """Return what the push of a card (or a test) shows."""
         engine = self.manager.engine
+        image: str | None = None
         config = engine.manager.config
         if card is not None:
             notification = engine.notification_config(card.notification_id) or {}
@@ -586,6 +602,8 @@ class PushDevice(Device):
             message = card.message
             info = card.info
             url = self.tap_url(card)
+            if card.image and wants_image(engine, card):
+                image = engine.images.signed_path(card.image)
         notification = notification or {}
         category = category or engine.category_of(notification) or {}
         settings = settings or {}
@@ -601,6 +619,7 @@ class PushDevice(Device):
             group=f"nc-{category.get('id', 'general')}",
             category_name=str(category.get("name") or "Notifications"),
             url=url or self.default_url(),
+            image=image,
         )
 
     def default_url(self) -> str:

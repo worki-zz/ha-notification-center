@@ -1204,12 +1204,23 @@ DATA_SCHEMA = vol.Schema(
     }
 )
 
+# Image: a still of a camera or image entity, taken when a card becomes
+# active; shown in the Notification details and, with ``push``, attached to
+# the push.
+IMAGE_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_domain(["camera", "image"]),
+        vol.Optional("push", default=True): cv.boolean,
+    }
+)
+
 STEP_SCHEMA = _with_id(
     {
         vol.Optional("enabled", default=True): cv.boolean,
         vol.Required("message"): cv.string,
         vol.Optional("info"): _optional(cv.string),
         vol.Optional("data"): _optional(DATA_SCHEMA),
+        vol.Optional("image"): _optional(IMAGE_SCHEMA),
         vol.Optional("activation", default={"type": "triggers"}): ACTIVATION_SCHEMA,
         vol.Optional("conditions", default=dict): STEP_CONDITIONS_SCHEMA,
         vol.Optional("done_when", default=dict): DONE_WHEN_SCHEMA,

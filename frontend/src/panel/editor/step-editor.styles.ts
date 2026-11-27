@@ -27,6 +27,13 @@ export const STEP_EDITOR_STYLES = css`
     .row > .data-type {
       flex: 0 1 220px;
     }
+    .image-push {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 56px;
+      cursor: pointer;
+    }
     /* On a phone each Data field takes the whole width. */
     @media (max-width: 600px) {
       .row.data > *,

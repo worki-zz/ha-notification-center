@@ -42,6 +42,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 | `services.py` (+ `services.yaml`) | Actions |
 | `websocket_api.py` | Websocket commands for the panel; the YAML export download view |
 | `issues.py`, `diagnostics.py` | Repairs issues, diagnostics download |
+| `images.py` | Image of a step: stills taken at activation, kept a week, served behind the login |
 | `media_source.py`, `sounds/` | Built-in sounds |
 | `frontend_setup.py` | Registers panel and card |
 | `translations/en.json`, `hu.json` | UI strings (keep both in step) |

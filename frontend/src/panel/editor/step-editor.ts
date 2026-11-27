@@ -547,18 +547,46 @@ export class NcStepEditor extends LitElement {
             </button>`,
         )}
       </div>
-      ${data.type === "none"
-        ? html`<div class="row data">
-            ${this._text("info", "Info", step.info ?? "", (value) =>
-              this._change({ info: value || null }),
-            )}
-            ${this._renderData(data)}
-          </div>`
-        : html`${this._text("info", "Info", step.info ?? "", (value) =>
-              this._change({ info: value || null }),
-            )}
-            <div class="row data">${this._renderData(data)}</div>`}
+      <div class="row data">
+        ${this._text("info", "Info", step.info ?? "", (value) =>
+          this._change({ info: value || null }),
+        )}
+        ${data.type === "none" ? this._renderData(data) : nothing}
+        ${step.image?.entity_id ? nothing : this._renderImage(step)}
+      </div>
+      ${data.type === "none" ? nothing : html`<div class="row data">${this._renderData(data)}</div>`}
+      ${step.image?.entity_id ? html`<div class="row data">${this._renderImage(step)}</div>` : nothing}
     </div>`;
+  }
+
+  // Image: a camera or image entity whose still is taken at the activation;
+  // once chosen, its own row with Show in push.
+  private _renderImage(step: EditorStep) {
+    const image = step.image;
+    const picker = html`<ha-entity-picker
+      class="data-type"
+      .hass=${this.hass}
+      .value=${image?.entity_id ?? ""}
+      .placeholder=${"Image"}
+      .includeDomains=${["camera", "image"]}
+      @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+        ev.stopPropagation();
+        const entityId = ev.detail.value || "";
+        this._change({
+          image: entityId ? { entity_id: entityId, push: image?.push ?? true } : null,
+        });
+      }}
+    ></ha-entity-picker>`;
+    if (!image?.entity_id) return picker;
+    return html`${picker}
+      <label class="image-push">
+        <ha-switch
+          .checked=${image.push ?? true}
+          @change=${(ev: Event) =>
+            this._change({ image: { ...image, push: (ev.target as HTMLInputElement).checked } })}
+        ></ha-switch>
+        Show in push
+      </label>`;
   }
 
   private _renderData(data: StepData) {
