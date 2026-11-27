@@ -60,9 +60,6 @@ export class NcDetailsDialog extends LitElement {
   // The signed addresses of the stills, by image id.
   @state() private _images: Record<string, string> = {};
 
-  // A camera's live view instead of its still.
-  @state() private _live = false;
-
   @state() private _store: StoreData = {};
 
   @state() private _now = Date.now();
@@ -82,7 +79,6 @@ export class NcDetailsDialog extends LitElement {
     this._target = undefined;
     this._error = undefined;
     this._open = true;
-    this._live = false;
     this._follow();
   }
 
@@ -249,21 +245,23 @@ export class NcDetailsDialog extends LitElement {
     </ha-tile-icon>`;
   }
 
-  // The still of the step's Image in place of the icon; a camera can show
-  // its live view instead. A click opens the entity's more info.
+  // The step's Image in place of the icon: a camera's live view while the
+  // notification is active, else the still taken at its activation. A click
+  // on the still opens the entity's more info.
   private _renderImage(data: DetailsData) {
     const hass = this.hass!;
     const imageId = data.card?.image;
     const entityId = data.live.step?.image?.entity_id;
-    if (!imageId || !entityId) return undefined;
-    const url = this._imageUrl(imageId);
-    const camera = entityId.startsWith("camera.") && !!hass.states[entityId];
-    const live = this._live && camera;
+    if (!entityId) return undefined;
+    const stateObj = hass.states[entityId];
+    const live = data.status === "active" && entityId.startsWith("camera.") && !!stateObj;
+    if (!live && !imageId) return undefined;
+    const url = imageId ? this._imageUrl(imageId) : undefined;
     return html`<div class="image">
       ${live
         ? html`<ha-camera-stream
             .hass=${hass}
-            .stateObj=${hass.states[entityId]}
+            .stateObj=${stateObj}
             controls
             muted
             allow-exoplayer
@@ -275,12 +273,6 @@ export class NcDetailsDialog extends LitElement {
               @click=${() => this._moreInfo(entityId)}
             />`
           : html`<div class="image-wait"></div>`}
-      ${camera
-        ? html`<ha-button appearance="plain" size="small" @click=${() => (this._live = !live)}>
-            <ha-icon slot="start" .icon=${live ? "mdi:image-outline" : "mdi:video-outline"}></ha-icon>
-            ${live ? "Still" : "Live"}
-          </ha-button>`
-        : nothing}
     </div>`;
   }
 
@@ -474,10 +466,9 @@ export class NcDetailsDialog extends LitElement {
     /* The Image: the still (or a camera's live view) in place of the icon. */
     .image {
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
+      justify-content: center;
       width: 100%;
+      margin-bottom: 16px;
     }
     .image img,
     .image ha-camera-stream,
