@@ -20,6 +20,7 @@ import voluptuous as vol
 
 from .cards import (
     PHASE_CLOSED,
+    PHASE_OPEN,
     PHASE_SNOOZED,
     Card,
     Overrides,
@@ -473,6 +474,71 @@ class EngineActions:
         """
         self._close_early(notification_id, step_id, CLOSED_DISMISSED, context)
 
+    @callback
+    def undo(
+        self: Engine,
+        notification_id: str,
+        step_id: str,
+        entity_id: str | None,
+        context: Context | None = None,
+    ) -> Card:
+        """Bring a card done or dismissed today back as active.
+
+        It comes back as it was: with its message and when it became active,
+        but muted, so that no push, light, speaker or siren goes off again.
+        No status actions run, and the ones already run are not undone. A
+        card of the step that came after it, or an Expiration that has
+        passed, keeps it closed.
+        """
+        key = (notification_id, step_id, entity_id or "")
+        card = self.cards.get(key)
+        if card is not None and card.is_open:
+            raise ServiceValidationError("The notification is open")
+        if card is None or card.closed_reason != CLOSED_DONE:
+            card = self.dismissed.get(key, card)
+        start = dt_util.start_of_local_day()
+        if (
+            card is None
+            or card.is_open
+            or card.transient
+            or card.closed_reason not in (CLOSED_DONE, CLOSED_DISMISSED)
+            or card.closed_at is None
+            or card.closed_at < start
+        ):
+            raise ServiceValidationError(
+                "Only a notification done or dismissed today can come back"
+            )
+        if card.active_since is None:
+            raise ServiceValidationError("The notification was never active")
+        now = dt_util.utcnow()
+        if card.expires_at is not None and card.expires_at <= now:
+            raise ServiceValidationError("Its Expiration has passed")
+        step = self._step(notification_id, step_id)
+        closed_at = card.closed_at
+        if any(
+            other is not card and other.since > closed_at
+            for other in self.cards_of(notification_id, step_id)
+        ):
+            raise ServiceValidationError("The step has a newer notification")
+        self.dismissed.pop(key, None)
+        self.cards[key] = card
+        self._change(
+            card,
+            source=SOURCE_BUTTON,
+            context=context,
+            quiet=True,
+            phase=PHASE_OPEN,
+            closed_reason=None,
+            closed_at=None,
+            blocked=False,
+            transient=False,
+            muted=True,
+            hidden=step.is_hidden(card),
+        )
+        self._start_text(card)
+        self._schedule_expiry(card)
+        return card
+
     def _close_early(
         self: Engine,
         notification_id: str,
@@ -495,6 +561,7 @@ class EngineActions:
         now = dt_util.utcnow()
         if (old := self.cards.get((notification_id, step_id, ""))) is not None:
             self.forget(old, notify=False)
+        self.dismissed.pop((notification_id, step_id, ""), None)
         card = Card(
             notification_id=notification_id,
             step_id=step_id,

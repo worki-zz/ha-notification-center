@@ -311,12 +311,9 @@ async def test_mode_and_priority(center: Center, hass: HomeAssistant) -> None:
 
 
 async def test_tap_opens_the_page(center: Center, hass: HomeAssistant) -> None:
-    """The tap opens General's page, a Tap's own, or the panel that presses it."""
+    """A tap opens the card's details, the Tap's page, or the panel to press it."""
     _android, ios = await _setup(center, hass)
-    general = dict(center.manager.config["general"])
-    general["open_on_tap"] = "/lovelace/home"
-    await center.manager.async_update_general(general)
-    await center.add("Plain", step("Hello"))
+    plain_id = await center.add("Plain", step("Hello"))
     await center.add(
         "Tapped",
         step(
@@ -331,29 +328,37 @@ async def test_tap_opens_the_page(center: Center, hass: HomeAssistant) -> None:
             ],
         ),
     )
-    info_id = await center.add(
-        "Info",
+    details_id = await center.add(
+        "Details",
         step(
             "Hello",
             buttons=[
                 {
                     "type": "tap",
                     "enabled": True,
-                    "navigation": {"type": "notification_info"},
+                    "navigation": {"type": "details"},
                 }
             ],
         ),
     )
     await center.call("trigger", "sensor.nc_plain")
     await center.call("trigger", "sensor.nc_tapped")
-    await center.call("trigger", "sensor.nc_info")
+    await center.call("trigger", "sensor.nc_details")
     await hass.async_block_till_done()
+    steps = {
+        item["id"]: item["steps"][0]["id"]
+        for item in center.manager.config["notifications"]
+    }
     urls = [call.data["data"]["url"] for call in ios]
-    assert urls[0] == "/lovelace/home"
+    # By default the Overview opens the card's Notification details.
+    assert urls[0] == (
+        f"/notification-center?details={plain_id}&step={steps[plain_id]}"
+    )
     assert urls[1].startswith("/notification-center?nc_press=NC%7C")
     assert urls[1].endswith("&nc_then=%2Flovelace%2Fgarden")
-    # Notification info: the Overview opens the notification's Status dialog.
-    assert urls[2] == f"/notification-center?info={info_id}"
+    assert urls[2] == (
+        f"/notification-center?details={details_id}&step={steps[details_id]}"
+    )
 
 
 async def test_push_test_and_repairs(

@@ -1350,7 +1350,6 @@ export class NcStepEditor extends LitElement {
       .entityActionSet=${this.entityActions.has(edit.button.id)}
       .runChoices=${runChoicesOf(effectiveButtons(this.category, step))}
       .blocks=${blocksOf(step)}
-      .generalOpenOnTap=${this.config?.general?.open_on_tap}
       @interaction-closed=${(ev: CustomEvent<InteractionResult>) => {
         ev.stopPropagation();
         this._interaction = undefined;

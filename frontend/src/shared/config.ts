@@ -104,8 +104,8 @@ export type ButtonNavigation =
   | { type: "none" }
   | { type: "more_info"; entity_id?: string | null }
   | { type: "navigate"; path: string }
-  // The notification's Status dialog, on the Overview.
-  | { type: "notification_info" };
+  // The Notification details of the card, where it is pressed.
+  | { type: "details" };
 
 /** The notification state a custom button or the Tap sets. */
 export interface ButtonState {
@@ -240,8 +240,6 @@ export interface GeneralSettings {
   read_the_message?: { tts_service?: string | null; language?: string | null };
   // The order of the chimes (ids); the others follow by name.
   chime_order?: string[];
-  // The page a tap on a push opens (empty: the panel's Overview).
-  open_on_tap?: string | null;
   [key: string]: unknown;
 }
 
@@ -434,14 +432,20 @@ export interface CardState {
   muted?: boolean;
   since: string;
   state_since: string;
-  // When it last became active (an active card).
+  // When it last became active (an active card; a closed one keeps it).
   active_since?: string | null;
+  // The card closes by itself then (the Expiration of Done when or Dismiss
+  // when), as done or dismissed.
+  expires_at?: string | null;
+  expires_as?: "done" | "dismissed";
   snoozed_until: string | null;
   closed_at?: string | null;
   message: string | null;
   info: string | null;
   // The step's custom data text, rendered.
   data_text?: string | null;
+  // What started it: a state change's entity, among others.
+  trigger?: Record<string, unknown> | null;
   // Whether the Dashboard channel shows the card now, and to whom.
   dashboard?: ChannelView;
   // An active card: what every channel does now, by channel key.

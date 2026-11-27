@@ -65,6 +65,11 @@ ACTION_SEPARATOR: Final = "|"
 # page of ``nc_then`` (the tap).
 QUERY_PRESS: Final = "nc_press"
 QUERY_THEN: Final = "nc_then"
+# The Overview opens the Notification details of a card (step and entity
+# optional).
+QUERY_DETAILS: Final = "details"
+QUERY_STEP: Final = "step"
+QUERY_ENTITY: Final = "entity"
 
 PANEL_PATH: Final = f"/{PANEL_URL_PATH}"
 DEFAULT_ICON: Final = "mdi:bell"
@@ -151,9 +156,13 @@ def press_url(press: str, then: str | None = None) -> str:
     return url
 
 
-def info_url(notification_id: str) -> str:
-    """Return the Overview's address with a notification's Status dialog open."""
-    return f"{PANEL_PATH}?info={quote(notification_id, safe='')}"
+def details_url(card: Card) -> str:
+    """Return the Overview's address with the Notification details of a card open."""
+    url = f"{PANEL_PATH}?{QUERY_DETAILS}={quote(card.notification_id, safe='')}"
+    url += f"&{QUERY_STEP}={quote(card.step_id, safe='')}"
+    if card.entity_id:
+        url += f"&{QUERY_ENTITY}={quote(card.entity_id, safe='')}"
+    return url
 
 
 def push_body(message: str | None, info: str | None) -> str:
@@ -499,20 +508,20 @@ class PushDevice(Device):
         )
 
     def default_url(self) -> str:
-        """Return the page the app opens on a tap, as General sets it."""
-        general = self.manager.engine.manager.config.get("general") or {}
-        return str(general.get("open_on_tap") or PANEL_PATH)
+        """Return the page a test push opens on a tap: the Overview."""
+        return PANEL_PATH
 
     def tap_url(self, card: Card) -> str:
         """Return what a tap on a card's push opens.
 
-        General's page, unless the Tap is switched on: when it does
-        something, the panel presses it first; a Tap that only navigates
-        opens its page (or the Status dialog) at once.
+        The card's Notification details, unless the Tap is switched on: when
+        it does something, the panel presses it first (then opens the
+        details, or the Tap's page); a Tap that only navigates opens its
+        page at once.
         """
         buttons = self.manager.engine.buttons_of(card)
         tap = next((button for button in buttons if button["type"] == "tap"), None)
-        page = self.default_url()
+        page = details_url(card)
         if tap is None or not tap.get("enabled"):
             return page
         # A Tap that runs another button does what that button does.
@@ -524,13 +533,15 @@ class PushDevice(Device):
             or actions.get("entity_action")
             or actions.get("ha_actions")
         )
-        if navigation.get("type") == "navigate":
+        kind = navigation.get("type")
+        if kind == "navigate":
             page = str(navigation["path"])
-        if not does:
-            if not navigation or navigation["type"] == "navigate":
-                return page
-            if navigation["type"] == "notification_info":
-                return info_url(card.notification_id)
+        if not does and kind in (None, "none", "navigate", "details"):
+            return page
+        # The panel presses the Tap there, then opens its page: the
+        # Overview unless it navigates or opens the details.
+        if kind not in ("navigate", "details"):
+            page = PANEL_PATH
         return press_url(action_id(card, tap["id"]), page)
 
     def actions_of(self, card: Card) -> list[dict[str, Any]]:

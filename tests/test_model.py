@@ -20,6 +20,7 @@ from custom_components.notification_center.model import (
 from custom_components.notification_center.store import (
     move_schedule_expires,
     rename_mute_and_pulse,
+    upgrade_details_navigation,
     upgrade_push_devices,
     upgrade_status_actions,
     upgrade_tap_behavior,
@@ -781,3 +782,27 @@ async def test_upgrade_status_actions(hass: HomeAssistant) -> None:
     assert effective["b-done"]["navigation"] == page
     assert effective["door"]["actions"]["notification_state"] == {"type": "mute"}
     assert effective["b-tap"]["navigation"] == {"type": "more_info"}
+
+
+async def test_upgrade_details_navigation(hass: HomeAssistant) -> None:
+    """Notification info opens the Notification details; General's page goes."""
+    config = _with_notification(
+        message="Hi",
+        buttons=[
+            {"id": "b1", "type": "custom", "navigation": {"type": "notification_info"}},
+            {"id": "b2", "type": "custom", "navigation": {"type": "more_info"}},
+        ],
+    )
+    config["general"]["open_on_tap"] = "/lovelace/home"
+    config["categories"][0]["buttons"] = [
+        {"type": "tap", "navigation": {"type": "notification_info"}}
+    ]
+    upgrade_details_navigation(config)
+
+    assert "open_on_tap" not in config["general"]
+    buttons = config["notifications"][0]["steps"][0]["buttons"]
+    assert buttons[0]["navigation"] == {"type": "details"}
+    assert buttons[1]["navigation"] == {"type": "more_info"}
+    assert config["categories"][0]["buttons"][0]["navigation"] == {"type": "details"}
+    validated = await async_validate_config(hass, config)
+    assert "open_on_tap" not in validated["general"]

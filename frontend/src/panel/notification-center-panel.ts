@@ -37,7 +37,8 @@ import {
 import type { HomeAssistant, PanelInfo } from "../shared/types";
 import "./category-editor";
 import "./general-page";
-import "./editor/info-dialog";
+import "../shared/details-dialog";
+import { openDetails } from "../shared/details";
 import "./editor/notification-editor";
 import { loadSettingsElements } from "./ha-elements";
 import "./settings-page";
@@ -80,9 +81,6 @@ export class NotificationCenterPanel extends LitElement {
 
   @state() private _notice?: string;
 
-  // The notification whose Status dialog is open (Notification info).
-  @state() private _info?: string;
-
 
   // Home Assistant's settings elements are loaded (for the settings pages).
   @state() private _haReady = false;
@@ -94,7 +92,7 @@ export class NotificationCenterPanel extends LitElement {
 
   private _timer?: number;
 
-  // A button's Notification info, or a push, opens ?info=<id>.
+  // A push opens ?details=<id>&step=<id>&entity=<id> (earlier ?info=<id>).
   private _locationChanged = (): void => {
     void this._pushTapped();
   };
@@ -151,18 +149,20 @@ export class NotificationCenterPanel extends LitElement {
 
   // A push was tapped (or its button opens a page): the address names the
   // button to press ("nc_press") and maybe the page to open then ("nc_then").
-  // Notification info opens the Status dialog of a notification ("info").
+  // "details" opens the Notification details of a card (a notification id
+  // or its sensor, maybe its step and entity); "info" is the earlier name.
   private async _pushTapped(): Promise<void> {
     const query = new URLSearchParams(window.location.search);
     const press = query.get("nc_press");
     const { config, state } = this._store;
-    const info = query.get("info");
-    if (info && config && state && !press) {
-      // A notification id, or its sensor.
-      this._info =
-        config.notifications.find((item) => item.id === info)?.id ??
-        Object.entries(state.notifications).find(([, item]) => item.entity_id === info)?.[0];
+    const details = query.get("details") ?? query.get("info");
+    if (details && config && state && !press) {
       navigate(window.location.pathname, true);
+      openDetails(this, {
+        notification: details,
+        step: query.get("step"),
+        entity: query.get("entity"),
+      });
       return;
     }
     if (!press || !config || !state || !this.hass) return;
@@ -280,21 +280,7 @@ export class NotificationCenterPanel extends LitElement {
               ? this._renderDone()
               : this._renderOverview()}
       </div></div>
-      ${this._renderInfo()}
     `;
-  }
-
-  private _renderInfo() {
-    const { config, state } = this._store;
-    const notification = config?.notifications.find((item) => item.id === this._info);
-    if (!notification) return nothing;
-    return html`<nc-info-dialog
-      .hass=${this.hass}
-      .config=${config}
-      .state=${state}
-      .notification=${notification}
-      @info-closed=${() => (this._info = undefined)}
-    ></nc-info-dialog>`;
   }
 
   private _renderLive(

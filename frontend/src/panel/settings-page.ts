@@ -19,7 +19,8 @@ import { cssColor } from "../shared/format";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { confirmDialog } from "./confirm";
-import "./editor/info-dialog";
+import "../shared/details-dialog";
+import { openDetails } from "../shared/details";
 import "./empty-state";
 import {
   deleteCategory,
@@ -61,9 +62,6 @@ export class NcSettings extends LitElement {
   @state() private _category = "";
 
   @state() private _error?: string;
-
-  // The notification whose Status dialog is open.
-  @state() private _info?: string;
 
   public override connectedCallback(): void {
     super.connectedCallback();
@@ -119,7 +117,6 @@ export class NcSettings extends LitElement {
               ? this._renderCategories()
               : this._renderList()}
         </div>
-        ${this._renderInfo()}
         ${this.tab === "notifications" && this.config?.notifications.length
           ? html`<ha-button slot="fab" size="l" @click=${this._add}>
               <ha-icon slot="start" icon="mdi:plus"></ha-icon>
@@ -324,18 +321,6 @@ export class NcSettings extends LitElement {
     );
   }
 
-  private _renderInfo() {
-    const item = this._info ? this.config?.notifications.find((n) => n.id === this._info) : undefined;
-    if (!item) return nothing;
-    return html`<nc-info-dialog
-      .hass=${this.hass}
-      .config=${this.config}
-      .state=${this.state}
-      .notification=${item}
-      @info-closed=${() => (this._info = undefined)}
-    ></nc-info-dialog>`;
-  }
-
   private async _categoryMenu(
     ev: CustomEvent<{ item: { value: string } }>,
     item: Category,
@@ -368,7 +353,7 @@ export class NcSettings extends LitElement {
         openMoreInfo(this, entityId);
         return;
       case "info":
-        this._info = item.id;
+        openDetails(this, { notification: item.id, view: "status" });
         return;
       case "run":
       case "run_me": {

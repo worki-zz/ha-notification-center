@@ -23,6 +23,27 @@ import type { HomeAssistant } from "./types";
 
 export const LIVE_CARD_ELEMENT = "notification-center-live-card";
 
+/** What a live card shows, without its buttons. */
+export function liveView(
+  hass: HomeAssistant,
+  live: LiveCard,
+  now: number,
+  data?: string,
+): NotificationViewData {
+  const { card, notification, category } = live;
+  const icon = notification.icon || category?.icon || undefined;
+  return {
+    label: notification.name,
+    data: data ?? cardData(hass, live, now),
+    message: card.message ?? undefined,
+    info: card.info ?? undefined,
+    icon,
+    stateObj: icon || !live.entityId ? undefined : hass.states[live.entityId],
+    color: cssColor(live.color ?? notification.color ?? category?.color),
+    highlight: notification.highlight ?? category?.highlight ?? "none",
+  };
+}
+
 export class NotificationCenterLiveCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
@@ -60,8 +81,6 @@ export class NotificationCenterLiveCard extends LitElement {
     const hass = this.hass;
     const live = this.live;
     if (!hass || !live) return undefined;
-    const { card, notification, category } = live;
-    const icon = notification.icon || category?.icon || undefined;
     const buttons: ViewButton[] = !this.interactive
       ? []
       : this._asking
@@ -79,17 +98,12 @@ export class NotificationCenterLiveCard extends LitElement {
             icon: button.icon,
             plain: button.plain,
           }));
+    const view = liveView(hass, live, this.now, this.data);
     return {
-      label: notification.name,
-      data: this.data ?? cardData(hass, live, this.now),
-      message: card.message ?? undefined,
-      info: card.info ?? undefined,
+      ...view,
       when: this.when,
-      icon,
-      stateObj: icon || !live.entityId ? undefined : hass.states[live.entityId],
-      color: cssColor(live.color ?? notification.color ?? category?.color),
       // Only an active card stands out.
-      highlight: this.muted ? "none" : (notification.highlight ?? category?.highlight ?? "none"),
+      highlight: this.muted ? "none" : view.highlight,
       muted: this.muted,
       clickable: this.interactive && !!tapButton(live),
       compact: this._asking,

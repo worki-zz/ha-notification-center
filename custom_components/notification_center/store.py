@@ -57,7 +57,9 @@ STORAGE_VERSION: Final = 1
 # 9: a person's notify and device_type are a list of push devices (0.7.11).
 # 10: status actions in the status blocks, Snooze when and Mute when, a
 #     button's actions and navigation inherited key by key (0.7.11).
-STORAGE_MINOR_VERSION: Final = 10
+# 11: the Navigation that opened the Status dialog opens the Notification
+#     details; General's page a tap on a push opens is gone (0.8.0).
+STORAGE_MINOR_VERSION: Final = 11
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -72,7 +74,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # 7: button values equal to the category's are chosen ones, not leftovers.
 # 8: a person's notify and device_type are a list of push devices.
 # 9: status actions, Snooze when and Mute when, button keys inherited one by one.
-EXPORT_VERSION: Final = 9
+# 10: Navigation "details" instead of "notification_info", no General open_on_tap.
+EXPORT_VERSION: Final = 10
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -106,6 +109,8 @@ class _ConfigStore(Store[ConfigData]):
             upgrade_push_devices(old_data)
         if old_major_version == 1 and old_minor_version < 10:
             upgrade_status_actions(old_data)
+        if old_major_version == 1 and old_minor_version < 11:
+            upgrade_details_navigation(old_data)
         return old_data
 
 
@@ -496,6 +501,33 @@ def switch_push_off(data: dict[str, Any]) -> None:
                 push.pop("modes", None)
 
 
+def upgrade_details_navigation(data: dict[str, Any]) -> None:
+    """Open the Notification details where the Status dialog was opened.
+
+    A button's or Tap's Navigation ``notification_info`` is ``details``. A
+    tap on a push opens the card's details now, so General's page for it
+    (``open_on_tap``) is gone.
+    """
+    general = data.get("general")
+    if isinstance(general, dict):
+        general.pop("open_on_tap", None)
+    buttons: list[Any] = []
+    for notification in data.get("notifications") or []:
+        steps = notification.get("steps") if isinstance(notification, dict) else None
+        for step in steps or []:
+            if isinstance(step, dict):
+                buttons.extend(step.get("buttons") or [])
+    for category in data.get("categories") or []:
+        if isinstance(category, dict):
+            buttons.extend(category.get("buttons") or [])
+    for button in buttons:
+        navigation = button.get("navigation") if isinstance(button, dict) else None
+        if not isinstance(navigation, dict):
+            continue
+        if navigation.get("type") == "notification_info":
+            navigation["type"] = "details"
+
+
 def _serialized[F: Callable[..., Coroutine[Any, Any, Any]]](method: F) -> F:
     """Run changes of the configuration one after the other.
 
@@ -832,7 +864,7 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, 3, 4, 5, 6, 7, 8, EXPORT_VERSION):
+        if version not in (1, 2, 3, 4, 5, 6, 7, 8, 9, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
@@ -850,6 +882,8 @@ class ConfigManager:
             upgrade_push_devices(data)
         if version < 9:
             upgrade_status_actions(data)
+        if version < 10:
+            upgrade_details_navigation(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(

@@ -566,7 +566,6 @@ export class NcCategoryEditor extends LitElement {
       .button=${edit.button as Button}
       .isNew=${edit.isNew}
       .runChoices=${runChoicesOf(this._draft!.buttons)}
-      .generalOpenOnTap=${this.config?.general?.open_on_tap}
       @interaction-closed=${(
         ev: CustomEvent<{ result?: Button | "delete" }>,
       ) => {

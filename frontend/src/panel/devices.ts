@@ -6,25 +6,18 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import {
-  CHANNEL_DASHBOARD,
-  CHANNEL_PUSH,
-  DOMAIN,
-  type Mode,
-  type NotificationCenterConfig,
-} from "../shared/config";
+import { DOMAIN, type Mode } from "../shared/config";
 import { errorText } from "../shared/live";
 import type { HassEntity, HomeAssistant } from "../shared/types";
 
-export type ChannelKind = "dashboard" | "push" | "light" | "speaker" | "siren";
-
-export interface ChannelInfo {
-  key: string;
-  name: string;
-  icon: string;
-  kind?: ChannelKind;
-  entity_id?: string;
-}
+export {
+  type ChannelInfo,
+  type ChannelKind,
+  channelIcon,
+  channelsOf,
+  entityName,
+  entityState,
+} from "../shared/channel-info";
 
 // Media player and siren features, as Home Assistant numbers them.
 export const MEDIA_VOLUME_SET = 4;
@@ -33,61 +26,8 @@ export const SIREN_TONES = 4;
 export const SIREN_VOLUME_SET = 8;
 export const SIREN_DURATION = 16;
 
-const KIND_ICONS: Record<ChannelKind, string> = {
-  dashboard: "mdi:view-dashboard-outline",
-  push: "mdi:cellphone-message",
-  light: "mdi:lightbulb-outline",
-  speaker: "mdi:speaker",
-  siren: "mdi:alarm-light-outline",
-};
-
-/** The entity's name in Home Assistant, or its entity id. */
-export function entityName(hass: HomeAssistant | undefined, entityId: string): string {
-  const state = hass?.states[entityId];
-  return String(state?.attributes.friendly_name ?? entityId);
-}
-
-export function entityState(hass: HomeAssistant | undefined, entityId: string | undefined): HassEntity | undefined {
-  return entityId ? hass?.states[entityId] : undefined;
-}
-
 export function features(state: HassEntity | undefined): number {
   return Number(state?.attributes.supported_features ?? 0);
-}
-
-/** The channels in their order: Dashboard, Push, the lights, the speakers, the sirens. */
-export function channelsOf(
-  hass: HomeAssistant | undefined,
-  config: NotificationCenterConfig | undefined,
-): ChannelInfo[] {
-  const channels: ChannelInfo[] = [
-    { key: CHANNEL_DASHBOARD, name: "Dashboard", icon: KIND_ICONS.dashboard, kind: "dashboard" },
-    { key: CHANNEL_PUSH, name: "Push", icon: KIND_ICONS.push, kind: "push" },
-  ];
-  const add = (items: { id: string; entity_id: string }[] | undefined, kind: ChannelKind) => {
-    for (const item of items ?? []) {
-      channels.push({
-        key: `${kind}:${item.id}`,
-        name: entityName(hass, item.entity_id),
-        icon: KIND_ICONS[kind],
-        kind,
-        entity_id: item.entity_id,
-      });
-    }
-  };
-  add(config?.lights, "light");
-  add(config?.speakers, "speaker");
-  add(config?.sirens, "siren");
-  return channels;
-}
-
-/** The icon of a channel: its entity's own icon, as Home Assistant shows it. */
-export function channelIcon(hass: HomeAssistant | undefined, channel: ChannelInfo) {
-  const stateObj = entityState(hass, channel.entity_id);
-  if (stateObj && customElements.get("ha-state-icon")) {
-    return html`<ha-state-icon class="channel-icon" .hass=${hass} .stateObj=${stateObj}></ha-state-icon>`;
-  }
-  return html`<ha-icon class="channel-icon" .icon=${channel.icon}></ha-icon>`;
 }
 
 /** Run a device channel once (the Test button). */

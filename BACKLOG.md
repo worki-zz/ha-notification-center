@@ -12,8 +12,8 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 ### Button action on the card's entity
 *Area: Notification editor.* A button's Action (Home Assistant action) can target the card's own entity, so one button action fits every entity of the notification without entity actions. *(Kristóf, 2026-11-20; phase 4)*
 
-### Notification details view
-*Area: Notification content.* A detail page per notification (like a more-info dialog of its own) with the title, the message, the Info line, the buttons, the attachments and the time, plus the data and history. Once it exists, it is also offered as a button action ("Notification details") next to Entity action, More info, Action and Navigate, and as one of the pages a tapped push can open (besides a path). Until then the Navigation *Notification info* opens the Status dialog on the Overview; it then opens this page, which may become the default navigation. *(Phase 3 and phase 4, 2026-11-19; extended by Kristóf, 2026-11-23, phase 6.2 and 2026-11-24)*
+### Notification details: attachments and history
+*Area: Notification content.* The Notification details (built in 0.8.0) could also show the attachments and the history of the notification (when it was active, snoozed, done, by whom). *(Phase 3 and phase 4, 2026-11-19; extended by Kristóf, 2026-11-23; the rest of the details view built 2026-11-27)*
 
 ### Statistics
 *Area: Insight.* Simple statistics per notification, such as how often it fired and how long it took until it was done. Built on the Home Assistant recorder data of the notification sensors. *(Phase 4, 2026-11-19)*

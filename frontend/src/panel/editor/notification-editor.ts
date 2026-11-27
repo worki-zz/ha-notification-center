@@ -24,7 +24,8 @@ import { renderStatus, statusOf } from "../status";
 import { dismissAll, openMoreInfo, renderNotificationMenu, runNow } from "../notification-menu";
 import { BLOCK_INTROS, block } from "./block";
 import "./group-dialog";
-import "./info-dialog";
+import "../../shared/details-dialog";
+import { openDetails } from "../../shared/details";
 import { ACTION_SLOT_STYLES } from "./action-slots";
 import { type EditorNotification, type EditorStep, buttonsWithEntityActions, detachCategoryButtons, newId, listedEntities, newNotification, newStep, prefillPinned, stepLabel, toEditor, toSaved } from "./model";
 import "./entities-block";
@@ -75,8 +76,6 @@ export class NcNotificationEditor extends LitElement {
 
   @state() private _preview: PreviewText[] = [];
 
-  // The Status dialog: open for the notification, or for one step.
-  @state() private _info?: { stepId?: string };
 
   // The draft as it was loaded or saved, to tell whether it changed.
   private _original = "";
@@ -119,17 +118,11 @@ export class NcNotificationEditor extends LitElement {
     return stepId ? this._storedItem()?.steps.find((item) => item.id === stepId) : undefined;
   }
 
-  private _renderInfo() {
+  // The Status of the saved notification, or of one of its steps.
+  private _showStatus(stepId?: string): void {
     const stored = this._storedItem();
-    if (!stored) return nothing;
-    return html`<nc-info-dialog
-      .hass=${this.hass}
-      .config=${this.config}
-      .state=${this.state}
-      .notification=${stored}
-      .stepId=${this._info?.stepId}
-      @info-closed=${() => (this._info = undefined)}
-    ></nc-info-dialog>`;
+    if (!stored) return;
+    openDetails(this, { notification: stored.id, step: stepId, view: "status" });
   }
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -383,7 +376,6 @@ export class NcNotificationEditor extends LitElement {
           ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
           ${draft ? this._renderEditor(draft) : nothing}
         </div>
-        ${this._info ? this._renderInfo() : nothing}
         ${draft
           ? html`<ha-button
               slot="fab"
@@ -410,9 +402,9 @@ export class NcNotificationEditor extends LitElement {
               role="button"
               tabindex="0"
               title="Status"
-              @click=${() => (this._info = {})}
+              @click=${() => this._showStatus()}
               @keydown=${(ev: KeyboardEvent) => {
-                if (ev.key === "Enter" || ev.key === " ") this._info = {};
+                if (ev.key === "Enter" || ev.key === " ") this._showStatus();
               }}
               >${renderStatus(status)}</span
             >`
@@ -828,7 +820,7 @@ export class NcNotificationEditor extends LitElement {
         await this._run(() => this._call("trigger", { step: index + 1, only_me: true }));
         return;
       case "info":
-        this._info = { stepId: step.id };
+        this._showStatus(step.id);
         return;
       case "duplicate": {
         const copy = JSON.parse(JSON.stringify(step)) as EditorStep;
@@ -930,7 +922,7 @@ export class NcNotificationEditor extends LitElement {
         this._yaml = undefined;
         return;
       case "info":
-        this._info = {};
+        this._showStatus();
         return;
       case "more_info":
         openMoreInfo(this, this._sensor());
