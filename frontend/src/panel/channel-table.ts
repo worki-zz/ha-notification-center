@@ -424,6 +424,7 @@ export class NcChannelTable extends LitElement {
         ${channel.kind === "speaker" ? this._renderRepeat(key) : nothing}
         ${channel.kind === "speaker" ? this._renderSpeaker(key, settings) : nothing}
         ${channel.kind === "push" ? this._renderPriority(key, settings) : nothing}
+        ${channel.kind === "push" ? this._renderKeep(key) : nothing}
       </div>
       <ha-dialog-footer slot="footer">
         <ha-button slot="primaryAction" @click=${() => (this._open = undefined)}
@@ -463,6 +464,25 @@ export class NcChannelTable extends LitElement {
       "Priority",
       (value) => this._set(key, { priority: value }),
       PUSH_PRIORITY_INFO[priority].help,
+    );
+  }
+
+  // A push: whether it stays on the phone when the notification closes.
+  private _renderKeep(key: string) {
+    const own = this._own(key).keep_when_closed as boolean | undefined;
+    const inherited = !!this._inherited(key).keep_when_closed;
+    return inheritField(
+      this.hass,
+      [
+        { value: "on", label: "On" },
+        { value: "off", label: "Off" },
+      ],
+      own === undefined ? undefined : own ? "on" : "off",
+      inherited ? "On" : "Off",
+      "Keep push when closed",
+      (value) =>
+        this._set(key, { keep_when_closed: value === undefined ? undefined : value === "on" }),
+      "When the notification is done, dismissed or ends, the push stays on the phone, silently replaced by one without buttons that says how it closed.",
     );
   }
 

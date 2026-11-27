@@ -363,6 +363,15 @@
         "snoozed": "Snoozed",
         "dismissed": "Dismissed"
       }
+    },
+    "push_closed": {
+      "options": {
+        "done": "Done at {time}",
+        "done_by": "Done by {person} at {time}",
+        "dismissed": "Dismissed at {time}",
+        "dismissed_by": "Dismissed by {person} at {time}",
+        "ended": "Ended at {time}"
+      }
     }
   },
   "issues": {

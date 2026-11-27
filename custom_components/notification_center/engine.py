@@ -893,6 +893,8 @@ class Engine(EngineQueries, EngineActions):
             phase=PHASE_CLOSED,
             closed_reason=reason,
             closed_at=dt_util.utcnow(),
+            closed_by=self.person_of(context),
+            closed_source=source,
             snoozed_until=None,
             hidden=False,
             blocked=blocked,

@@ -583,6 +583,8 @@ class EngineActions:
             context=context,
             closed_reason=reason,
             closed_at=now,
+            closed_by=self.person_of(context),
+            closed_source=SOURCE_BUTTON,
         )
         if skip:
             schedule.reschedule()

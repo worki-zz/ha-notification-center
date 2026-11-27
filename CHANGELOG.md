@@ -6,6 +6,7 @@
 
 - **Repairs**: an entity group whose action calls an action on entities without a target is listed (the group's action does not pick the member it runs for).
 - The Activation block says *Starts only with the Trigger action* while its Triggers list is empty.
+- **Push**: *Keep push when closed* in the Push channel's dialog (category or step, off by default). When the notification is done, dismissed or ends, the push stays on the phone: it is silently replaced by one without buttons whose last line says how it closed, such as *Done by Dóra at 14:32*, *Dismissed at 14:32* or *Ended at 14:32* (in Home Assistant's language). Snooze and Hide while still take it away.
 
 ### Changed
 

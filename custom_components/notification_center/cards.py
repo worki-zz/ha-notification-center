@@ -67,6 +67,10 @@ class Card:
     snoozed_until: datetime | None = None
     closed_reason: str | None = None
     closed_at: datetime | None = None
+    # Who closed the card (a person entity) and what closed it (a source):
+    # the closing line of a kept push.
+    closed_by: str | None = None
+    closed_source: str | None = None
     # A listed entity's closed card blocks a new one until the entity stops
     # matching: a dismissed or done card does not come back by itself.
     blocked: bool = False
@@ -127,6 +131,8 @@ class Card:
             "snoozed_until": to_iso(self.snoozed_until),
             "closed_reason": self.closed_reason,
             "closed_at": to_iso(self.closed_at),
+            "closed_by": self.closed_by,
+            "closed_source": self.closed_source,
             "blocked": self.blocked,
             "muted": self.muted,
             "trigger": self.trigger,
@@ -158,6 +164,8 @@ class Card:
             snoozed_until=parse_iso(data.get("snoozed_until")),
             closed_reason=data.get("closed_reason"),
             closed_at=parse_iso(data.get("closed_at")),
+            closed_by=data.get("closed_by"),
+            closed_source=data.get("closed_source"),
             blocked=bool(data.get("blocked", False)),
             # "silenced" is the key of runtime state saved before 0.7.4.
             muted=bool(data.get("muted", data.get("silenced", False))),
