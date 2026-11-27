@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Notification details**: the buttons are the size of the vacuum's more info dialog (48 px, in a Home Assistant control button group).
+
 ## 0.8.1
 
 ### Changed

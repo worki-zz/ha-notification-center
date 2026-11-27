@@ -285,7 +285,7 @@ export class NcDetailsDialog extends LitElement {
     if (!buttons.length && !snooze) return nothing;
     return html`<div class="controls">
       ${buttons.length
-        ? html`<div class="buttons">
+        ? html`<ha-control-button-group class="buttons">
             ${buttons.map(
               (button) => html`<ha-control-button
                 .label=${button.label}
@@ -295,7 +295,7 @@ export class NcDetailsDialog extends LitElement {
                 <ha-icon .icon=${button.icon}></ha-icon>
               </ha-control-button>`,
             )}
-          </div>`
+          </ha-control-button-group>`
         : nothing}
       ${snooze ? this._renderSnooze(data, snooze) : nothing}
     </div>`;
@@ -337,7 +337,7 @@ export class NcDetailsDialog extends LitElement {
       { key: "dismiss_early", label: "Dismiss", icon: "mdi:close" },
     ];
     return html`<div class="controls">
-      <div class="buttons">
+      <ha-control-button-group class="buttons">
         ${early.map(
           (button) => html`<ha-control-button
             .label=${button.label}
@@ -350,7 +350,7 @@ export class NcDetailsDialog extends LitElement {
             <ha-icon .icon=${button.icon}></ha-icon>
           </ha-control-button>`,
         )}
-      </div>
+      </ha-control-button-group>
     </div>`;
   }
 
@@ -490,17 +490,15 @@ export class NcDetailsDialog extends LitElement {
       gap: 16px;
       padding-top: 48px;
     }
+    /* The buttons as in the vacuum's more info dialog. */
     .buttons {
-      display: flex;
+      --control-button-group-thickness: 48px;
       justify-content: center;
-      flex-wrap: wrap;
-      gap: 12px;
     }
     .buttons ha-control-button {
-      width: 72px;
-      height: 64px;
-      --control-button-border-radius: 18px;
-      --mdc-icon-size: 24px;
+      width: var(--control-button-group-thickness);
+      --control-button-border-radius: var(--ha-border-radius-lg, 12px);
+      flex: none;
     }
     .snooze {
       width: 100%;
