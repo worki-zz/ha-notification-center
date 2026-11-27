@@ -2,6 +2,7 @@
 // its stored form and the form Home Assistant's own editors use.
 
 import type {
+  StepImage,
   AudienceEntry,
   Button,
   CardHighlight,
@@ -73,6 +74,7 @@ export interface EditorStep {
   message: string;
   info?: string | null;
   data?: StepData | null;
+  image?: StepImage | null;
   activation: Start;
   conditions: StepConditions;
   done_when: {
@@ -525,6 +527,7 @@ export function toSaved(draft: EditorNotification): EditorNotification {
         ? { type: "schedule", schedule: start.schedule!, actions: start.actions }
         : { type: "triggers", triggers, actions: start.actions };
     if (step.data && step.data.type === "none") step.data = null;
+    if (!step.image?.entity_id) delete step.image;
     if (!step.info) delete step.info;
     // A new step's buttons get their ids from Home Assistant.
     step.buttons = step.buttons.map((button) => {

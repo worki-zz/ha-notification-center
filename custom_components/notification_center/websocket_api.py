@@ -24,6 +24,7 @@ import voluptuous as vol
 
 from .const import CLOSED_DISMISSED, CLOSED_DONE, DOMAIN, SOURCE_BUTTON
 from .engine import async_get_engine
+from .images import ImageView
 from .model import (
     CHANNEL_PUSH,
     COLLECTIONS,
@@ -136,6 +137,7 @@ def async_register(hass: HomeAssistant) -> None:
     ):
         websocket_api.async_register_command(hass, command)
     hass.http.register_view(ExportView())
+    hass.http.register_view(ImageView())
 
 
 _SECTION = vol.In(COLLECTIONS)

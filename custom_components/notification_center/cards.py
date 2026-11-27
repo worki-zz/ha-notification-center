@@ -92,6 +92,11 @@ class Card:
     # When the card last opened (or came back from a snooze): the channels
     # count their delay from here.
     active_since: datetime | None = None
+    # The still of the step's Image, taken when the card became active (its
+    # id in the image store); ``image_pending`` while it is being taken (not
+    # stored: the push waits for it).
+    image: str | None = None
+    image_pending: bool = False
 
     @property
     def key(self) -> CardKey:
@@ -140,6 +145,7 @@ class Card:
             "expires_at": to_iso(self.expires_at),
             "expires_as": self.expires_as,
             "active_since": to_iso(self.active_since),
+            "image": self.image,
         }
 
     @classmethod
@@ -173,6 +179,7 @@ class Card:
             # Before 0.7.4 only a schedule expired, and it dismissed the card.
             expires_as=data.get("expires_as") or CLOSED_DISMISSED,
             active_since=parse_iso(data.get("active_since")),
+            image=data.get("image"),
         )
 
 

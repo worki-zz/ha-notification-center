@@ -16,6 +16,7 @@ they survive a restart.
 
 from __future__ import annotations
 
+import asyncio
 import calendar
 from collections.abc import Callable, Mapping
 from datetime import date, datetime, time, timedelta
@@ -88,6 +89,7 @@ from .const import (
 )
 from .engine_actions import EngineActions, PressRun, status_reached
 from .engine_queries import EngineQueries
+from .images import ImageStore, image_entity
 from .issues import IssueTracker
 from .model import (
     CHANNEL_PUSH,
@@ -238,6 +240,9 @@ class Engine(EngineQueries, EngineActions):
         self._config = manager.config
         # The end of the next channel delay: the channels change then.
         self._delay_timer: CALLBACK_TYPE | None = None
+        # The stills of the steps' Images.
+        self.images = ImageStore(hass)
+        self._image_tasks: set[asyncio.Task[None]] = set()
         self._delay_at: datetime | None = None
         self._person_states: dict[str, str] = {}
         # The lights, speakers and sirens (set by the integration's setup).
@@ -276,6 +281,7 @@ class Engine(EngineQueries, EngineActions):
             # A blocking card is both here and in ``cards``: the same card.
             self.dismissed[card.key] = self.cards.get(card.key) or card
         self._prune()
+        await self.images.async_prune()
         for card in self.cards.values():
             if card.phase == PHASE_SNOOZED:
                 self._schedule_unsnooze(card)
@@ -356,6 +362,9 @@ class Engine(EngineQueries, EngineActions):
         for tracker in self._text_trackers.values():
             tracker.async_stop()
         self._text_trackers.clear()
+        for task in self._image_tasks:
+            task.cancel()
+        self._image_tasks.clear()
         await self._store.async_save(self._data_to_save())
 
     @callback
@@ -658,6 +667,10 @@ class Engine(EngineQueries, EngineActions):
             if item["id"] == notification_id:
                 return dict(item)
         return None
+
+    def step_config(self, notification_id: str, step_id: str) -> dict[str, Any] | None:
+        """Return the stored settings of a step (a copy), or None."""
+        return self._step_config(notification_id, step_id)
 
     def _step_config(self, notification_id: str, step_id: str) -> dict[str, Any] | None:
         notification = self.notification_config(notification_id)
@@ -1062,6 +1075,7 @@ class Engine(EngineQueries, EngineActions):
             # Mute lasts until the card goes away (Snooze ends, a new card).
             if "muted" not in changes:
                 card.muted = False
+            self._take_image(card)
         new = card.status
         changed = new != old
         previous = self.summary_context
@@ -1095,6 +1109,35 @@ class Engine(EngineQueries, EngineActions):
         reached = status_reached(old_phase, card, changed, opened=opened, muted=muted)
         if reached is not None:
             self.queue_status_actions(card, reached, source, context, old_phase)
+
+    def _take_image(self, card: Card) -> None:
+        """Take the still of the step's Image when a card first becomes active.
+
+        A card coming back from a snooze keeps its still. The push waits for
+        it (``image_pending``).
+        """
+        if card.image is not None or card.image_pending:
+            return
+        entity_id = image_entity(self._step_config(card.notification_id, card.step_id))
+        if entity_id is None:
+            return
+        card.image_pending = True
+        task = self.hass.async_create_task(
+            self._async_take_image(card, entity_id), f"{DOMAIN} image {entity_id}"
+        )
+        self._image_tasks.add(task)
+        task.add_done_callback(self._image_tasks.discard)
+
+    async def _async_take_image(self, card: Card, entity_id: str) -> None:
+        try:
+            image_id = await self.images.async_capture(entity_id)
+        finally:
+            card.image_pending = False
+        if self.cards.get(card.key) is not card:
+            return
+        card.image = image_id
+        self._save()
+        self._notify()
 
     def _record(
         self, notification_id: str, step_id: str, state: str, when: datetime
@@ -1325,6 +1368,9 @@ class Engine(EngineQueries, EngineActions):
     @callback
     def _midnight(self, _now: datetime) -> None:
         self._prune()
+        self.hass.async_create_background_task(
+            self.images.async_prune(), f"{DOMAIN} prune images"
+        )
         # A Notification state condition on Done or Dismissed counts the
         # day's cards only: check those conditions again on the new day.
         self._refresh_own_conditions()

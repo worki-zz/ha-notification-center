@@ -2,6 +2,8 @@
   "domain": "notification_center",
   "name": "Notification Center",
   "after_dependencies": [
+    "camera",
+    "image",
     "media_source",
     "person"
   ],

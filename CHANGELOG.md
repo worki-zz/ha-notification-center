@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Image of a step** (Message block): a camera or image entity whose still is taken when the notification becomes active and kept for a week. The Notification details show it in place of the icon (a click opens the entity; a camera has *Live* for its live view), and the push carries it (*Show in push*, on by default; the push waits for the still, at most 10 seconds). Without a Data or an Image the picker is at the end of the Info row; once set it has its own row. The still is served behind the login at `/api/notification_center/image/<id>` (the push uses a signed address that works for a week).
+
 ### Changed
 
 - **Notification details**: the buttons are the size of the vacuum's more info dialog (48 px, in a Home Assistant control button group). A Snooze with one time is one of them, in the editor's order; with several times it stays the menu under them.

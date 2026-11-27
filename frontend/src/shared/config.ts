@@ -189,12 +189,20 @@ export interface StepData {
   format?: "relative" | "duration" | "time" | "date" | "datetime" | null;
 }
 
+/** The Image of a step: the entity, and whether the push carries it. */
+export interface StepImage {
+  entity_id: string;
+  push?: boolean;
+}
+
 export interface Step {
   id: string;
   enabled: boolean;
   message: string;
   info?: string | null;
   data?: StepData | null;
+  // A still of a camera or image entity, taken when a card becomes active.
+  image?: StepImage | null;
   activation: { type: "triggers" | "schedule" };
   buttons: Button[];
   // The people whose states differ from the category's audience.
@@ -434,6 +442,8 @@ export interface CardState {
   state_since: string;
   // When it last became active (an active card; a closed one keeps it).
   active_since?: string | null;
+  // The still of the step's Image (its id), taken when the card became active.
+  image?: string | null;
   // The card closes by itself then (the Expiration of Done when or Dismiss
   // when), as done or dismissed.
   expires_at?: string | null;

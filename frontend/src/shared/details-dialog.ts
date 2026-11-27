@@ -57,6 +57,12 @@ export class NcDetailsDialog extends LitElement {
   // The card shown; unset while the address names several (the picker).
   @state() private _target?: DetailsTarget;
 
+  // The signed addresses of the stills, by image id.
+  @state() private _images: Record<string, string> = {};
+
+  // A camera's live view instead of its still.
+  @state() private _live = false;
+
   @state() private _store: StoreData = {};
 
   @state() private _now = Date.now();
@@ -76,6 +82,7 @@ export class NcDetailsDialog extends LitElement {
     this._target = undefined;
     this._error = undefined;
     this._open = true;
+    this._live = false;
     this._follow();
   }
 
@@ -242,6 +249,59 @@ export class NcDetailsDialog extends LitElement {
     </ha-tile-icon>`;
   }
 
+  // The still of the step's Image in place of the icon; a camera can show
+  // its live view instead. A click opens the entity's more info.
+  private _renderImage(data: DetailsData) {
+    const hass = this.hass!;
+    const imageId = data.card?.image;
+    const entityId = data.live.step?.image?.entity_id;
+    if (!imageId || !entityId) return undefined;
+    const url = this._imageUrl(imageId);
+    const camera = entityId.startsWith("camera.") && !!hass.states[entityId];
+    const live = this._live && camera;
+    return html`<div class="image">
+      ${live
+        ? html`<ha-camera-stream
+            .hass=${hass}
+            .stateObj=${hass.states[entityId]}
+            controls
+            muted
+            allow-exoplayer
+          ></ha-camera-stream>`
+        : url
+          ? html`<img
+              src=${url}
+              alt=${data.notification.name}
+              @click=${() => this._moreInfo(entityId)}
+            />`
+          : html`<div class="image-wait"></div>`}
+      ${camera
+        ? html`<ha-button appearance="plain" size="small" @click=${() => (this._live = !live)}>
+            <ha-icon slot="start" .icon=${live ? "mdi:image-outline" : "mdi:video-outline"}></ha-icon>
+            ${live ? "Still" : "Live"}
+          </ha-button>`
+        : nothing}
+    </div>`;
+  }
+
+  // A still is served behind the login: the page signs its address.
+  private _imageUrl(imageId: string): string | undefined {
+    const known = this._images[imageId];
+    if (known !== undefined) return known || undefined;
+    this._images = { ...this._images, [imageId]: "" };
+    void this.hass!
+      .callWS<{ path: string }>({
+        type: "auth/sign_path",
+        path: `/api/${DOMAIN}/image/${imageId}`,
+        expires: 3600,
+      })
+      .then((result) => {
+        this._images = { ...this._images, [imageId]: result.path };
+      })
+      .catch(() => undefined);
+    return undefined;
+  }
+
   /** The card's top row: label · data, in the card's colour. */
   private _top(data: DetailsData) {
     const hass = this.hass!;
@@ -259,7 +319,7 @@ export class NcDetailsDialog extends LitElement {
     const open = !!card && OPEN_STATUSES.includes(card.status);
     const undo = canUndo(this._store, data, this._now);
     return html`<div class="hero">
-        ${this._icon(data, true)} ${this._top(data)}
+        ${this._renderImage(data) ?? this._icon(data, true)} ${this._top(data)}
         ${data.message ? html`<div class="message">${data.message}</div>` : nothing}
         ${open && card.info ? html`<div class="info">${card.info}</div>` : nothing}
         <span class="badge" style="--badge-color: ${data.statusColor}">${statusLabel(hass, data, this._now)}</span>
@@ -410,6 +470,30 @@ export class NcDetailsDialog extends LitElement {
     ha-tile-icon {
       border-radius: var(--ha-border-radius-pill, 9999px);
       background-color: color-mix(in srgb, var(--tile-icon-color) 20%, transparent);
+    }
+    /* The Image: the still (or a camera's live view) in place of the icon. */
+    .image {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+    }
+    .image img,
+    .image ha-camera-stream,
+    .image-wait {
+      display: block;
+      width: 100%;
+      max-width: 480px;
+      border-radius: var(--ha-card-border-radius, 12px);
+      overflow: hidden;
+    }
+    .image img {
+      cursor: pointer;
+    }
+    .image-wait {
+      aspect-ratio: 16 / 9;
+      background-color: var(--secondary-background-color);
     }
     ha-tile-icon.big {
       --tile-icon-size: 80px;
