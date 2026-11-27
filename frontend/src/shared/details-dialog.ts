@@ -276,12 +276,11 @@ export class NcDetailsDialog extends LitElement {
   // The card's buttons in the order of the editor (as on the push), then Snooze.
   private _renderControls(data: DetailsData) {
     const live = data.live;
-    const shown = liveButtons(live);
     const order = effectiveButtons(live.category, live.step).map((button) => button.id);
-    const buttons = shown
-      .filter((button) => button.button.type !== "snooze")
-      .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
-    const snooze = shown.find((button) => button.button.type === "snooze");
+    const shown = liveButtons(live).sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+    // Snooze with one time is a button of the group; with several, a menu under it.
+    const buttons = shown.filter((button) => !button.ask);
+    const snooze = shown.find((button) => button.ask);
     if (!buttons.length && !snooze) return nothing;
     return html`<div class="controls">
       ${buttons.length
@@ -301,18 +300,10 @@ export class NcDetailsDialog extends LitElement {
     </div>`;
   }
 
-  // Snooze: a menu that shows only its icon and "Snooze" while closed; one
-  // time only, a button of the same place and look.
+  // Snooze with several times: a menu that shows only its icon and "Snooze"
+  // while closed.
   private _renderSnooze(data: DetailsData, snooze: LiveButton) {
     const choices = snoozeChoices(snooze.button);
-    if (!snooze.ask) {
-      return html`<ha-control-button class="snooze" .label=${snooze.label} @click=${() => this._press(data, snooze)}>
-        <div class="snooze-content">
-          <ha-icon .icon=${snooze.icon}></ha-icon>
-          <span>${snooze.label}</span>
-        </div>
-      </ha-control-button>`;
-    }
     return html`<ha-control-select-menu
       class="snooze"
       .label=${snooze.label}
@@ -504,21 +495,6 @@ export class NcDetailsDialog extends LitElement {
       width: 100%;
       max-width: 320px;
       --control-select-menu-border-radius: 16px;
-      --control-button-border-radius: 16px;
-    }
-    /* One time only: a button of the menu's size and look. */
-    ha-control-button.snooze {
-      height: var(--control-select-menu-height, 48px);
-    }
-    .snooze-content {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: 100%;
-      padding: 0 4px;
-      box-sizing: border-box;
-      font-size: var(--ha-font-size-m, 14px);
-      font-weight: var(--ha-font-weight-normal, 400);
     }
     /* Several cards: the rows of the Overview. */
     .picker {

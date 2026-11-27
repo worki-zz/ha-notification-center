@@ -86,7 +86,8 @@ export class NotificationCenterView extends LitElement {
             .interactive=${!!view.iconTap}
             role=${view.iconTap ? "button" : nothing}
             aria-label=${view.iconTap ? "Notification details" : nothing}
-            @click=${this._iconTap}
+            @action=${this._iconAction}
+            @click=${this._iconClick}
           >
             <ha-state-icon
               slot="icon"
@@ -145,10 +146,18 @@ export class NotificationCenterView extends LitElement {
     this.dispatchEvent(new CustomEvent("nc-tap", { bubbles: true, composed: true }));
   }
 
-  private _iconTap(ev: Event): void {
+  // An interactive tile icon has Home Assistant's action handler: a touch
+  // gives only its "action" event (no click), a mouse both.
+  private _iconAction(ev: CustomEvent<{ action?: string } | undefined>): void {
     if (!this.view?.iconTap) return;
     ev.stopPropagation();
+    if (ev.detail?.action !== "tap") return;
     this.dispatchEvent(new CustomEvent("nc-icon", { bubbles: true, composed: true }));
+  }
+
+  // The click of the icon is not the card's tap.
+  private _iconClick(ev: Event): void {
+    if (this.view?.iconTap) ev.stopPropagation();
   }
 
   private _keydown(ev: KeyboardEvent): void {

@@ -4,7 +4,11 @@
 
 ### Changed
 
-- **Notification details**: the buttons are the size of the vacuum's more info dialog (48 px, in a Home Assistant control button group).
+- **Notification details**: the buttons are the size of the vacuum's more info dialog (48 px, in a Home Assistant control button group). A Snooze with one time is one of them, in the editor's order; with several times it stays the menu under them.
+
+### Fixed
+
+- A tap on a notification's icon did not open its details on a phone or tablet (touch).
 
 ## 0.8.1
 
