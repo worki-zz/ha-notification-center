@@ -7,6 +7,8 @@ import { type AudienceEntry, type AudienceState } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
 
 import { TABLE_STYLES } from "./table-styles";
+import { avatar } from "../shared/avatar";
+export { avatar } from "../shared/avatar";
 import {
   STATE_NAMES,
   type PersonInfo,
@@ -23,26 +25,6 @@ const STATE_HELP: Record<AudienceState, string> = {
   away: "Not at home",
 };
 
-
-/** "As Home Assistant draws a person": the picture, or the initials. */
-export function avatar(person: PersonInfo) {
-  if (customElements.get("ha-person-badge")) {
-    return html`<ha-person-badge
-      class="avatar"
-      .person=${{ id: person.id, name: person.name, picture: person.picture }}
-    ></ha-person-badge>`;
-  }
-  if (person.picture)
-    return html`<img class="avatar" src=${person.picture} alt="" />`;
-  const initials = person.name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 3)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-  return html`<span class="avatar">${initials}</span>`;
-}
 
 // -- Audience ------------------------------------------------------------------
 

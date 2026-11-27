@@ -4,10 +4,10 @@ import { html, nothing } from "lit";
 
 import { AUDIENCE_STATES, PUSH_PRIORITY_DEFAULT, type PushPriority, type AudienceEntry, type AudienceState, type ChannelSettings, type Duration, type Mode } from "../shared/config";
 import type { HomeAssistant } from "../shared/types";
-import { type ChannelInfo } from "./devices";
+import { type ChannelInfo } from "../shared/channel-info";
 
-export type { ChannelInfo } from "./devices";
-export { channelsOf } from "./devices";
+export type { ChannelInfo } from "../shared/channel-info";
+export { channelsOf } from "../shared/channel-info";
 export { effectiveChannel, modeColumns, sleepersOf } from "../shared/channels";
 import { effectiveChannel } from "../shared/channels";
 

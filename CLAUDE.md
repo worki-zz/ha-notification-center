@@ -51,7 +51,10 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
 - `shared/`: config types (`config.ts`), live card logic (`live.ts`, `live-card.ts`),
   Upcoming of the Overview and the list card (`upcoming.ts`), status of one notification for a
   card or badge (`entity-status.ts`), channel helpers (`channels.ts`),
-  look of a notification (`notification-view.ts`), formatting, text, store.
+  look of a notification (`notification-view.ts`), formatting, text, store;
+  Notification details: addresses, data and Undo check (`details.ts`), the dialog with its
+  picker and Status view (`details-dialog.ts`), the Status blocks (`status-view.ts`), channel
+  kinds and icons (`channel-info.ts`), person avatar (`avatar.ts`).
 - `card/`: dashboard cards, the Notification badge (`notification-center-badge.ts`) and their
   editors; Show when / Ignore audience fields (`nc-options.ts`).
 - `panel/notification-center-panel.ts`: the panel shell; `settings-page.ts`: Notifications
@@ -61,7 +64,7 @@ Python backend in `custom_components/notification_center/`, TypeScript (Lit) fro
   `ha-elements.ts`, `fields.ts`, `confirm.ts`, `dialog-back.ts`, `leave-guard.ts` (Back with unsaved changes): shared UI helpers.
 - `panel/editor/`: notification editor (`notification-editor.ts`), its Entities block
   (`entities-block.ts`), one step (`step-editor.ts`), schedule, interaction (button)
-  dialog, entity groups, Status dialog (`info-dialog.ts`), condition Test for own
+  dialog, entity groups, condition Test for own
   conditions (`condition-test.ts`), `model.ts` (editor form and conversions). Styles and help texts
   of the big components are in `*.styles.ts` and `step-editor.help.ts` next to them.
 - `shared/version.ts` must match the release version.

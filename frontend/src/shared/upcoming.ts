@@ -86,7 +86,12 @@ export function scheduledSteps(
       if (!filter.ignoreChannels && !onDashboard(category, step)) continue;
       if (!filter.ignoreAudience && !inAudience(category, step, person, people)) continue;
       // A step with an open card shows that card instead.
-      if (entry.cards.some((card) => card.step_id === step.id && card.status !== "done")) {
+      if (
+        entry.cards.some(
+          (card) =>
+            card.step_id === step.id && card.status !== "done" && card.status !== "dismissed",
+        )
+      ) {
         continue;
       }
       const due = new Date(item.due);

@@ -39,7 +39,7 @@ import {
   mergeButton,
 } from "../../shared/live";
 import type { HomeAssistant } from "../../shared/types";
-import { field, inheritField, loadPageName, pageName, restoreButton } from "../fields";
+import { field, inheritField, restoreButton } from "../fields";
 
 /** The default label and icon of an interaction. */
 export const INTERACTION_DEFAULTS: Record<
@@ -228,7 +228,7 @@ function navigationText(
   if (navigation?.type === "navigate") {
     return [navigation.path ? `Navigate: ${navigation.path}` : "Navigate"];
   }
-  if (navigation?.type === "notification_info") return ["Notification info"];
+  if (navigation?.type === "details") return ["Notification details"];
   return [];
 }
 
@@ -258,10 +258,6 @@ export class NcInteractionDialog extends LitElement {
   @property({ attribute: false }) public blocks?: Partial<
     Record<Exclude<ButtonState["type"], "unchanged">, BlockInfo>
   >;
-
-  // The page a tap on the push opens when the Tap does not navigate (set
-  // under General, Push; empty: the Overview).
-  @property({ attribute: false }) public generalOpenOnTap?: string | null;
 
   @state() private _button?: Button;
 
@@ -541,7 +537,7 @@ export class NcInteractionDialog extends LitElement {
                 options: [
                   { value: "more_info", label: "More info" },
                   { value: "navigate", label: "Navigate" },
-                  { value: "notification_info", label: "Notification info" },
+                  { value: "details", label: "Notification details" },
                 ],
               },
             },
@@ -552,8 +548,8 @@ export class NcInteractionDialog extends LitElement {
               setNavigation(
                 value === "navigate"
                   ? { type: "navigate", path: "" }
-                  : value === "notification_info"
-                    ? { type: "notification_info" }
+                  : value === "details"
+                    ? { type: "details" }
                     : { type: "more_info", entity_id: null },
               );
             },
@@ -574,7 +570,7 @@ export class NcInteractionDialog extends LitElement {
                   setNavigation({ type: "navigate", path: (value as string) ?? "" }),
                 )
               : html`<div class="secondary">
-                  Opens the notification's Status dialog on the Overview.
+                  Opens the Notification details of the notification where it is pressed.
                 </div>`}`
       : tap
         ? html`<div class="secondary">${this._pushPageText()}</div>`
@@ -582,15 +578,9 @@ export class NcInteractionDialog extends LitElement {
     return this._row("Navigation", secondary, control, below);
   }
 
-  // Off, a tap on the push opens the page set under General, Push.
+  // Off, a tap on the push opens the Notification details.
   private _pushPageText(): string {
-    const path = this.generalOpenOnTap;
-    // A dashboard view is named by its title once it is read.
-    void loadPageName(this.hass, path).then((found) => {
-      if (found) this.requestUpdate();
-    });
-    const page = path ? pageName(this.hass, path) : "the Overview";
-    return `Off, a tap on the push notification opens ${page}.`;
+    return "Off, a tap on the push notification opens its Notification details.";
   }
 
   // The built-in Snooze button: the times the dashboard offers besides

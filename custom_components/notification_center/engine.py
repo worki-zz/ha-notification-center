@@ -206,6 +206,10 @@ class Engine(EngineQueries, EngineActions):
         self.hass = hass
         self.manager = manager
         self.cards: dict[CardKey, Card] = {}
+        # The cards dismissed today that went away (a dismissed card does not
+        # stay like a done one): the Notification details shows them, and
+        # Undo can bring one back, until midnight.
+        self.dismissed: dict[CardKey, Card] = {}
         # notification id -> step id -> state -> ISO time it was last reached
         self.history: dict[str, dict[str, dict[str, str]]] = {}
         self.runners: dict[str, NotificationRunner] = {}
@@ -262,6 +266,15 @@ class Engine(EngineQueries, EngineActions):
             if self._step_config(card.notification_id, card.step_id) is None:
                 continue
             self.cards[card.key] = card
+        for item in stored.get("dismissed") or []:
+            try:
+                card = Card.from_dict(item)
+            except KeyError, TypeError, ValueError:
+                continue
+            if self._step_config(card.notification_id, card.step_id) is None:
+                continue
+            # A blocking card is both here and in ``cards``: the same card.
+            self.dismissed[card.key] = self.cards.get(card.key) or card
         self._prune()
         for card in self.cards.values():
             if card.phase == PHASE_SNOOZED:
@@ -387,6 +400,10 @@ class Engine(EngineQueries, EngineActions):
             elif self._started and card.is_open and card.notification_id in changed:
                 # The texts (message, Info, Data) follow the edited step.
                 self._start_text(card)
+        for key, card in list(self.dismissed.items()):
+            step = self._step_config(card.notification_id, card.step_id)
+            if step is None or not step.get("enabled", True):
+                del self.dismissed[key]
         if self._started:
             for nid, notification in new.items():
                 if nid not in self.runners:
@@ -788,6 +805,8 @@ class Engine(EngineQueries, EngineActions):
         if card is not None:
             # No state change in between: the new card follows at once.
             self.forget(card, notify=False)
+        # A new card: the one dismissed earlier today cannot come back.
+        self.dismissed.pop(key, None)
         card = Card(
             notification_id=step.notification.id,
             step_id=step.step_id,
@@ -878,6 +897,8 @@ class Engine(EngineQueries, EngineActions):
             hidden=False,
             blocked=blocked,
         )
+        if reason == CLOSED_DISMISSED and not transient:
+            self.dismissed[card.key] = card
         if transient or (reason != CLOSED_DONE and not card.blocked):
             self.cards.pop(card.key, None)
             self._save()
@@ -921,6 +942,8 @@ class Engine(EngineQueries, EngineActions):
                 cancel()
         if self.cards.get(card.key) is card:
             del self.cards[card.key]
+        if self.dismissed.get(card.key) is card:
+            del self.dismissed[card.key]
         self._save()
         if notify:
             self._notify()
@@ -1020,15 +1043,21 @@ class Engine(EngineQueries, EngineActions):
         *,
         source: str,
         context: Context | None = None,
+        quiet: bool = False,
         **changes: Any,
     ) -> None:
+        """Change a card and run what follows (history, events, status actions).
+
+        ``quiet`` (Undo): the card keeps when it became active and no status
+        actions run.
+        """
         old = card.status
         old_phase = card.phase
         opened = changes.get("phase") == PHASE_OPEN and card.phase != PHASE_OPEN
         muted = bool(changes.get("muted")) and not card.muted
         for name, value in changes.items():
             setattr(card, name, value)
-        if opened:
+        if opened and not quiet:
             card.active_since = dt_util.utcnow()
             # Mute lasts until the card goes away (Snooze ends, a new card).
             if "muted" not in changes:
@@ -1061,6 +1090,8 @@ class Engine(EngineQueries, EngineActions):
                 self._fire_event(card, new, source, context)
         finally:
             self.summary_context = previous
+        if quiet:
+            return
         reached = status_reached(old_phase, card, changed, opened=opened, muted=muted)
         if reached is not None:
             self.queue_status_actions(card, reached, source, context, old_phase)
@@ -1336,6 +1367,9 @@ class Engine(EngineQueries, EngineActions):
                 and (card.closed_at is None or card.closed_at < start)
             ):
                 del self.cards[card.key]
+        for key, card in list(self.dismissed.items()):
+            if card.closed_at is None or card.closed_at < start:
+                del self.dismissed[key]
 
     # -- Storage ------------------------------------------------------------
 
@@ -1345,5 +1379,6 @@ class Engine(EngineQueries, EngineActions):
     def _data_to_save(self) -> dict[str, Any]:
         return {
             "cards": [card.as_dict() for card in self.cards.values()],
+            "dismissed": [card.as_dict() for card in self.dismissed.values()],
             "history": self.history,
         }

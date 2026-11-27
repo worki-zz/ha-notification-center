@@ -16,6 +16,7 @@ from .cards import (
     to_iso,
 )
 from .const import (
+    CLOSED_DISMISSED,
     CLOSED_DONE,
     STATE_ACTIVE,
     STATE_DISABLED,
@@ -202,6 +203,37 @@ class EngineQueries:
         ]
         return sorted(cards, key=lambda card: (order.get(card.step_id, 0), card.since))
 
+    def _details_cards(self: Engine, notification_id: str) -> list[Card]:
+        """Return the visible cards and the ones dismissed today, in step order.
+
+        The Notification details shows a dismissed card (and its Undo) until
+        midnight; the sensors and the Dashboard do not count it.
+        """
+        cards = self._visible_cards(notification_id)
+        keys = {card.key for card in cards}
+        start = dt_util.start_of_local_day()
+        for card in [
+            *self.cards_of(notification_id),
+            *(
+                card
+                for card in self.dismissed.values()
+                if card.notification_id == notification_id
+            ),
+        ]:
+            if (
+                card.key not in keys
+                and not card.is_open
+                and card.closed_reason == CLOSED_DISMISSED
+                and not card.transient
+                and card.closed_at is not None
+                and card.closed_at >= start
+            ):
+                keys.add(card.key)
+                cards.append(card)
+        notification = self.notification_config(notification_id) or {"steps": []}
+        order = {step["id"]: index for index, step in enumerate(notification["steps"])}
+        return sorted(cards, key=lambda card: (order.get(card.step_id, 0), card.since))
+
     def top_card(self: Engine, notification_id: str) -> Card | None:
         """Return the card a notification shows first."""
         cards = self._visible_cards(notification_id)
@@ -355,7 +387,7 @@ class EngineQueries:
                     "entity_id": self.entity_id_of(notification["id"]),
                     "cards": [
                         self._card_state(card)
-                        for card in self._visible_cards(notification["id"])
+                        for card in self._details_cards(notification["id"])
                     ],
                     "last_done": to_iso(
                         self.last_reached(notification["id"], None, CLOSED_DONE)

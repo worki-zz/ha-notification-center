@@ -26,6 +26,7 @@ import {
   type Step,
   colorCss,
 } from "./config";
+import { openDetails } from "./details";
 import { entityAttribute, entityState, formatTime } from "./format";
 import type { HomeAssistant } from "./types";
 
@@ -478,8 +479,8 @@ export function hasActions(button: Pick<Button, "type" | "actions">): boolean {
  * Press a button of a card.
  *
  * Its own actions (the entity action, then the Home Assistant actions) and
- * the state it sets run in Home Assistant, then the navigation (More info
- * or Navigate) here, from the given element. One that cannot run is
+ * the state it sets run in Home Assistant, then the navigation (More info,
+ * Navigate or the Notification details) here, from the given element. One that cannot run is
  * skipped; the navigation still happens.
  */
 export async function pressButton(
@@ -524,15 +525,15 @@ export async function pressButton(
     }
   } else if (navigation?.type === "navigate" && navigation.path) {
     navigate(navigation.path);
-  } else if (navigation?.type === "notification_info") {
-    navigate(notificationInfoPath(card.notification_id));
+  } else if (navigation?.type === "details") {
+    // Where it was pressed: over the dashboard, or the Overview.
+    openDetails(element, {
+      notification: card.notification_id,
+      step: card.step_id,
+      entity: card.entity_id,
+    });
   }
   if (failed) throw failed;
-}
-
-/** The Overview with a notification's Status dialog open. */
-export function notificationInfoPath(notificationId: string): string {
-  return `/notification-center?info=${encodeURIComponent(notificationId)}`;
 }
 
 /** Go to a page of Home Assistant, as its own links do. */

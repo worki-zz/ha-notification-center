@@ -291,9 +291,6 @@ GENERAL_SCHEMA = vol.Schema(
         # The order of the chimes (built-in and own) in the lists; the ones
         # not in it follow by name.
         vol.Optional("chime_order", default=list): vol.All(cv.ensure_list, [cv.string]),
-        # The page the app opens when a push notification is tapped (empty:
-        # the panel's Overview). A Tap with a Navigation opens that instead.
-        vol.Optional("open_on_tap"): _optional(cv.string),
         vol.Optional("read_the_message", default=dict): vol.Schema(
             {
                 vol.Optional("tts_service"): _optional(cv.entity_id),
@@ -709,7 +706,7 @@ MUTE_WHEN_SCHEMA = vol.Schema(
 
 # Where a button takes the user, on the device it was pressed on: the
 # entity's more info dialog (empty: the card's entity), a page, or the
-# notification's Status dialog on the Overview. ``none``: Navigation is
+# notification's Notification details. ``none``: Navigation is
 # switched off (stored to stop inheriting the category's).
 NAVIGATION_SCHEMA = vol.Any(
     vol.Schema({vol.Required("type"): "none"}),
@@ -720,7 +717,7 @@ NAVIGATION_SCHEMA = vol.Any(
         }
     ),
     vol.Schema({vol.Required("type"): "navigate", vol.Required("path"): cv.string}),
-    vol.Schema({vol.Required("type"): "notification_info"}),
+    vol.Schema({vol.Required("type"): "details"}),
 )
 NAVIGATION_OFF: Final = {"type": "none"}
 

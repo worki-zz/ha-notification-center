@@ -1,5 +1,5 @@
 // The General tab of the settings: a list of pages like Home Assistant's
-// System settings (Home modes, People, Light, Sound; Colors, Snooze, Push and Import and export in a second
+// System settings (Home modes, People, Light, Sound; Colors, Snooze and Import and export in a second
 // block),
 // and the version. Each page opens on its own (nc-general-page).
 
@@ -10,7 +10,7 @@ import { DOMAIN, type NotificationCenterConfig } from "../shared/config";
 import { errorText, navigate } from "../shared/live";
 import type { HomeAssistant } from "../shared/types";
 import { VERSION } from "../shared/version";
-import { field, loadPageName, pageName } from "./fields";
+import { field } from "./fields";
 
 interface GeneralPage {
   key: string;
@@ -49,9 +49,6 @@ export class NcSettingsGeneral extends LitElement {
   // The Snooze dialog's time while it is open.
   @state() private _snooze?: string;
 
-  // The Push dialog's page while it is open ("" : the panel's Overview).
-  @state() private _push?: string;
-
   @state() private _error?: string;
 
   @state() private _busy = false;
@@ -63,14 +60,6 @@ export class NcSettingsGeneral extends LitElement {
   @state() private _pendingImport?: { name: string; text: string };
 
   @state() private _notice?: string;
-
-  // The page a push opens, by name (a dashboard view once its title is read).
-  private _pushPage(path: string | null | undefined): string {
-    void loadPageName(this.hass, path).then((found) => {
-      if (found) this.requestUpdate();
-    });
-    return pageName(this.hass, path);
-  }
 
   protected override render() {
     const config = this.config;
@@ -116,13 +105,6 @@ export class NcSettingsGeneral extends LitElement {
         color: "#EC407A",
       },
       {
-        key: "push",
-        name: "Push",
-        description: this._pushPage(config.general?.open_on_tap),
-        icon: "mdi:cellphone-message",
-        color: "#29B6F6",
-      },
-      {
         key: "snooze",
         name: "Snooze",
         description: `At ${tomorrow.slice(0, 5)}`,
@@ -141,7 +123,6 @@ export class NcSettingsGeneral extends LitElement {
       ${this._card(settings)} ${this._card(data)}
       <p class="version">Notification Center ${VERSION}</p>
       ${this._snooze !== undefined ? this._renderSnooze(this._snooze) : nothing}
-      ${this._push !== undefined ? this._renderPush(this._push) : nothing}
       ${this._io ? this._renderImportExport() : nothing}
     `;
   }
@@ -150,11 +131,6 @@ export class NcSettingsGeneral extends LitElement {
     if (key === "snooze") {
       this._error = undefined;
       this._snooze = this.config?.general?.snooze_tomorrow_at ?? "08:00";
-      return;
-    }
-    if (key === "push") {
-      this._error = undefined;
-      this._push = this.config?.general?.open_on_tap ?? "";
       return;
     }
     if (key === "import") {
@@ -203,59 +179,6 @@ export class NcSettingsGeneral extends LitElement {
         data: { ...(this.config?.general ?? {}), snooze_tomorrow_at: time },
       });
       this._snooze = undefined;
-    } catch (err) {
-      this._error = errorText(err);
-    } finally {
-      this._busy = false;
-    }
-  }
-
-  // Push: the page a tap on a push opens, unless a category or notification
-  // sets its own.
-  private _renderPush(value: string) {
-    return html`<ha-dialog
-      open
-      width="small"
-      header-title="Push"
-      @closed=${(ev: Event) => {
-        if (ev.target !== ev.currentTarget) return;
-        this._push = undefined;
-      }}
-    >
-      <p class="hint">
-        The page a tap on a push opens, unless its category or notification sets one.
-      </p>
-      ${this._error ? html`<ha-alert alert-type="error">${this._error}</ha-alert>` : nothing}
-      ${field(
-        this.hass,
-        { navigation: {} },
-        value,
-        "Open on tap",
-        (path) => {
-          this._push = (path as string | undefined) ?? "";
-        },
-        { helper: "Empty: Notification Center, Overview." },
-      )}
-      <ha-dialog-footer slot="footer">
-        <ha-button slot="secondaryAction" appearance="plain" @click=${() => (this._push = undefined)}>
-          Cancel
-        </ha-button>
-        <ha-button slot="primaryAction" .disabled=${this._busy} @click=${this._savePush}>Save</ha-button>
-      </ha-dialog-footer>
-    </ha-dialog>`;
-  }
-
-  private async _savePush(): Promise<void> {
-    const path = this._push;
-    if (path === undefined || !this.hass) return;
-    this._busy = true;
-    this._error = undefined;
-    try {
-      await this.hass.callWS({
-        type: `${DOMAIN}/general/update`,
-        data: { ...(this.config?.general ?? {}), open_on_tap: path || null },
-      });
-      this._push = undefined;
     } catch (err) {
       this._error = errorText(err);
     } finally {
