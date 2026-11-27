@@ -15,6 +15,12 @@ A push follows its card: it goes away from every phone when the card does
 comes back. A change of the mode or of where people are leaves a sent push as
 it is, and so does Mute (it only stops new pushes).
 
+With *Keep push when closed* (``keep_when_closed``), a push whose card closes
+(done, dismissed, expired, or its entity no longer matches) stays on the
+phone: it is silently replaced by one without buttons whose Info line says how
+it closed (*Done by Dóra at 14:32*). Snooze and Hide while still remove it,
+and a later push with the same tag replaces it as usual.
+
 Every push of a notification (one per listed entity) has the same tag on a
 phone, so the push of a later step replaces the earlier one. iOS cannot
 replace a critical push, so that one is removed first.
@@ -29,16 +35,25 @@ there and opens the page.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import logging
 from typing import TYPE_CHECKING, Any, Final
 from urllib.parse import quote
 
 from homeassistant.core import Context, Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import translation
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import PANEL_URL_PATH, SOURCE_PUSH
+from .cards import PHASE_CLOSED
+from .const import (
+    CLOSED_DONE,
+    DOMAIN,
+    PANEL_URL_PATH,
+    SOURCE_ENTITY,
+    SOURCE_EXPIRES,
+    SOURCE_PUSH,
+)
 from .device_base import Device
 from .device_colors import color_of, parse_color
 from .device_speaker import _token
@@ -93,6 +108,16 @@ IOS_LEVELS: Final = {
     "time_sensitive": "time-sensitive",
     "critical": "critical",
 }
+# The closing lines of a kept push, from the translations (selector
+# ``push_closed``); English when they are not loaded.
+CLOSING_LINES: Final = {
+    "done": "Done at {time}",
+    "done_by": "Done by {person} at {time}",
+    "dismissed": "Dismissed at {time}",
+    "dismissed_by": "Dismissed by {person} at {time}",
+    "ended": "Ended at {time}",
+}
+CLOSING_PRIORITY: Final = "silent"
 TEST_TAG: Final = "nc-test"
 TEST_TITLE: Final = "Test notification"
 TEST_MESSAGE: Final = "This is a test of the push notification."
@@ -313,6 +338,20 @@ class PushDevice(Device):
             EVENT_NOTIFICATION_ACTION, self._action_pressed
         )
         self._remember_categories(manager.engine.manager.config)
+        self._closing_lines: dict[str, str] = dict(CLOSING_LINES)
+        manager.hass.async_create_background_task(
+            self._async_load_closing_lines(), "notification center closing lines"
+        )
+
+    async def _async_load_closing_lines(self) -> None:
+        """Read the closing lines in Home Assistant's language."""
+        prefix = f"component.{DOMAIN}.selector.push_closed.options."
+        texts = await translation.async_get_translations(
+            self.hass, self.hass.config.language, "selector", {DOMAIN}
+        )
+        for name in CLOSING_LINES:
+            if text := texts.get(prefix + name):
+                self._closing_lines[name] = text
 
     def _keep_sent_of_devices(self, config: Mapping[str, Any]) -> None:
         """Key a push sent before the push devices (per person) by device id.
@@ -366,6 +405,7 @@ class PushDevice(Device):
         config = engine.manager.config
         phones = phones_of(config)
         changed = False
+        closing: list[tuple[Card, Phone, str]] = []
         for card_key, old in list(self._sent.items()):
             card = engine.cards.get(_split_key(card_key))
             if (
@@ -373,7 +413,8 @@ class PushDevice(Device):
                 or card.status != "active"
                 or _token(card) != old.get("token")
             ):
-                self._remove(card_key, old, phones)
+                kept = card if card is not None and self._keeps(card, old) else None
+                closing += self._remove(card_key, old, phones, kept)
                 del self._sent[card_key]
                 changed = True
         for card in cards:
@@ -403,20 +444,37 @@ class PushDevice(Device):
                     self._phones[_phone_key(phone.device_id, push_tag(card))] = card_key
                     self.last_sent[person] = now
                     changed = True
+        for card, phone, tag in closing:
+            # Not when a push with the same tag went out above (a later step).
+            if _phone_key(phone.device_id, tag) not in self._phones:
+                self._send_closing(card, phone, tag)
         if changed:
             self._save()
             self.manager.changed()
+
+    def _keeps(self, card: Card, record: Mapping[str, Any]) -> bool:
+        """Return whether a card's push stays on the phones as it closes."""
+        if card.phase != PHASE_CLOSED or _token(card) != record.get("token"):
+            return False
+        settings = self.manager.engine.channel_settings_of(card, CHANNEL_PUSH)
+        return bool((settings or {}).get("keep_when_closed"))
 
     def _remove(
         self,
         card_key: str,
         record: Mapping[str, Any],
         phones: Mapping[str, list[Phone]],
-    ) -> None:
-        """Take a card's push away from the phones it is still on."""
+        kept: Card | None = None,
+    ) -> list[tuple[Card, Phone, str]]:
+        """Take a card's push away from the phones it is still on.
+
+        A kept card's push is not cleared: its phones are returned, to get
+        the closing push.
+        """
         by_id = {
             phone.device_id: phone for devices in phones.values() for phone in devices
         }
+        closing: list[tuple[Card, Phone, str]] = []
         for device_id, sent in (record.get("devices") or {}).items():
             phone_key = _phone_key(device_id, sent["tag"])
             if self._phones.get(phone_key) != card_key:
@@ -424,8 +482,13 @@ class PushDevice(Device):
                 continue
             del self._phones[phone_key]
             phone = by_id.get(device_id)
-            if phone is not None:
+            if phone is None:
+                continue
+            if kept is not None and phone.device_type in ("ios", "android"):
+                closing.append((kept, phone, sent["tag"]))
+            else:
                 self._clear(phone, sent["tag"])
+        return closing
 
     def _save(self) -> None:
         self.manager.save(
@@ -469,6 +532,39 @@ class PushDevice(Device):
             # iOS cannot replace a critical push: take the earlier one away.
             self._clear(phone, tag)
         self._notify(phone, payload)
+
+    def _send_closing(self, card: Card, phone: Phone, tag: str) -> None:
+        """Replace a closed card's push silently: no buttons, a closing line."""
+        content = self.content_of(card)
+        payload = build_payload(
+            phone,
+            replace(
+                content,
+                body=push_body(card.message, self.closing_line(card)),
+                priority=CLOSING_PRIORITY,
+                url=details_url(card),
+            ),
+            tag=tag,
+        )
+        if phone.device_type == "ios" and content.priority == "critical":
+            # iOS cannot replace a critical push: take it away first.
+            self._clear(phone, tag)
+        self._notify(phone, payload)
+
+    def closing_line(self, card: Card) -> str:
+        """Return how a card closed, for its kept push: *Done by Dóra at 14:32*."""
+        when = card.closed_at or dt_util.utcnow()
+        time = dt_util.as_local(when).strftime("%H:%M")
+        if card.closed_source in (SOURCE_EXPIRES, SOURCE_ENTITY):
+            name = "ended"
+        else:
+            name = "done" if card.closed_reason == CLOSED_DONE else "dismissed"
+        person = None
+        if name != "ended" and card.closed_by:
+            state = self.hass.states.get(card.closed_by)
+            person = state.name if state is not None else card.closed_by
+            name += "_by"
+        return self._closing_lines[name].format(time=time, person=person)
 
     def _clear(self, phone: Phone, tag: str) -> None:
         if phone.device_type not in ("ios", "android"):

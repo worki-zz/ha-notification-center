@@ -10,11 +10,13 @@ from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import async_mock_service
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
+from custom_components.notification_center.cards import Card
 from custom_components.notification_center.const import DOMAIN
 from custom_components.notification_center.model import effective_buttons
 from custom_components.notification_center.push import (
     Content,
     Phone,
+    PushDevice,
     action_id,
     build_payload,
     color_hex,
@@ -539,3 +541,66 @@ async def test_push_starts_off_after_the_update(
     assert category["channels"]["dashboard"]["modes"] == ["home"]
     step_channels = config["notifications"][0]["steps"][0].get("channels", {})
     assert "modes" not in step_channels.get("push", {})
+
+
+async def test_keep_push_when_closed(center: Center, hass: HomeAssistant) -> None:
+    """Kept: Done replaces the push silently with a closing line, no buttons."""
+    android, ios = await _setup(
+        center, hass, push={"modes": ["home"], "keep_when_closed": True}
+    )
+    await center.add("Doorbell", step("Someone rings", info="Gate"))
+    await center.call("trigger", "sensor.nc_doorbell")
+    card = next(iter(center.engine.cards.values()))
+    tag = f"nc-{card.notification_id}"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "done",
+        {"entity_id": "sensor.nc_doorbell"},
+        blocking=True,
+        context=Context(user_id="u1"),
+    )
+    await hass.async_block_till_done()
+    assert all(call.data["message"] != "clear_notification" for call in android)
+    closing = android[-1].data
+    assert closing["title"] == "Doorbell"
+    message, line = closing["message"].split("\n")
+    assert message == "Someone rings"
+    assert line.startswith("Done by Kristóf at ")
+    assert closing["data"]["tag"] == tag
+    assert "actions" not in closing["data"]
+    assert closing["data"]["channel"] == "Silent"
+    assert closing["data"]["clickAction"].startswith("/notification-center?details=")
+    ios_closing = ios[-1].data
+    assert ios_closing["data"]["push"] == {"interruption-level": "passive"}
+    assert center.state("sensor.nc_channel_push") == "0"
+
+
+async def test_keep_push_lines_and_snooze(center: Center, hass: HomeAssistant) -> None:
+    """Dismissed by nobody, ended (expired); Snooze still takes the push away."""
+    android, _ios = await _setup(
+        center, hass, push={"modes": ["home"], "keep_when_closed": True}
+    )
+    await center.add("Doorbell", step("Someone rings"))
+    await center.call("trigger", "sensor.nc_doorbell")
+    await center.call("snooze", "sensor.nc_doorbell")
+    assert android[-1].data["message"] == "clear_notification"
+
+    await center.call("trigger", "sensor.nc_doorbell")
+    await center.call("clear", "sensor.nc_doorbell")
+    assert android[-1].data["message"].startswith("Someone rings\nDismissed at ")
+
+    assert center.engine.devices is not None
+    push = center.engine.devices.devices["push"]
+    assert isinstance(push, PushDevice)
+    card = Card.from_dict(
+        {
+            "notification_id": "n",
+            "step_id": "s",
+            "phase": "closed",
+            "closed_reason": "dismissed",
+            "closed_source": "expires",
+            "closed_by": KRISTOF,
+        }
+    )
+    assert push.closing_line(card).startswith("Ended at ")

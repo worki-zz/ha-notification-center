@@ -363,6 +363,15 @@
         "snoozed": "Elhalasztva",
         "dismissed": "Elvetve"
       }
+    },
+    "push_closed": {
+      "options": {
+        "done": "Kész, {time}",
+        "done_by": "Kész: {person}, {time}",
+        "dismissed": "Elvetve, {time}",
+        "dismissed_by": "Elvetette: {person}, {time}",
+        "ended": "Véget ért, {time}"
+      }
     }
   },
   "issues": {

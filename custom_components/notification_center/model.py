@@ -477,6 +477,9 @@ _CHANNEL_EXTRA: dict[str, dict[Any, Any]] = {
     },
     CHANNEL_PUSH: {
         vol.Optional("priority"): vol.In(PUSH_PRIORITIES),
+        # On: when the card closes, the push stays on the phone, silently
+        # replaced by one with a closing line (default off: it goes away).
+        vol.Optional("keep_when_closed"): cv.boolean,
     },
 }
 
