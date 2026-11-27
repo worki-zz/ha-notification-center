@@ -4,7 +4,7 @@
 
 ### Changed
 
-- **Notification details**: the buttons are the size of the vacuum's more info dialog (48 px, in a Home Assistant control button group).
+- **Notification details**: the buttons are the size of the vacuum's more info dialog (48 px, in a Home Assistant control button group). Snooze is one of them, in the editor's order: with several times it opens them in a menu.
 
 ## 0.8.1
 

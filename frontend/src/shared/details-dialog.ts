@@ -276,58 +276,50 @@ export class NcDetailsDialog extends LitElement {
   // The card's buttons in the order of the editor (as on the push), then Snooze.
   private _renderControls(data: DetailsData) {
     const live = data.live;
-    const shown = liveButtons(live);
     const order = effectiveButtons(live.category, live.step).map((button) => button.id);
-    const buttons = shown
-      .filter((button) => button.button.type !== "snooze")
-      .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
-    const snooze = shown.find((button) => button.button.type === "snooze");
-    if (!buttons.length && !snooze) return nothing;
+    const buttons = liveButtons(live).sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+    if (!buttons.length) return nothing;
     return html`<div class="controls">
-      ${buttons.length
-        ? html`<ha-control-button-group class="buttons">
-            ${buttons.map(
-              (button) => html`<ha-control-button
+      <ha-control-button-group class="buttons">
+        ${buttons.map((button) =>
+          button.ask
+            ? this._renderSnooze(data, button)
+            : html`<ha-control-button
                 .label=${button.label}
                 title=${button.label}
                 @click=${() => this._press(data, button)}
               >
                 <ha-icon .icon=${button.icon}></ha-icon>
               </ha-control-button>`,
-            )}
-          </ha-control-button-group>`
-        : nothing}
-      ${snooze ? this._renderSnooze(data, snooze) : nothing}
+        )}
+      </ha-control-button-group>
     </div>`;
   }
 
-  // Snooze: a menu that shows only its icon and "Snooze" while closed; one
-  // time only, a button of the same place and look.
+  // Snooze with several times: its button opens them in Home Assistant's
+  // dropdown menu.
   private _renderSnooze(data: DetailsData, snooze: LiveButton) {
     const choices = snoozeChoices(snooze.button);
-    if (!snooze.ask) {
-      return html`<ha-control-button class="snooze" .label=${snooze.label} @click=${() => this._press(data, snooze)}>
-        <div class="snooze-content">
-          <ha-icon .icon=${snooze.icon}></ha-icon>
-          <span>${snooze.label}</span>
-        </div>
-      </ha-control-button>`;
-    }
-    return html`<ha-control-select-menu
-      class="snooze"
-      .label=${snooze.label}
-      .options=${choices.map((choice) => ({
-        value: choice.key,
-        label: choice.label,
-        icon: /\d+[mh]$/.test(choice.key) ? "mdi:timer-outline" : "mdi:calendar-today",
-      }))}
+    return html`<ha-dropdown
+      placement="bottom"
       @wa-select=${(ev: CustomEvent<{ item?: { value?: string } }>) => {
         const choice = ev.detail.item?.value;
         if (choice) this._press(data, snooze, choice);
       }}
     >
-      <ha-icon slot="icon" .icon=${snooze.icon}></ha-icon>
-    </ha-control-select-menu>`;
+      <ha-control-button slot="trigger" .label=${snooze.label} title=${snooze.label}>
+        <ha-icon .icon=${snooze.icon}></ha-icon>
+      </ha-control-button>
+      ${choices.map(
+        (choice) => html`<ha-dropdown-item .value=${choice.key}>
+          <ha-icon
+            slot="icon"
+            .icon=${/\d+[mh]$/.test(choice.key) ? "mdi:timer-outline" : "mdi:calendar-today"}
+          ></ha-icon>
+          ${choice.label}
+        </ha-dropdown-item>`,
+      )}
+    </ha-dropdown>`;
   }
 
   // A scheduled step not due yet: Done and Dismiss (early), as on Upcoming.
@@ -500,25 +492,11 @@ export class NcDetailsDialog extends LitElement {
       --control-button-border-radius: var(--ha-border-radius-lg, 12px);
       flex: none;
     }
-    .snooze {
-      width: 100%;
-      max-width: 320px;
-      --control-select-menu-border-radius: 16px;
-      --control-button-border-radius: 16px;
+    .buttons ha-dropdown {
+      flex: none;
     }
-    /* One time only: a button of the menu's size and look. */
-    ha-control-button.snooze {
-      height: var(--control-select-menu-height, 48px);
-    }
-    .snooze-content {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: 100%;
-      padding: 0 4px;
-      box-sizing: border-box;
-      font-size: var(--ha-font-size-m, 14px);
-      font-weight: var(--ha-font-weight-normal, 400);
+    .buttons ha-dropdown ha-control-button {
+      height: var(--control-button-group-thickness);
     }
     /* Several cards: the rows of the Overview. */
     .picker {
