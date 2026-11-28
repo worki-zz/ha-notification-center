@@ -273,7 +273,7 @@ export class NotificationCenterPanel extends LitElement {
         ${!this._store.config || !this._store.state
           ? this._store.error
             ? nothing
-            : html`<div class="empty">Loading…</div>`
+            : this._renderLoading(page)
           : page === "schedule"
             ? this._renderSchedule()
             : page === "done"
@@ -329,10 +329,7 @@ export class NotificationCenterPanel extends LitElement {
     return html`
       ${active.length
         ? this._renderLive(active)
-        : html`<ha-card outlined class="all-done">
-            <ha-icon icon="mdi:message-bulleted"></ha-icon>
-            <div>${timed.length ? "No active notifications" : "All done"}</div>
-          </ha-card>`}
+        : this._renderAllDone(timed.length ? "No active notifications" : "All done")}
       ${timed.length
         ? html`<h2>Upcoming</h2>
             ${renderUpcoming(this.hass!, this._store, timed, this._now, this._closeEarly)}`
@@ -354,6 +351,19 @@ export class NotificationCenterPanel extends LitElement {
           </div>`
         : nothing}
     `;
+  }
+
+  // While loading: the page's empty state with "Loading…", so nothing
+  // jumps when the data arrives.
+  private _renderLoading(page: Page) {
+    return page === "overview" ? this._renderAllDone("Loading…") : this._renderEmpty("Loading…");
+  }
+
+  private _renderAllDone(text: string) {
+    return html`<ha-card outlined class="all-done">
+      <ha-icon icon="mdi:message-bulleted"></ha-icon>
+      <div>${text}</div>
+    </ha-card>`;
   }
 
   // A page with nothing on it: one neutral card with a short text.
