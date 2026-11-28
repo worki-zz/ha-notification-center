@@ -20,6 +20,7 @@ from custom_components.notification_center.model import (
 from custom_components.notification_center.store import (
     move_schedule_expires,
     rename_mute_and_pulse,
+    upgrade_conditions_choice,
     upgrade_details_navigation,
     upgrade_push_devices,
     upgrade_status_actions,
@@ -78,7 +79,7 @@ async def test_step_defaults(hass: HomeAssistant) -> None:
         "actions": no_actions,
     }
     assert step["conditions"] == {
-        "activate_only_while_met": True,
+        "activate_only_while_met": False,
         "hide_while_not_met": True,
         "conditions": [],
     }
@@ -806,6 +807,42 @@ async def test_upgrade_details_navigation(hass: HomeAssistant) -> None:
     assert config["categories"][0]["buttons"][0]["navigation"] == {"type": "details"}
     validated = await async_validate_config(hass, config)
     assert "open_on_tap" not in validated["general"]
+
+
+def test_upgrade_conditions_choice() -> None:
+    """The two Conditions switches become Wait until they are met or Don't activate."""
+    wait = {"activate_only_while_met": False, "hide_while_not_met": True}
+    skip = {"activate_only_while_met": True, "hide_while_not_met": False}
+    neither = {"activate_only_while_met": False, "hide_while_not_met": False}
+    triggered = {"type": "triggers", "triggers": []}
+    scheduled = {"type": "schedule", "schedule": {}}
+    cases = [
+        (triggered, {}, wait),
+        (triggered, {"activate_only_while_met": True}, wait),
+        (triggered, skip, skip),
+        (triggered, wait, wait),
+        (triggered, neither, wait),
+        (scheduled, skip, wait),
+        (scheduled, neither, wait),
+    ]
+    config = default_config()
+    config["notifications"] = [
+        {
+            "id": "n1",
+            "name": "N",
+            "steps": [
+                {"activation": activation, "conditions": {**old, "conditions": []}}
+                for activation, old, _ in cases
+            ]
+            + [{"activation": triggered}],
+        }
+    ]
+    upgrade_conditions_choice(config)
+
+    steps = config["notifications"][0]["steps"]
+    for step, (_, _, new) in zip(steps, cases, strict=False):
+        assert step["conditions"] == {**new, "conditions": []}
+    assert "conditions" not in steps[-1]
 
 
 async def test_orphan_entity_actions_are_dropped(hass: HomeAssistant) -> None:

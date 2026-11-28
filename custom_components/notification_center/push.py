@@ -11,14 +11,14 @@ audience in a ticked state who has a phone (``ChannelView.people``). Someone
 who arrives home, wakes up or comes into a ticked mode later gets it then.
 
 A push follows its card: it goes away from every phone when the card does
-(Done, Dismiss, the end, Snooze, Hide while) and comes again when the card
+(Done, Dismiss, the end, Snooze, hidden by Conditions) and comes again when the card
 comes back. A change of the mode or of where people are leaves a sent push as
 it is, and so does Mute (it only stops new pushes).
 
 With *Keep push when closed* (``keep_when_closed``), a push whose card closes
 (done, dismissed, expired, or its entity no longer matches) stays on the
 phone: it is silently replaced by one without buttons whose Info line says how
-it closed (*Done by Dóra at 14:32*). Snooze and Hide while still remove it,
+it closed (*Done by Dóra at 14:32*). Snooze and hiding by Conditions still remove it,
 and a later push with the same tag replaces it as usual.
 
 Every push of a notification (one per listed entity) has the same tag on a

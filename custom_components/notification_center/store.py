@@ -59,7 +59,9 @@ STORAGE_VERSION: Final = 1
 #     button's actions and navigation inherited key by key (0.7.11).
 # 11: the Navigation that opened the Status dialog opens the Notification
 #     details; General's page a tap on a push opens is gone (0.8.0).
-STORAGE_MINOR_VERSION: Final = 11
+# 12: Conditions has one choice, If the conditions are not met: Wait until
+#     they are met or Don't activate, instead of two switches.
+STORAGE_MINOR_VERSION: Final = 12
 CONFIG_KEY: Final = DOMAIN
 RUNTIME_KEY: Final = f"{DOMAIN}.runtime"
 BACKUP_KEY: Final = f"{DOMAIN}.backup"
@@ -75,7 +77,8 @@ BACKUP_KEY: Final = f"{DOMAIN}.backup"
 # 8: a person's notify and device_type are a list of push devices.
 # 9: status actions, Snooze when and Mute when, button keys inherited one by one.
 # 10: Navigation "details" instead of "notification_info", no General open_on_tap.
-EXPORT_VERSION: Final = 10
+# 11: Conditions: Wait until they are met or Don't activate.
+EXPORT_VERSION: Final = 11
 
 type ConfigListener = Callable[[ConfigData], None]
 
@@ -111,6 +114,8 @@ class _ConfigStore(Store[ConfigData]):
             upgrade_status_actions(old_data)
         if old_major_version == 1 and old_minor_version < 11:
             upgrade_details_navigation(old_data)
+        if old_major_version == 1 and old_minor_version < 12:
+            upgrade_conditions_choice(old_data)
         return old_data
 
 
@@ -528,6 +533,34 @@ def upgrade_details_navigation(data: dict[str, Any]) -> None:
             navigation["type"] = "details"
 
 
+def upgrade_conditions_choice(data: dict[str, Any]) -> None:
+    """Turn the two Conditions switches into one choice.
+
+    If the conditions are not met: *Wait until they are met* (stored as
+    hide_while_not_met on, activate_only_while_met off) or *Don't activate*
+    (the other way round). Only a triggered step with just Activate only
+    while conditions are met keeps Don't activate; every other combination,
+    and every scheduled step (it always waited), waits.
+    """
+    for notification in data.get("notifications") or []:
+        steps = notification.get("steps") if isinstance(notification, dict) else None
+        for step in steps or []:
+            if not isinstance(step, dict):
+                continue
+            conditions = step.get("conditions")
+            if not isinstance(conditions, dict):
+                continue
+            activation = step.get("activation")
+            scheduled = (
+                isinstance(activation, dict) and activation.get("type") == "schedule"
+            )
+            start = bool(conditions.get("activate_only_while_met", True))
+            hide = bool(conditions.get("hide_while_not_met", True))
+            skip = start and not hide and not scheduled
+            conditions["activate_only_while_met"] = skip
+            conditions["hide_while_not_met"] = not skip
+
+
 def _serialized[F: Callable[..., Coroutine[Any, Any, Any]]](method: F) -> F:
     """Run changes of the configuration one after the other.
 
@@ -864,7 +897,7 @@ class ConfigManager:
         if not isinstance(data, dict):
             raise ConfigValidationError("the YAML must be a mapping")
         version = data.pop("version", EXPORT_VERSION)
-        if version not in (1, 2, 3, 4, 5, 6, 7, 8, 9, EXPORT_VERSION):
+        if version not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, EXPORT_VERSION):
             raise ConfigValidationError(f"unknown export version {version}")
         if version < 2:
             upgrade_button_actions(data)
@@ -884,6 +917,8 @@ class ConfigManager:
             upgrade_status_actions(data)
         if version < 10:
             upgrade_details_navigation(data)
+        if version < 11:
+            upgrade_conditions_choice(data)
         unknown = set(data) - set(SECTIONS)
         if unknown:
             raise ConfigValidationError(

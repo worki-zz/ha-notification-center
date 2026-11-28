@@ -167,6 +167,15 @@ function blocksOf(step: EditorStep) {
   );
 }
 
+
+type ConditionsChoice = "wait" | "skip";
+
+// If the conditions are not met (the Conditions block).
+const CONDITIONS_CHOICES: { value: ConditionsChoice; label: string }[] = [
+  { value: "wait", label: "Wait until they are met" },
+  { value: "skip", label: "Don't activate" },
+];
+
 @customElement("nc-step-editor")
 export class NcStepEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -1031,35 +1040,27 @@ export class NcStepEditor extends LitElement {
 
   private _renderShow(step: EditorStep) {
     const show = step.conditions;
-    const toggle =
-      (key: "activate_only_while_met" | "hide_while_not_met") => (ev: Event) =>
-        this._change({
-          conditions: {
-            ...show,
-            [key]: (ev.target as HTMLInputElement).checked,
-          },
-        });
+    // Stored as two flags: Wait until they are met hides the card while they
+    // are not met; Don't activate checks them at the activation only.
+    const choice: ConditionsChoice = show.activate_only_while_met ? "skip" : "wait";
     return html`<div class="block">
-      <div class="show-switches">
-        <ha-card outlined class="own-row">
-          <ha-icon class="builtin ${show.activate_only_while_met ? "" : "off"}" icon="mdi:play-circle-outline"></ha-icon>
-          <div class="own-text">Activate only while conditions are met</div>
-          <ha-switch
-            .checked=${show.activate_only_while_met}
-            @change=${toggle("activate_only_while_met")}
-          ></ha-switch>
-        </ha-card>
-        <ha-card outlined class="own-row">
-          <ha-icon class="builtin ${show.hide_while_not_met ? "" : "off"}" icon="mdi:eye-off-outline"></ha-icon>
-          <div class="own-text">
-            Hide while conditions are not met
-          </div>
-          <ha-switch
-            .checked=${show.hide_while_not_met}
-            @change=${toggle("hide_while_not_met")}
-          ></ha-switch>
-        </ha-card>
-      </div>
+      ${this._selector(
+        { select: { mode: "list", options: CONDITIONS_CHOICES } },
+        choice,
+        "If the conditions are not met",
+        (value) => {
+          const skip = value === "skip";
+          if ((choice === "skip") === skip) return;
+          this._change({
+            conditions: {
+              ...show,
+              activate_only_while_met: skip,
+              hide_while_not_met: !skip,
+            },
+          });
+        },
+        "conditions-choice",
+      )}
       ${this._stateRow("condition", show.conditions, (item) =>
         this._change({
           conditions: {
