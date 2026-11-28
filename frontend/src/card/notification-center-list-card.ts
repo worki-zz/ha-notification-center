@@ -175,8 +175,9 @@ export class NotificationCenterListCard extends LitElement {
   private _shouldHide(): boolean {
     if (this.preview || this._show("empty")) return false;
     const cards = this._cards();
-    // Until the data is there, stay as it is.
-    if (!cards) return this.hidden;
+    // While loading, hidden as its empty state is (the data stays through
+    // a reconnect, so this is only the first load).
+    if (!cards) return true;
     return cards.length === 0 && this._upcoming().length === 0;
   }
 

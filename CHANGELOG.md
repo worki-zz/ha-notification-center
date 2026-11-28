@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Loading**: the Overview (and its Schedule and Done pages) shows its empty state with *Loading…* while the data loads, so nothing jumps when it arrives. The Notification Center card does the same when its empty state is shown; without it the card stays hidden while loading.
+
 ## 0.8.2
 
 ### Added
