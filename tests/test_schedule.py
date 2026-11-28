@@ -56,9 +56,11 @@ def _scheduled(schedule: dict[str, Any], **extra: Any) -> dict[str, Any]:
     return {
         "message": extra.pop("message", "Do it"),
         "activation": {"type": "schedule", "schedule": schedule},
+        # If the conditions are not met: Wait until they are met, or with
+        # skip=True Don't activate.
         "conditions": {
-            "activate_only_while_met": True,
-            "hide_while_not_met": False,
+            "activate_only_while_met": (skip := extra.pop("skip", False)),
+            "hide_while_not_met": not skip,
             "conditions": extra.pop("conditions", []),
         },
         **extra,
@@ -254,6 +256,73 @@ async def test_scheduled_card_waits_for_conditions(
     assert center.state("sensor.nc_watering") == "hidden"
     await center.set("sensor.rain_today", "1")
     assert center.state("sensor.nc_watering") == "active"
+
+
+async def test_scheduled_step_skips_when_conditions_are_not_met(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """Don't activate: an occurrence whose Conditions are not met is skipped."""
+    center = await load(hass, config_entry)
+    await center.set("sensor.rain_today", "10")
+    dry = [{"condition": "numeric_state", "entity_id": "sensor.rain_today", "below": 5}]
+    nid = await center.add(
+        "Watering",
+        _scheduled(
+            {"type": "calendar", "every": 1, "unit": "days", "at": "22:00"},
+            conditions=dry,
+            skip=True,
+        ),
+    )
+    # Not met now: not under Upcoming, as it would be skipped.
+    assert center.engine.upcoming(nid) == []
+    await _move(hass, freezer, "2026-11-16 22:00")
+    assert center.state("sensor.nc_watering") == "idle"
+    assert center.kinds() == []
+    # Met at the next due time: it activates, and stays when no longer met.
+    await center.set("sensor.rain_today", "1")
+    assert _fmt(center.attrs("sensor.nc_watering")["next_due"]) == (
+        "2026-11-17 Tue 22:00"
+    )
+    await _move(hass, freezer, "2026-11-17 22:00")
+    assert center.state("sensor.nc_watering") == "active"
+    await center.set("sensor.rain_today", "10")
+    assert center.state("sensor.nc_watering") == "active"
+
+
+async def test_after_last_done_skip_counts_from_the_due_time(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    budapest: None,
+) -> None:
+    """A skipped after-last-done occurrence is next due one interval later."""
+    center = await load(hass, config_entry)
+    await center.set("input_boolean.cleaning", "off")
+    await center.add(
+        "Vacuum",
+        _scheduled(
+            {"type": "after_last_done", "every": 2, "unit": "days", "at": "10:00"},
+            conditions=[
+                {"condition": "state", "entity_id": "input_boolean.cleaning",
+                 "state": "off"}
+            ],
+            skip=True,
+        ),
+    )  # fmt: skip
+    assert _fmt(center.attrs("sensor.nc_vacuum")["next_due"]) == (
+        "2026-11-18 Wed 10:00"
+    )
+    # The robot is cleaning at the due time: this occurrence is skipped.
+    await center.set("input_boolean.cleaning", "on")
+    await _move(hass, freezer, "2026-11-18 10:00")
+    assert center.state("sensor.nc_vacuum") == "idle"
+    await center.set("input_boolean.cleaning", "off")
+    assert _fmt(center.attrs("sensor.nc_vacuum")["next_due"]) == (
+        "2026-11-20 Fri 10:00"
+    )
 
 
 async def test_after_last_donestep(

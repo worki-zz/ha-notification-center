@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Conditions**: one choice, *If the conditions are not met*, instead of the two switches *Activate only while conditions are met* and *Hide while conditions are not met*, for triggered and scheduled steps alike. *Wait until they are met* (the default): the notification is activated hidden, shows once the conditions are met and hides again whenever they are not. *Don't activate*: it is not activated if they are not met at that moment; once active, it stays.
+- **Scheduled steps** can now *Don't activate*: an occurrence whose conditions are not met at the due time is skipped, as with Dismiss early, and the step comes again at the next one (after last done counts it from the time it was due). Upcoming leaves it out while its conditions are not met, as with Wait.
+- Existing steps are migrated: a triggered step with only *Activate only while conditions are met* gets *Don't activate*; every other combination (both switches, only Hide while, or neither) and every scheduled step gets *Wait until they are met*. A triggered step that had both switches off now hides its notification while its conditions are not met.
+
 ## 0.8.2
 
 ### Added

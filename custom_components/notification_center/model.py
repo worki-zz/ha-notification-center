@@ -649,12 +649,14 @@ ACTIVATION_SCHEMA = vol.Any(
     ),
 )
 
-# Conditions: one set of conditions, used at the activation (a card is
-# activated only while they are met; a scheduled card waits for them) and
-# while a card is active (it is hidden while they are not met), as switched on.
+# Conditions: one set of conditions. If they are not met: *Wait until they
+# are met* (hide_while_not_met: the card is activated hidden and shows while
+# they are met) or *Don't activate* (activate_only_while_met: no card, a
+# scheduled step skips the occurrence; once active, it stays). Both on is
+# kept for a later "If they are no longer met later: Hide it".
 STEP_CONDITIONS_SCHEMA = vol.Schema(
     {
-        vol.Optional("activate_only_while_met", default=True): cv.boolean,
+        vol.Optional("activate_only_while_met", default=False): cv.boolean,
         vol.Optional("hide_while_not_met", default=True): cv.boolean,
         vol.Optional("conditions", default=list): CONDITIONS,
     }
@@ -665,7 +667,7 @@ DONE_WHEN_SCHEMA = vol.Schema(
         vol.Optional("triggers", default=list): TRIGGERS,
         # Close a card when what activated it is no longer true: its entity
         # no longer matches Notification entities, or the Conditions (with
-        # Activate only while conditions are met) are no longer met.
+        # Don't activate) are no longer met.
         vol.Optional("activation_conditions_no_longer_true", default=False): cv.boolean,
         # Close a card as done at a time after it became active.
         vol.Optional("expires"): _optional(EXPIRES),

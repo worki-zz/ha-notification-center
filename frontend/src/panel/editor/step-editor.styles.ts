@@ -127,12 +127,6 @@ export const STEP_EDITOR_STYLES = css`
     ha-icon.builtin.off {
       color: var(--disabled-text-color);
     }
-    /* Side by side where there is room. */
-    .show-switches {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 8px;
-    }
     ha-card.interactions {
       overflow: hidden;
     }

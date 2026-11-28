@@ -34,10 +34,10 @@ export const HELP: Record<
   show: {
     title: "Conditions",
     text: [
-      "One set of conditions, used as switched on above them.",
-      "Activate only while conditions are met: the step is activated only when they are all true at that moment, for example the door notification only while the alarm is armed. A scheduled notification waits for them, hidden, until Expiration closes it.",
+      "One set of conditions. If the conditions are not met, the choice above them decides what happens.",
+      "Wait until they are met (the default): the notification is activated hidden, shows once they are all true, and hides again whenever any of them is false, for example the window notification only while the heating is on. Push and light come again when it shows. A scheduled notification waits like this until Expiration closes it.",
+      "Don't activate: the step is activated only when they are all true at that moment, for example the door notification only while the alarm is armed. Once active, it stays. A scheduled step skips that occurrence, as Dismiss early does, and comes again at the next one; after last done counts it from the time it was due.",
       "Notification state, at the top from step 2, tests a step of this notification (the previous one at first, or Any step): Now, for at least is true while it is in a state (for a while if set); Within the last is true when it reached the state within that time, even if it has left it since. Done and Dismissed with Now count only today's notifications, so for a step done yesterday evening use Within the last.",
-      "Hide while conditions are not met: an active notification is hidden while any of them is false, and shows again when they are all true, for example the window notification only while the heating is on. Push and light come again when it shows.",
     ],
   },
   interactions: {
@@ -55,7 +55,7 @@ export const HELP: Record<
       "The notification closes as done by itself when one of these triggers fires, for example when the washing machine door opens.",
       "Expiration, at the top, closes it as done after a while from when it became active, or on that day (or some days later) at a time. When Dismiss when also has one, the earlier one counts.",
       "To close it as dismissed instead (not done), use Dismiss when, the next block.",
-      "When the activation is no longer true: an entity's notification closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a notification closes when the Conditions it was activated with are no longer met (with Activate only while conditions are met switched on).",
+      "When the activation is no longer true: an entity's notification closes when that entity no longer matches Notification entities at the top of Activation (the leak is dry again), and a notification closes when the Conditions it was activated with are no longer met (with Don't activate chosen, on a triggered step).",
       "The Actions tab runs whenever the notification is done: by these triggers, the Done button, the Done action or an automation.",
     ],
   },

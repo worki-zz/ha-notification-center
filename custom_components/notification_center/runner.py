@@ -221,6 +221,7 @@ class StepRunner:
         self.show_when: _Conditions | None = None
         self.start_conditions: _Conditions | None = None
         self._hides = False
+        self._follows = False
         self._closes = False
         self.hide_timed = False
         self._hide_entities: set[str] = set()
@@ -252,13 +253,14 @@ class StepRunner:
         self.referenced |= entities
         if start["type"] == "schedule":
             self.schedule = StepSchedule(self, start["schedule"])
-        if show_when.get("activate_only_while_met", True):
+        # If the conditions are not met: *Wait until they are met* (stored as
+        # hide_while_not_met) activates the card hidden and shows it while they
+        # are met; *Don't activate* (activate_only_while_met) does not activate
+        # it, and a scheduled step skips that occurrence. Both on is kept for a
+        # later "If they are no longer met later: Hide it".
+        if show_when.get("activate_only_while_met", False):
             self.start_conditions = self.show_when
-        # Hidden while they are not met; a scheduled card that needs them to
-        # start waits for them, hidden, until it expires.
-        self._hides = bool(show_when.get("hide_while_not_met", True)) or (
-            self.schedule is not None and self.start_conditions is not None
-        )
+        self._hides = bool(show_when.get("hide_while_not_met", True))
         # When the activation is no longer true also closes an
         # active card when the Conditions it was activated with are not met.
         self._closes = (
@@ -267,7 +269,13 @@ class StepRunner:
             and not self.start_conditions.empty
             and self.schedule is None
         )
-        if self._hides or self._closes:
+        # Upcoming leaves out a scheduled step that would be skipped.
+        self._follows = (
+            self._hides
+            or self._closes
+            or (self.schedule is not None and self.start_conditions is not None)
+        )
+        if self._follows:
             self._hide_entities = entities
             self.hide_timed = timed
             # Own conditions follow the cards (see ``watches_own``); the
@@ -603,7 +611,7 @@ class StepRunner:
     @property
     def watches_own(self) -> bool:
         """Return whether Conditions on other cards decide hiding or closing."""
-        if not (self._hides or self._closes):
+        if not self._follows:
             return False
         return any(
             conditions is not None and conditions.has_own
@@ -615,9 +623,17 @@ class StepRunner:
 
         See ``_Conditions.check_untimed`` for what is checked for that time.
         """
-        if not self._hides or self.show_when is None or self.show_when.empty:
+        if not (self._hides or self.start_conditions is not None):
+            return False
+        if self.show_when is None or self.show_when.empty:
             return False
         return not self.show_when.check_untimed(variables, due)
+
+    def skips_occurrence(self, trigger: dict[str, Any]) -> bool:
+        """Return whether a scheduled occurrence is skipped: Don't activate."""
+        if self.start_conditions is None or self.start_conditions.empty:
+            return False
+        return not self.start_conditions.check({"trigger": trigger, "entity": None})
 
     def is_hidden(self, card: Card) -> bool:
         """Return whether a card is hidden: the Conditions are not met for it."""

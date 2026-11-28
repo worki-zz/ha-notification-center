@@ -219,7 +219,8 @@ class StepSchedule:
             closed = self.engine.last_reached(notification_id, self.step.step_id, state)
             if closed is not None and closed >= last:
                 return
-        self._due(last)
+        # It was activated before, so the conditions are not checked again.
+        self._due(last, check=False)
 
     def _closed_while_stopped(self, due: datetime) -> datetime | None:
         """Record an occurrence that its Expires row closed while stopped.
@@ -240,12 +241,20 @@ class StepSchedule:
             self.step.notification.id, self.step.step_id, HISTORY_SCHEDULED, due
         )
 
-    def _due(self, due: datetime) -> None:
+    def _due(self, due: datetime, check: bool = True) -> None:
+        trigger = {"platform": "schedule", "due": due.isoformat()}
         self._record(due)
+        if check and self.step.skips_occurrence(trigger):
+            # Don't activate: the conditions are not met at the due time, so
+            # the occurrence is skipped, as with Dismiss early.
+            self.engine.record(
+                self.step.notification.id, self.step.step_id, HISTORY_SKIPPED, due
+            )
+            return
         self.engine.open(
             self.step,
             None,
-            {"platform": "schedule", "due": due.isoformat()},
+            trigger,
             SOURCE_SCHEDULE,
             since=due,
         )

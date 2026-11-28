@@ -49,6 +49,9 @@ Items are grouped by priority (set by Kristóf, 2026-11-19); each shows its area
 
 ## Low priority
 
+### Conditions: if they are no longer met later
+*Area: Engine, Step editor.* Under *Don't activate* in the Conditions block, a second row shown only with that choice: *If they are no longer met later:* *Keep it* (today's behaviour) / *Hide it* / *Close it as done* (the Done when row *When the activation is no longer true* for Conditions would move here). No data change: Hide it is `activate_only_while_met` and `hide_while_not_met` both on, which the engine already handles. *(Kristóf, 2026-11-28; design thread "Rethink Hide while logic")*
+
 ### Snooze when the push is swiped away
 *Area: Push.* A fixed row at the top of the Snooze when block's Triggers tab: *Push swiped away (Android)*, a switch, off by default. A swiped push snoozes the notification for the Snooze button's *Snooze for* time. Android only: it needs the Companion app's clear event (`mobile_app_notification_cleared`); the iOS app sends no such event. Only Snooze, because Android's *Clear all* swipes every push at once. Pushes the integration removes itself (done, dismissed, a later step) are not counted. Stored as `snooze_when.push_swiped: true`; the person who swiped is found from the push device that sent the event, and the snooze runs the Snooze when actions like any other snooze. Replaces the earlier *Push swipe action* idea (a swipe setting per notification, category and General). *(Kristóf, 2026-11-24; reshaped 2026-11-26, pre-1.0 backlog review)*
 

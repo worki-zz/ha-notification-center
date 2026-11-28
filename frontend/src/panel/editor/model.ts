@@ -61,7 +61,10 @@ export interface Start {
   actions: StatusActions;
 }
 
-/** Conditions: used at the activation and to hide an active card. */
+/**
+ * Conditions. If they are not met: Wait until they are met (hide_while_not_met,
+ * the default) or Don't activate (activate_only_while_met).
+ */
 export interface StepConditions {
   activate_only_while_met: boolean;
   hide_while_not_met: boolean;
@@ -195,7 +198,7 @@ export function newStep(): EditorStep {
     enabled: true,
     message: "",
     activation: { type: "triggers", triggers: [], actions: noActions() },
-    conditions: { activate_only_while_met: true, hide_while_not_met: true, conditions: [] },
+    conditions: { activate_only_while_met: false, hide_while_not_met: true, conditions: [] },
     done_when: { triggers: [], activation_conditions_no_longer_true: false, actions: noActions() },
     dismiss_when: { triggers: [], actions: noActions() },
     snooze_when: { enabled: false, triggers: [], actions: noActions(), rerun_activation: false },
@@ -459,7 +462,7 @@ export function toEditor(
       }
     }
     step.conditions = {
-      activate_only_while_met: step.conditions?.activate_only_while_met ?? true,
+      activate_only_while_met: step.conditions?.activate_only_while_met ?? false,
       hide_while_not_met: step.conditions?.hide_while_not_met ?? true,
       conditions: conditions(step.conditions?.conditions),
     };
